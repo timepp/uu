@@ -1,6 +1,4 @@
-import * as uu from '../uu.js'
+import * as uu from '../uu.ts'
 
-const div = uu.createElement('div')
-div.textContent = 'Hello, world!'
-document.body.appendChild(div)
+const div = uu.createElement(document.body, 'div', [], 'Hello, world!')
 
