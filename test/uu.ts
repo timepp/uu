@@ -1,5 +1,5 @@
 // uu: a set of utility functions for modern web UI
-// hash: 1b42bcca556c4933e93266d77230122a2bee122a35f34750d7acf6e513eabacc
+// hash: a6bc88fddfdde0339e774ae46344c50ed9a1e5cef511ed266986b5af08e86197
 // Please do not modify this file directly. Use the following command to update this file on a deno environment:
 // deno run -A --reload jsr:@timepp/uu
 
