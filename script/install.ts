@@ -1,7 +1,7 @@
 // this script will put `uu.ts` in the current directory
 
 import * as hash from './hash.ts'
-import * as fs from 'jsr:@std/fs'
+import * as fs from 'jsr:@std/fs@1.0.14'
 import { assets } from './bootstrap-assets.ts'
 import * as ma from './memory-asset.ts'
 
