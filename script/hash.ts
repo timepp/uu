@@ -8,7 +8,7 @@ function parseFile(lines: string[]) {
     if (hashLine === -1) throw new Error('Hash line not found')
     const hash = lines[hashLine].slice(hashPrefix.length).trim()
     const contentLine = lines.findIndex((l, index) => index > hashLine && l.trim() !== '' && !l.startsWith('//'))
-    const content = lines.slice(hashLine + 1, contentLine).join('\n').trim()
+    const content = lines.slice(contentLine).join('\n').trim()
     return { hash, hashLine, content, contentLine }
 }
 
@@ -18,18 +18,18 @@ async function hashString(str: string) {
 }
 
 export async function validateHash(file: string) {
-    const lines = Deno.readTextFileSync(file).split('\n')
+    const lines = Deno.readTextFileSync(file).split(/\r?\n/g)
     const { hash, content } = parseFile(lines)
     const newHash = await hashString(content)
-    if (newHash !== hash) {
-        console.error(`Hash mismatch: ${newHash} !== ${hash}`)
-        return false
+    return {
+        oldHash: hash,
+        newHash,
+        isValid: hash === newHash,
     }
-    return true
 }
 
 export async function updateHash(file: string) {
-    const lines = Deno.readTextFileSync(file).split('\n')
+    const lines = Deno.readTextFileSync(file).split(/\r?\n/g)
     const { hash, hashLine, content } = parseFile(lines)
     const newHash = await hashString(content)
     lines[hashLine] = `// hash: ${newHash}`

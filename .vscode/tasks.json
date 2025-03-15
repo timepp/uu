@@ -1,0 +1,22 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "deno",
+			"command": "test",
+			"args": ["--no-check"],
+			"problemMatcher": [
+				"$deno-test"
+			],
+			"group": "test",
+			"label": "deno: test"
+		},
+		{
+			"type": "deno",
+			"command": "run",
+			"args": ["-A", "script/launch-test-ui.ts"],
+			"group": "test",
+			"label": "deno: launch test ui",
+		}
+	]
+}
