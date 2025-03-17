@@ -3,20 +3,36 @@
 // Please do not modify this file directly. Use the following command to update this file on a deno environment:
 // deno run -A --reload jsr:@timepp/uu
 
-export function traverseObject(obj: any, callback: (path: string[], value: any, isLeaf: boolean) => void, path: string[] = []): void {
-    if (obj === null || obj === undefined) {
-        callback(path, obj, true);
+function traverseObjectInternal(obj: any, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => void, path: string[], seenObjects: WeakSet<object>): void {
+    if (typeof obj !== 'object' || obj === null) {
+        callback(path, obj, 'leaf');
         return;
     }
 
-    if (typeof obj === 'object') {
-        callback(path, obj, false);
-        for (const key in obj) {
-            traverseObject(obj[key], callback, [...path, key]);
-        }
+    if (seenObjects.has(obj)) {
+        callback(path, obj, 'loop');
     } else {
-        callback(path, obj, true);
+        seenObjects.add(obj);
+        callback(path, obj, 'object');
+        for (const key in obj) {
+            traverseObjectInternal(obj[key], callback, [...path, key], seenObjects);
+        }
     }
+}
+
+export function traverseObject(obj: any, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => void): void {
+    const seenObjects = new WeakSet<object>()
+    traverseObjectInternal(obj, callback, [], seenObjects)
+}
+
+export function dataProperties(arr: object[]) {
+    const propSet = new Set<string>()
+    for (const item of arr) {
+        for (const key in item) {
+            propSet.add(key)
+        }
+    }
+    return [...propSet]
 }
 
 /// get time as YYYY-MM-DD HH:mm:ss
@@ -104,10 +120,24 @@ export function highlightJson(text: string) {
         [/"[^"]+":/g, 'key'],
         [/"(?:[^"\\]|\\.)*"/g, 'string'], // 支持转义的字符串匹配
         [/\d+/g, 'number'],
-        [/true|false/g, 'boolean'],
+        [/true/g, 'true'],
+        [/false/g, 'false'],
         [/null/g, 'null'],
         [/[{}[\]:,]/g, 'punctuation'],
-    ])
+    ]) as {
+        content: string,
+        category: 'key' | 'string' | 'number' | 'true' | 'false' | 'null' | 'punctuation' | ''
+    }[]
+}
+
+export function triggerDownload(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
 }
 
 export function derivedUrl(oldUrl: string, paramsToAdd: Record<string, string>, paramsToRemove?: RegExp) {
@@ -126,7 +156,7 @@ export function derivedUrl(oldUrl: string, paramsToAdd: Record<string, string>, 
     return url.toString()
 }
 
-export function createElement<K extends keyof HTMLElementTagNameMap>(parent: Element | null, tagName: K, classes: string[] = [], text?: string, style: Partial<CSSStyleDeclaration> = {}): HTMLElementTagNameMap[K] {
+export function createElement<K extends keyof HTMLElementTagNameMap>(parent: Element | null, tagName: K, classes: string[] = [], text?: string, style: Partial<CSSStyleDeclaration> = {}) {
     const e = document.createElement(tagName)
     e.classList.add(...classes)
     if (parent) parent.appendChild(e)
@@ -188,8 +218,22 @@ export function showInfo(title: string, content: string) {
 }
 
 export function createJsonView(content: string) {
+    const parts = highlightJson(content)
     const pre = createElement(null, 'pre', [])
-    // property: blue, string: black, number: purple, boolean: orange, null: red, separator: green
+
+    for (const part of parts) {
+        const span = createElement(pre, 'span')
+        span.textContent = part.content
+        switch (part.category) {
+            case 'key': span.style.color = 'blue'; break
+            // case 'string': span.style.color = 'purple'; break
+            case 'number': span.style.color = '#f439e6'; break
+            case 'true': span.style.color = 'green'; break
+            case 'false': span.style.color = 'red'; break
+            case 'null': span.style.backgroundColor = 'yellow'; break
+            case 'punctuation': span.style.fontWeight = "800"; break
+        }
+    }
 
     return pre
 }
@@ -224,17 +268,7 @@ export function showJsonResult(title: string, content: string) {
     return dialog
 }
 
-export function triggerDownload(blob: Blob, filename: string) {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-}
-
-export async function MultiSelect(title: string, data: string[]) : Promise<string[]> {
+export async function MultiSelect(title: string, data: string[], selected: string[]) : Promise<string[]> {
     const dialog = createElement(document.body, 'dialog', [])
     dialog.style.width = "80vw";  
     dialog.style.height = "80vh"; 
@@ -267,6 +301,11 @@ export async function MultiSelect(title: string, data: string[]) : Promise<strin
         const span = createElement(main, 'span', ['multi-select', 'rounded-1', 'p-1', 'm-1'], item)
         span.style.cursor = "pointer"
         span.style.backgroundColor = normalBackgroundColor
+
+        if (selected.includes(item)) {
+            span.classList.add('selected')
+            span.style.backgroundColor = selectedBackgroundColor
+        }
 
         span.onclick = () => {
             span.classList.toggle('selected')
@@ -313,6 +352,7 @@ export async function MultiSelect(title: string, data: string[]) : Promise<strin
 }
 
 export type TablePresentation = {
+    initialColumns: string[]
     includeProperties: string[]
     excludeProperties: string[]
     columnFormaters: Record<string, (value: any) => string | HTMLElement>
@@ -320,25 +360,27 @@ export type TablePresentation = {
 }
 
 export function createTableFromArray(arr: any[], presentation: Partial<TablePresentation> = {}) {
+    const properties = dataProperties(arr)
+    let columns = presentation.initialColumns || properties
+
+    const view = createElement(null, 'div')
+    const toolbar = createElement(view, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
+    const fieldSelect = createElement(toolbar, 'button', ['btn', 'btn-primary'], 'Select Fields')
+
     const table = document.createElement('table')
     table.classList.add('table', 'table-striped', 'table-bordered', 'table-hover')
     const thead = document.createElement('thead')
     const tbody = document.createElement('tbody')
     table.appendChild(thead)
     table.appendChild(tbody)
-
-    const allProps = arr.map(item => Object.keys(item)).flat()
-    const props = [...new Set(allProps)].filter(prop => {
-        if (presentation.excludeProperties && presentation.excludeProperties.includes(prop)) return false
-        if (presentation.includeProperties && !presentation.includeProperties.includes(prop)) return false
-        return true
-    })
+    const cells: Record<string, HTMLTableCellElement[]> = {}
     
     const tr = document.createElement('tr')
-    for (const prop of props) {
+    for (const prop of properties) {
         const th = document.createElement('th')
         th.textContent = prop
         tr.appendChild(th)
+        cells[prop] = [th]
     }
     thead.appendChild(tr)
 
@@ -352,7 +394,7 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
 
     for (const item of arr) {
         const tr = document.createElement('tr')
-        for (const prop of props) {
+        for (const prop of properties) {
             const td = document.createElement('td')
             const v = item[prop]
             const formater = presentation.columnFormaters?.[prop] || defaultColumnFormater
@@ -364,6 +406,7 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
                 td.appendChild(formattedValue)
             }
             
+            cells[prop].push(td)
             tr.appendChild(td)
         }
 
@@ -377,13 +420,19 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
         tbody.appendChild(tr)
     }
 
-    // convert to data table
-    const dataTable = new (window as any).DataTable(table, {
-        perPage: 100,
-        sortable: true,
-        searchable: true,
-        perPageSelect: [5, 10, 20, 50],
-    })
+    function syncColumns(columns: string[]) {
+        for (const prop of properties) {
+            const visible = columns.includes(prop)
+            for (const cell of cells[prop]) {
+                cell.style.display = visible ? '' : 'none'
+            }
+        }
+    }
 
-    return table
+    fieldSelect.onclick = async () => {
+        columns = await MultiSelect('Select Fields', properties, columns)
+        syncColumns(columns)
+    }
+
+    return view
 }

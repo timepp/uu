@@ -9,13 +9,23 @@ Deno.test('object traverse', async () => {
         address: {
             city: 'New York',
             zip: '10001',
-            r1: {r2: "r4"}
+            r1: {r2: "r4"},
+            recursive: {}
         }
     }
+    data.address.recursive = data.address // Creating a recursive reference
     
     const arr: any[] = []
-    uu.traverseObject(data, (key, value, isLeaf) => arr.push([isLeaf, key, value]))
-    ut.assertEquals(JSON.stringify(arr), `[[false,[],{"name":"test","age":30,"hobbies":["reading","gaming"],"address":{"city":"New York","zip":"10001","r1":{"r2":"r4"}}}],[true,["name"],"test"],[true,["age"],30],[false,["hobbies"],["reading","gaming"]],[true,["hobbies","0"],"reading"],[true,["hobbies","1"],"gaming"],[false,["address"],{"city":"New York","zip":"10001","r1":{"r2":"r4"}}],[true,["address","city"],"New York"],[true,["address","zip"],"10001"],[false,["address","r1"],{"r2":"r4"}],[true,["address","r1","r2"],"r4"]]`)
+    uu.traverseObject(data, (path, value, type) => arr.push([path, value, type]))
+    // filter out the object nodes
+    const leafs = arr.filter(v => v[2] === 'leaf')
+    ut.assertEquals(JSON.stringify(leafs), `[[["name"],"test","leaf"],[["age"],30,"leaf"],[["hobbies","0"],"reading","leaf"],[["hobbies","1"],"gaming","leaf"],[["address","city"],"New York","leaf"],[["address","zip"],"10001","leaf"],[["address","r1","r2"],"r4","leaf"]]`)
+
+    const objectPaths = arr.filter(v => v[2] === 'object').map(v => v[0])
+    ut.assertEquals(objectPaths, [[], ["hobbies"], ["address"], ["address", "r1"]])
+
+    const loopPaths = arr.filter(v => v[2] === 'loop').map(v => v[0])
+    ut.assertEquals(loopPaths, [["address", "recursive"]])
 })
 
 Deno.test('data format', async () => {
@@ -40,11 +50,6 @@ Deno.test('highLight', async () => {
         { category: 'string', content: '"value3389"' },
         { category: '', content: '}' }
     ])
-
-    const json = `{"name":"value\\"ccc\\"89"}`
-    console.log(json)
-    const result2 = uu.highlightJson(json)
-    result2.forEach(v => console.log(v.content, v.category))
 })
 
 Deno.test('derivedUrl', async () => {
@@ -52,6 +57,5 @@ Deno.test('derivedUrl', async () => {
     const paramsToAdd = { name: 'newValue', newParam: 'newValue' }
     const paramsToRemove = /age|extra/
     const newUrl = uu.derivedUrl(url, paramsToAdd, paramsToRemove)
-    console.log(newUrl)
     ut.assertEquals(newUrl, 'https://example.com/path?name=newValue&newParam=newValue')
 })
