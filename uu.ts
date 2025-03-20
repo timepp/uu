@@ -55,6 +55,83 @@ export function formatFloat(n: number, digits = 2, mininumDigits = 0) {
     })
 }
 
+// catch all excpetion and return a default value if error occurs
+export function safeExecute<T>(fn: () => T, defaultValue: T | ((e: unknown) => T)) {
+    try {
+        return fn()
+    } catch (e) {
+        if (typeof defaultValue === 'function') {
+            return (defaultValue as (e: unknown) => T)(e)
+        } else {
+            return defaultValue
+        }
+    }
+}
+
+function createState<T extends object>(object: T, properties: (keyof T)[], stateKey?: string) {
+    // 内部存储的状态对象
+    const internalState: Partial<T> = {};
+
+    // 初始化 internalState，只包含指定的属性
+    properties.forEach((prop) => {
+        if (prop in object) {
+            internalState[prop] = object[prop];
+        }
+    });
+
+    // 定义代理对象
+    const state = new Proxy(internalState, {
+        get(target: Partial<T>, prop: string | symbol, receiver: any) {
+            // 将 prop 转换为 keyof T 类型，并检查是否在 properties 中
+            const key = prop as keyof T;
+            if (properties.includes(key)) {
+                return target[key];
+            }
+            throw new Error(`Property '${String(prop)}' is not managed by this state`);
+            // return undefined; // 未指定的属性返回 undefined
+        },
+        set(target: Partial<T>, prop: string | symbol, value: any) {
+            // 将 prop 转换为 keyof T 类型，并检查是否在 properties 中
+            const key = prop as keyof T;
+            if (properties.includes(key)) {
+                target[key] = value;
+                saveState();
+                return true;
+            }
+            throw new Error(`Property '${String(prop)}' is not managed by this state`);
+        }
+    }) as Pick<T, typeof properties[number]>;
+
+    // 加载状态
+    function loadState() {
+        if (!stateKey) return;
+        const stored = localStorage.getItem(stateKey);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            properties.forEach((prop) => {
+                if (prop in parsed) {
+                    internalState[prop] = parsed[prop];
+                }
+            });
+        }
+    }
+
+    // 保存状态
+    function saveState() {
+        if (!stateKey) return;
+        const persistState: Partial<T> = {};
+        properties.forEach((prop) => {
+            persistState[prop] = internalState[prop];
+        });
+        localStorage.setItem(stateKey, JSON.stringify(persistState));
+    }
+
+    // 加载初始状态
+    loadState();
+
+    return state;
+}
+
 /// break text into pieces by given regex matchers
 /// each piece is attached with a category
 /// return: {content, category}[] that covers the whole text
@@ -169,6 +246,17 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(parent: Ele
     return e
 }
 
+export function forEachTableCell(table: HTMLTableElement, callback: (cell: HTMLTableCellElement, row: number, col: number) => void) {
+    // row: 0 is header, 1 is first row
+    for (let i = 0; i < table.rows.length; i++) {
+        const row = table.rows[i]
+        for (let j = 0; j < row.cells.length; j++) {
+            const cell = row.cells[j]
+            callback(cell, i, j)
+        }
+    }
+}
+
 export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>) {
     const dialog = createElement(document.body, 'dialog', [])
     const dc = createElement(dialog, 'div', [])
@@ -268,48 +356,84 @@ export function showJsonResult(title: string, content: string) {
     return dialog
 }
 
-export async function MultiSelect(title: string, data: string[], selected: string[]) : Promise<string[]> {
-    const dialog = createElement(document.body, 'dialog', [])
-    dialog.style.width = "80vw";  
-    dialog.style.height = "80vh"; 
+export type SelectOption = {
+    singleSelect: boolean
+    preserveOrder: boolean
+    initialSelection: string[]
 
-    const dc = createElement(dialog, 'div', [])
-    dc.style.width = "100%";   // 宽度100%
-    dc.style.height = "100%";  // 高度100%
-    dc.style.display = "flex";
-    dc.style.alignItems = "center";
-    dc.style.flexDirection = "column";
+    // return `newSelection` if the new selection is valid
+    // otherwise, return a selection if checker can fix invalid selection
+    // otherwise, return an error message
+    checker: (oldSelection: string[], newSelection: string[]) => string[] | string
+}
 
+export type SelectResult = {
+    selected: string[]
+    action: string | null
+}
+
+// TODO: for multi selection, how to express "everything"?
+// For example, when data is ['a', 'b', 'c'], 
+// `everything` doesn't equate to ['a', 'b', 'c'], it express the intention of 'doesn't care about the details'
+// if user choose ['a', 'b', 'c'], it's fixed to that. Next time if data changed to ['a', 'b', 'c', 'd'], user choice is still ['a', 'b', 'c']
+// if user choose `everything`, it means ['a', 'b', 'c'] this time, but next time if data changed to ['a', 'b', 'c', 'd'], it means ['a', 'b', 'c', 'd'] next time
+export async function showSelection(title: string, data: string[], options: Partial<SelectOption>) {
+    const dialog = createElement(document.body, 'dialog', [], '', {width: '80vw'})
+    const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
     const header = createElement(dc, 'div', [])
     createElement(header, 'h2', [], title)
-
+    const selectedContent = createElement(dc, 'div', [])
+    // createElement(dc, 'hr', ['w-100'])
     
     // filter text
-    const filter = createElement(dc, 'input', ['form-control'], '')
+    const filter = createElement(dc, 'input', ['form-control', 'mt-2', 'mb-2'])
     filter.placeholder = "Filter"
     
+    const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap'])
     createElement(dc, 'hr', ['w-100'])
+    const alert = createElement(dc, 'div', ['alert', 'alert-danger', 'd-none'])
+    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
+    const okBtn = createElement(footer, 'button', ['btn', 'btn-primary', 'me-2'], 'OK')
 
-    const main = createElement(dc, 'div', ['d-flex'])
-    main.style.overflowY = "auto"
-    // main.style.flexGrow = "1";
-    main.style.flexDirection = "row"
-    main.style.flexWrap = "wrap"
-    const normalBackgroundColor = 'rgb(244, 244, 244)'
-    const selectedBackgroundColor = 'rgba(0, 123, 255, 0.5)'
+    let selected = options.initialSelection || []
+
+    function syncSelected() {
+        selectedContent.innerHTML = ''
+        createElement(selectedContent, 'span', ['m-1'], 'Selected: ', {color: 'blue'})
+        for (let i = 0; i < selected.length; i++) {
+            const item = selected[i]
+            const text = options.preserveOrder ? `${i + 1}: ${item}` : item
+            createElement(selectedContent, 'span', ['m-1'], text)
+        }
+
+        for (const item of main.children) {
+            const span = item as HTMLSpanElement
+            const isItemSelected = selected.includes(item.textContent!)
+            span.classList.toggle('selected', isItemSelected)
+            span.style.backgroundColor = isItemSelected ? 'rgba(0, 123, 255, 0.5)' : 'rgb(244, 244, 244)'
+        }
+    }
+
     for (const item of data) {
         const span = createElement(main, 'span', ['multi-select', 'rounded-1', 'p-1', 'm-1'], item)
         span.style.cursor = "pointer"
-        span.style.backgroundColor = normalBackgroundColor
-
-        if (selected.includes(item)) {
-            span.classList.add('selected')
-            span.style.backgroundColor = selectedBackgroundColor
-        }
-
         span.onclick = () => {
-            span.classList.toggle('selected')
-            span.style.backgroundColor = span.classList.contains('selected') ? selectedBackgroundColor : normalBackgroundColor
+            const oldSelection = [...selected]
+            const newSelection = options.singleSelect ? [item] : (selected.includes(item) ? selected.filter(i => i !== item) : [...selected, item])
+            const r = options.checker?.(oldSelection, newSelection)
+            if (typeof r === 'string') {
+                // invalid state
+                alert.textContent = r
+                alert.classList.remove('d-none')
+                okBtn.disabled = true
+                selected = newSelection
+            } else {
+                // fixed state
+                selected = r || newSelection
+                alert.classList.add('d-none')
+                okBtn.disabled = false
+            }
+            syncSelected()
         }
     }
 
@@ -324,115 +448,219 @@ export async function MultiSelect(title: string, data: string[], selected: strin
         }
     }
 
-    const spacer = createElement(dc, 'div', ['flex-grow-1'])
-    createElement(dc, 'hr', ['w-100'])
-    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
-
-    let resolver: ((value: string[]) => void)
-    const promise = new Promise<string[]>((resolve, reject) => {
+    let resolver: ((value: SelectResult) => void)
+    const promise = new Promise<SelectResult>((resolve, reject) => {
         resolver = resolve
     })
-    
-    const okButton = createElement(footer, 'button', ['btn', 'btn-primary'], 'OK')
-    okButton.onclick = () => {
-        const selected = [] as string[]
-        for (const item of main.children) {
-            if (item.classList.contains('selected')) {
-                selected.push(item.textContent || '')
-            }
-        }
+
+    okBtn.onclick = () => {
         dialog.close()
         dialog.remove()
-        resolver(selected)
+        resolver({selected, action: 'OK'})
     }
 
-    dialog.showModal()
+    // handle esc key to close the dialog
+    dialog.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            dialog.close()
+            dialog.remove()
+            resolver({selected: [], action: null})
+        }
+    })
 
+    syncSelected()
+    dialog.showModal()
     return promise
 }
 
 export type TablePresentation = {
-    initialColumns: string[]
-    includeProperties: string[]
-    excludeProperties: string[]
+    columns: string[]
     columnFormaters: Record<string, (value: any) => string | HTMLElement>
+    sortBy: {
+        column: string
+        order: 'asc' | 'desc'
+    }[]
     onRowClick: (item: any) => void
+    stateKey: string // used to save the state of the table in local storage
 }
 
 export function createTableFromArray(arr: any[], presentation: Partial<TablePresentation> = {}) {
-    const properties = dataProperties(arr)
-    let columns = presentation.initialColumns || properties
-
-    const view = createElement(null, 'div')
-    const toolbar = createElement(view, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
-    const fieldSelect = createElement(toolbar, 'button', ['btn', 'btn-primary'], 'Select Fields')
-
-    const table = document.createElement('table')
-    table.classList.add('table', 'table-striped', 'table-bordered', 'table-hover')
-    const thead = document.createElement('thead')
-    const tbody = document.createElement('tbody')
-    table.appendChild(thead)
-    table.appendChild(tbody)
-    const cells: Record<string, HTMLTableCellElement[]> = {}
-    
-    const tr = document.createElement('tr')
-    for (const prop of properties) {
-        const th = document.createElement('th')
-        th.textContent = prop
-        tr.appendChild(th)
-        cells[prop] = [th]
-    }
-    thead.appendChild(tr)
-
+    // helper functions
+    const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
+    const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
     const defaultColumnFormater = (value: any) => {
         if (typeof value === 'object' && value !== null) {
-            return JSON.stringify(value, null, 2)
+            return safeExecute(() => JSON.stringify(value, null, 2), e => `${e}`)
         } else {
             return value || ''
         }
     }
 
-    for (const item of arr) {
-        const tr = document.createElement('tr')
+    // overall dom
+    const view = createElement(null, 'div')
+    const toolbar = createElement(view, 'div', ['input-group', 'mb-3'])
+    const fieldSelect = createElement(toolbar, 'button', ['btn', 'btn-primary', 'me-2'], 'Columns')
+    const sortBtn = createElement(toolbar, 'button', ['btn', 'btn-primary'], 'Sort')
+    const sortHint = createElement(toolbar, 'span', ['input-group-text', 'me-2'], '')
+    createElement(toolbar, 'span', ['input-group-text'], 'Filter')
+    const filter = createElement(toolbar, 'input', ['form-control'], '')
+    const table = createElement(view, 'table', ['table', 'table-striped', 'table-bordered', 'table-hover'])
+    const thead = createElement(table, 'thead')
+    const tbody = createElement(table, 'tbody')
+
+    // local states
+    const properties = dataProperties(arr)
+    const state = createState(presentation, ['columns', 'sortBy'], presentation.stateKey)
+       
+    type Row = HTMLTableRowElement & { rawIndex: number }
+
+    function constructTable() {
+        const tr = createElement(thead, 'tr', [])
         for (const prop of properties) {
-            const td = document.createElement('td')
-            const v = item[prop]
-            const formater = presentation.columnFormaters?.[prop] || defaultColumnFormater
-            const formattedValue = formater(v)
-            if (typeof formattedValue === 'string') {
-                td.textContent = formattedValue
+            const th = createElement(tr, 'th', [], prop, {cursor: 'pointer', userSelect: 'none'})
+            th.onclick = () => {
+                const s = state.sortBy?.find(s => s.column === prop)
+                if (s) {
+                    if (s.order === 'asc') {
+                        state.sortBy = [{column: prop, order: 'desc'}]
+                    } else if (s.order === 'desc') {
+                        state.sortBy = []
+                    }
+                } else {
+                    state.sortBy = [{column: prop, order: 'asc'}]
+                }
+                applySort()
             }
-            else if (formattedValue instanceof HTMLElement) {
-                td.appendChild(formattedValue)
-            }
-            
-            cells[prop].push(td)
-            tr.appendChild(td)
         }
-
-        if (presentation.onRowClick) {
-            tr.onclick = () => {
-                presentation.onRowClick!(item)
+    
+        // create the table body
+        for (const [i, item] of arr.entries()) {
+            const tr = createElement(tbody, 'tr', []);
+            (tr as Row).rawIndex = i
+            for (const prop of properties) {
+                const td = createElement(tr, 'td', [])
+                const v = item[prop]
+                const formater = presentation.columnFormaters?.[prop] || defaultColumnFormater
+                const formattedValue = formater(v)
+                if (typeof formattedValue === 'string') {
+                    td.textContent = formattedValue
+                }
+                else if (formattedValue instanceof HTMLElement) {
+                    td.appendChild(formattedValue)
+                }
             }
-            tr.style.cursor = 'pointer'
+    
+            if (presentation.onRowClick) {
+                tr.onclick = () => {
+                    presentation.onRowClick!(item)
+                }
+                tr.style.cursor = 'pointer'
+            }
         }
-
-        tbody.appendChild(tr)
     }
 
-    function syncColumns(columns: string[]) {
-        for (const prop of properties) {
-            const visible = columns.includes(prop)
-            for (const cell of cells[prop]) {
-                cell.style.display = visible ? '' : 'none'
+    function applyFilter(s: string) {
+        for (const item of tbody.children) {
+            let visible = false
+            for (const cell of item.children) {
+                if (cell.textContent?.toLowerCase().includes(s)) {
+                    visible = true
+                    break
+                }
+            }
+            item.classList.toggle('d-none', !visible)
+        }
+    }
+
+    function showhideColumns() {
+        forEachTableCell(table, (cell, row, col) => {
+            cell.style.display = (state.columns??properties).includes(properties[col]) ? '' : 'none'
+        })
+    }
+
+    function applySort() {
+        // update sort hint
+        const sortBy = state.sortBy || []
+        sortHint.textContent = `${sortBy.map(s => `${s.column} ${toArrow(s.order)}`).join(', ')}`
+        
+        // update table header to show sort & order
+        for (const [index, prop] of properties.entries()) {
+            const th = thead.children[0].children[index] as HTMLTableCellElement
+            th.innerHTML = '' // clear the header content
+            createElement(th, 'span', [], prop)
+            const i = sortBy.findIndex(s => s.column === prop)
+            if (i >= 0) {
+                const s = sortBy[i]
+                createElement(th, 'span', [], toArrow(s.order))
+                if (sortBy.length > 1) {
+                    createElement(th, 'span', [], `${i + 1}`, {verticalAlign: 'super', fontSize: '0.8em'})
+                }
             }
         }
+
+        // sort the table rows
+        const rows = Array.from(tbody.children) as Row[]
+        if (sortBy.length > 0) {
+            rows.sort((a, b) => {
+                for (const s of sortBy) {
+                    const aValue = arr[a.rawIndex][s.column]
+                    const bValue = arr[b.rawIndex][s.column]
+                    if (aValue < bValue) return s.order === 'asc' ? -1 : 1
+                    if (aValue > bValue) return s.order === 'asc' ? 1 : -1
+                }
+                return 0
+            })
+        } else {
+            rows.sort((a, b) => a.rawIndex - b.rawIndex)
+        }
+
+        tbody.innerHTML = ''
+        tbody.append(...rows)
     }
 
     fieldSelect.onclick = async () => {
-        columns = await MultiSelect('Select Fields', properties, columns)
-        syncColumns(columns)
+        const r = await showSelection('Select Fields', properties, {initialSelection: state.columns??properties})
+        if (r.action === null) return
+
+        // Note: select all means not just select all this time, but for future as well
+        //       so we cannot just save the current full set of properties
+        //       we need to save `undefined` to express this semantics
+        // TODO: find a more descriptive way
+        state.columns = r.selected.length === properties.length? undefined : r.selected
+        showhideColumns()
     }
 
+    sortBtn.onclick = async () => {
+        // construct all properties
+        const allOptions = properties.map(p => [`${p} ${toArrow('asc')}`, `${p} ${toArrow('desc')}`]).flat()
+        const sortOptions = state.sortBy?.map(s => `${s.column} ${toArrow(s.order)}`)
+        const checker = (oldSelection: string[], newSelection: string[]) => {
+            if (newSelection.length > oldSelection.length) {
+                // a new sort is added, we will make sure to remove old duplicates if there is
+                const item = newSelection[newSelection.length - 1]
+                const key = item.split(' ')[0]
+                return oldSelection.filter(s => s.split(' ')[0] !== key).concat([item])
+            }
+            return newSelection
+       }
+        const r = await showSelection('Sort By', allOptions, {preserveOrder: true, initialSelection: sortOptions, checker})
+        if (r.action === null) return
+        state.sortBy = r.selected.map(s => {
+            const [column, order] = s.split(' ')
+            return {column, order: fromArrow(order) as 'asc' | 'desc'}
+        })
+        applySort()
+    }
+
+    filter.oninput = () => {
+        const v = filter.value.toLowerCase()
+        applyFilter(v)
+    }
+
+    // logic start here
+    constructTable()
+    showhideColumns()
+    applySort()
     return view
 }
+

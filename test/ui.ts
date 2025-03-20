@@ -18,6 +18,6 @@ const jv = uu.createJsonView(JSON.stringify(data, null, 2))
 document.body.appendChild(jv)
 
 const arr = Object.entries(window).map(([k, v]) => {
-    return {key: k, value: v}
+    return {key: k, value: v, type: typeof v}
 })
-document.body.appendChild(uu.createTableFromArray(arr))
+document.body.appendChild(uu.createTableFromArray(arr, {stateKey: 'windowTable'}))
