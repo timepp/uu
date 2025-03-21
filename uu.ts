@@ -135,7 +135,7 @@ function createState<T extends object>(object: T, properties: (keyof T)[], state
 /// break text into pieces by given regex matchers
 /// each piece is attached with a category
 /// return: {content, category}[] that covers the whole text
-export function highLight(text: string, hc: [RegExp, string][]) {
+export function segmentByRegex(text: string, hc: [RegExp, string][]) {
     const matches: { index: number; length: number; content: string; category: string }[] = [];
 
     // 收集所有匹配项，按照优先级从高到低处理
@@ -192,8 +192,8 @@ export function highLight(text: string, hc: [RegExp, string][]) {
 /// - boolean: true/false
 /// - null: null
 /// - punctuation: {, }, [, ], :, ,
-export function highlightJson(text: string) {
-    return highLight(text, [
+export function segmentJson(text: string) {
+    return segmentByRegex(text, [
         [/"[^"]+":/g, 'key'],
         [/"(?:[^"\\]|\\.)*"/g, 'string'], // 支持转义的字符串匹配
         [/\d+/g, 'number'],
@@ -231,6 +231,10 @@ export function derivedUrl(oldUrl: string, paramsToAdd: Record<string, string>, 
         url.searchParams.set(key, value)
     }
     return url.toString()
+}
+
+export function derivedCurrentUrl(paramsToAdd: Record<string, string>, paramsToRemove?: RegExp) {
+    return derivedUrl(window.location.href, paramsToAdd, paramsToRemove)
 }
 
 export function createElement<K extends keyof HTMLElementTagNameMap>(parent: Element | null, tagName: K, classes: string[] = [], text?: string, style: Partial<CSSStyleDeclaration> = {}) {
@@ -290,7 +294,7 @@ export function showInfo(title: string, content: string) {
 
     const main = createElement(dc, 'div', [])
     main.style.maxWidth = "800px"
-    const h = highLight(content, [[/error:/ig, 'red']])
+    const h = segmentByRegex(content, [[/error:/ig, 'red']])
     // main.appendChild(h)
 
     createElement(dc, 'hr', [])
@@ -305,8 +309,19 @@ export function showInfo(title: string, content: string) {
     return dialog
 }
 
+export function highlightText(text: string, rules: [RegExp, string][]) {
+    const parts = segmentByRegex(text, rules)
+    return parts.map(part => {
+        const span = createElement(null, 'span', [], part.content)
+        if (part.category) {
+            span.style.color = part.category
+        }
+        return span
+    })
+}
+
 export function createJsonView(content: string) {
-    const parts = highlightJson(content)
+    const parts = segmentJson(content)
     const pre = createElement(null, 'pre', [])
 
     for (const part of parts) {
@@ -326,7 +341,7 @@ export function createJsonView(content: string) {
     return pre
 }
 
-export function showJsonResult(title: string, content: string) {
+export function showLargeJsonResult(title: string, content: string) {
     const dialog = createElement(document.body, 'dialog', [])
     dialog.style.width = "80vw";  
     dialog.style.height = "80vh"; 
@@ -342,8 +357,8 @@ export function showJsonResult(title: string, content: string) {
     createElement(header, 'h2', [], title)
 
     const main = createElement(dc, 'pre', [])
-    const h = highLight(content, [[/"[^"]+":/g, 'blue'], [/…[0-9]+ more (chars|items)…/g, 'red']])
-    // main.appendChild(h)
+    const spans = highlightText(content, [[/"[^"]+":/g, 'blue'], [/…[0-9]+ more (chars|items)…/g, 'red']])
+    main.append(...spans)
     main.style.flexGrow = "1";   // 让 textarea 占满剩余空间
     main.style.width = "100%";   // 宽度100%
 
@@ -367,16 +382,6 @@ export type SelectOption = {
     checker: (oldSelection: string[], newSelection: string[]) => string[] | string
 }
 
-export type SelectResult = {
-    selected: string[]
-    action: string | null
-}
-
-// TODO: for multi selection, how to express "everything"?
-// For example, when data is ['a', 'b', 'c'], 
-// `everything` doesn't equate to ['a', 'b', 'c'], it express the intention of 'doesn't care about the details'
-// if user choose ['a', 'b', 'c'], it's fixed to that. Next time if data changed to ['a', 'b', 'c', 'd'], user choice is still ['a', 'b', 'c']
-// if user choose `everything`, it means ['a', 'b', 'c'] this time, but next time if data changed to ['a', 'b', 'c', 'd'], it means ['a', 'b', 'c', 'd'] next time
 export async function showSelection(title: string, data: string[], options: Partial<SelectOption>) {
     const dialog = createElement(document.body, 'dialog', [], '', {width: '80vw'})
     const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
@@ -448,15 +453,15 @@ export async function showSelection(title: string, data: string[], options: Part
         }
     }
 
-    let resolver: ((value: SelectResult) => void)
-    const promise = new Promise<SelectResult>((resolve, reject) => {
+    let resolver: ((value: string[]|undefined) => void)
+    const promise = new Promise<string[]|undefined>((resolve, reject) => {
         resolver = resolve
     })
 
     okBtn.onclick = () => {
         dialog.close()
         dialog.remove()
-        resolver({selected, action: 'OK'})
+        resolver(selected)
     }
 
     // handle esc key to close the dialog
@@ -464,7 +469,7 @@ export async function showSelection(title: string, data: string[], options: Part
         if (e.key === 'Escape') {
             dialog.close()
             dialog.remove()
-            resolver({selected: [], action: null})
+            resolver(undefined)
         }
     })
 
@@ -473,13 +478,24 @@ export async function showSelection(title: string, data: string[], options: Part
     return promise
 }
 
+export type TableColumnProperty = {
+    formater?: (value: any) => string | HTMLElement
+    style?: Partial<CSSStyleDeclaration>
+}
 export type TablePresentation = {
     columns: string[]
-    columnFormaters: Record<string, (value: any) => string | HTMLElement>
+    columnProperties: Record<string, TableColumnProperty>
     sortBy: {
         column: string
         order: 'asc' | 'desc'
     }[]
+
+    // If not empty, raw index will be shown in the first column with the given name
+    // note: this column can be hide / sort as well
+    // typical usages is passing a '#' here
+    rawIndexColumn: string
+
+    pageSize?: number
     onRowClick: (item: any) => void
     stateKey: string // used to save the state of the table in local storage
 }
@@ -495,7 +511,7 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
             return value || ''
         }
     }
-
+    
     // overall dom
     const view = createElement(null, 'div')
     const toolbar = createElement(view, 'div', ['input-group', 'mb-3'])
@@ -504,16 +520,29 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
     const sortHint = createElement(toolbar, 'span', ['input-group-text', 'me-2'], '')
     createElement(toolbar, 'span', ['input-group-text'], 'Filter')
     const filter = createElement(toolbar, 'input', ['form-control'], '')
+    const counts = createElement(toolbar, 'span', ['input-group-text'], '20 / 100')
+
+    // now paging section, which looks like 4 buttons and an edit: "<< < [8] > >>
+    const paging = createElement(toolbar, 'div', ['btn-group'])
+    const firstBtn = createElement(paging, 'button', ['btn', 'btn-primary', 'ms-2'], '<<')
+    const prevBtn = createElement(paging, 'button', ['btn', 'btn-primary'], '<')
+    const pageText = createElement(paging, 'button', ['btn', 'btn-secondary'], '20 * 2/5')
+    const nextBtn = createElement(paging, 'button', ['btn', 'btn-primary'], '>')
+    const lastBtn = createElement(paging, 'button', ['btn', 'btn-primary'], '>>')
+
+
     const table = createElement(view, 'table', ['table', 'table-striped', 'table-bordered', 'table-hover'])
     const thead = createElement(table, 'thead')
     const tbody = createElement(table, 'tbody')
 
     // local states
-    const properties = dataProperties(arr)
+    const properties = [presentation.rawIndexColumn, ...dataProperties(arr)].filter(Boolean) as string[]
+    let currentPage = 0 // page won't be persisted
+    let totalVisible = 0 // total visible rows, used for paging
     const state = createState(presentation, ['columns', 'sortBy'], presentation.stateKey)
-       
-    type Row = HTMLTableRowElement & { rawIndex: number }
 
+    type Row = HTMLTableRowElement & { rawIndex: number }
+    
     function constructTable() {
         const tr = createElement(thead, 'tr', [])
         for (const prop of properties) {
@@ -538,10 +567,10 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
             const tr = createElement(tbody, 'tr', []);
             (tr as Row).rawIndex = i
             for (const prop of properties) {
-                const td = createElement(tr, 'td', [])
+                const td = createElement(tr, 'td', [], '', presentation.columnProperties?.[prop]?.style)
                 const v = item[prop]
-                const formater = presentation.columnFormaters?.[prop] || defaultColumnFormater
-                const formattedValue = formater(v)
+                const formater = presentation.columnProperties?.[prop]?.formater || defaultColumnFormater
+                const formattedValue = (prop === presentation.rawIndexColumn)? `${i}` : formater(v)
                 if (typeof formattedValue === 'string') {
                     td.textContent = formattedValue
                 }
@@ -559,17 +588,58 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
         }
     }
 
+    function gotoPage(page: number) {
+        const pageSize = presentation.pageSize || Infinity
+        const lastPage = Math.floor(totalVisible / pageSize)
+        if (page < 0) page = 0
+        if (page > lastPage) page = lastPage
+        currentPage = page
+        applyPaging()
+    }
+
+    function applyPaging() {
+        const pageSize = presentation.pageSize || Infinity
+        // only visible rows falling into the current page are shown, all others are hidden
+        let pos = 0
+        for (const row of tbody.children) {
+            const r = row as Row
+
+            if (r.classList.contains('invisible')) {
+                r.classList.toggle('d-none', true)
+                continue
+            }
+
+            const page = Math.floor(pos / pageSize)
+            if (page === currentPage) {
+                r.classList.toggle('d-none', false)
+            } else {
+                r.classList.toggle('d-none', true)
+            }
+            pos++
+        }
+        pageText.textContent = `${currentPage + 1} / ${Math.ceil(totalVisible / presentation.pageSize!)}`
+        if (!presentation.pageSize) {
+            paging.classList.add('d-none')
+        }
+    }
+
     function applyFilter(s: string) {
+        totalVisible = 0
+        let total = 0
         for (const item of tbody.children) {
-            let visible = false
+            let meet = false
             for (const cell of item.children) {
                 if (cell.textContent?.toLowerCase().includes(s)) {
-                    visible = true
+                    meet = true
                     break
                 }
             }
-            item.classList.toggle('d-none', !visible)
+            total++
+            totalVisible += (meet ? 1 : 0)
+            item.classList.toggle('invisible', !meet)
         }
+        counts.textContent = `${totalVisible} / ${total}`
+        currentPage = 0
     }
 
     function showhideColumns() {
@@ -603,8 +673,8 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
         if (sortBy.length > 0) {
             rows.sort((a, b) => {
                 for (const s of sortBy) {
-                    const aValue = arr[a.rawIndex][s.column]
-                    const bValue = arr[b.rawIndex][s.column]
+                    const aValue = (s.column === presentation.rawIndexColumn)? a.rawIndex : arr[a.rawIndex][s.column]
+                    const bValue = (s.column === presentation.rawIndexColumn)? b.rawIndex : arr[b.rawIndex][s.column]
                     if (aValue < bValue) return s.order === 'asc' ? -1 : 1
                     if (aValue > bValue) return s.order === 'asc' ? 1 : -1
                 }
@@ -616,17 +686,18 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
 
         tbody.innerHTML = ''
         tbody.append(...rows)
+        applyPaging()
     }
 
     fieldSelect.onclick = async () => {
         const r = await showSelection('Select Fields', properties, {initialSelection: state.columns??properties})
-        if (r.action === null) return
+        if (r === undefined) return
 
         // Note: select all means not just select all this time, but for future as well
         //       so we cannot just save the current full set of properties
         //       we need to save `undefined` to express this semantics
         // TODO: find a more descriptive way
-        state.columns = r.selected.length === properties.length? undefined : r.selected
+        state.columns = (r.length === properties.length)? undefined : r
         showhideColumns()
     }
 
@@ -644,8 +715,8 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
             return newSelection
        }
         const r = await showSelection('Sort By', allOptions, {preserveOrder: true, initialSelection: sortOptions, checker})
-        if (r.action === null) return
-        state.sortBy = r.selected.map(s => {
+        if (r === undefined) return
+        state.sortBy = r.map(s => {
             const [column, order] = s.split(' ')
             return {column, order: fromArrow(order) as 'asc' | 'desc'}
         })
@@ -655,11 +726,22 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
     filter.oninput = () => {
         const v = filter.value.toLowerCase()
         applyFilter(v)
+        applyPaging()
     }
+
+    pageText.onclick = () => {
+        const page = Number(prompt('Page size', `${presentation.pageSize || 20}`))
+        gotoPage(page - 1)
+    }
+    firstBtn.onclick = () => gotoPage(0)
+    prevBtn.onclick = () => gotoPage(currentPage - 1)
+    nextBtn.onclick = () => gotoPage(currentPage + 1)
+    lastBtn.onclick = () => gotoPage(Infinity)
 
     // logic start here
     constructTable()
     showhideColumns()
+    applyFilter('')
     applySort()
     return view
 }

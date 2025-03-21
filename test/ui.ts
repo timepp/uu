@@ -20,4 +20,4 @@ document.body.appendChild(jv)
 const arr = Object.entries(window).map(([k, v]) => {
     return {key: k, value: v, type: typeof v}
 })
-document.body.appendChild(uu.createTableFromArray(arr, {stateKey: 'windowTable'}))
+document.body.appendChild(uu.createTableFromArray(arr, {stateKey: 'windowTable', rawIndexColumn: '#', pageSize: 10}))
