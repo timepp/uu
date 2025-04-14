@@ -50,6 +50,22 @@ export function formatFloat(n: number, digits = 2, mininumDigits = 0): string {
     })
 }
 
+export function toFileSystemCompatibleName(name: string): string {
+    // 1. Remove leading and trailing spaces
+    name = name.trim()
+
+    // 2. Replace invalid characters with underscores
+    const invalidChars = /[<>:"/\\|?*]/g
+    name = name.replace(invalidChars, '_')
+
+    // 3. Limit length to 255 characters
+    if (name.length > 255) {
+        name = name.slice(0, 255)
+    }
+
+    return name
+}
+
 // catch all excpetion and return a default value if error occurs
 export function safeExecute<T>(fn: () => T, defaultValue: T | ((e: unknown) => T)): T {
     try {
