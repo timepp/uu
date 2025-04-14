@@ -41,7 +41,7 @@ Deno.test('data format', async () => {
 Deno.test('highLight', async () => {
     const text = `{"name": "value3389"}`
 
-    const result1 = uu.highLight(text, [[/"[^"]+":/g, 'key'], [/"[^"]+"/g, 'string'], [/\d+/g, 'number']])
+    const result1 = uu.highlightText(text, [[/"[^"]+":/g, 'key'], [/"[^"]+"/g, 'string'], [/\d+/g, 'number']])
     console.log(result1)
     ut.assertEquals(result1, [
         { category: '', content: '{' },

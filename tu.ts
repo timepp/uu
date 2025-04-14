@@ -217,3 +217,78 @@ export function segmentJson(text: string): {content: string, category: 'key' | '
         category: 'key' | 'string' | 'number' | 'true' | 'false' | 'null' | 'punctuation' | ''
     }[]
 }
+
+/** get the date boundaries for a given date and type
+ *  @example getDateBoundaries(new Date(), 'week', 1) // get the next week boundaries
+ *  @example getDateBoundaries(new Date(), 'week', -1) // get the last week boundaries
+ *  @example getDateBoundaries(new Date(), 'month', 0) // get current month boundaries
+ */
+export function getDateBoundaries(t: Date, type: 'week' | 'month' | 'day' | 'year', offset: number = 0): { start: Date, end: Date } {
+    const start = new Date(t);
+    const end = new Date(t);
+
+    switch (type) {
+        case 'week':
+            const day = start.getDay();
+            start.setDate(start.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
+            end.setDate(start.getDate() + 6);
+            break;
+        case 'month':
+            start.setMonth(start.getMonth() + offset, 1);
+            end.setMonth(start.getMonth() + 1, 0);
+            break;
+        case 'day':
+            start.setDate(start.getDate() + offset);
+            end.setDate(start.getDate());
+            break;
+        case 'year':
+            start.setFullYear(start.getFullYear() + offset, 0, 1);
+            end.setFullYear(start.getFullYear(), 11, 31);
+            break;
+    }
+
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    return { start, end };
+}
+
+/** replace html template
+ *  this function replace the following with the corresponding value in the replacements object:
+ *  <!-- {{key}} Begin -->
+    ...
+    <!-- {{key}} End -->
+ */
+export function replaceHtmlTemplate(template: string, replacements: Record<string, string>): string {
+    const regex = /<!--\s*{{(.*?)}}\s*Begin\s*-->([\s\S]*?)<!--\s*{{\1}}\s*End\s*-->/g;
+    return template.replace(regex, (match, key) => {
+        return replacements[key] || match;
+    });
+}
+
+export type TokenInfo = {
+    aud: string;
+    upn: string;
+    exp: number;
+    scp?: string;
+}
+
+export function decodeJwt(token: string): { raw: string, ti: TokenInfo, isExpired: boolean } {
+    const parts = token.split('.');
+    if (parts.length !== 3) {
+        throw new Error('JWT must have 3 parts');
+    }
+
+    // convert base64url to base64
+    const base64Url = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const payload = JSON.parse(atob(base64Url));
+
+    const ti = payload as TokenInfo;
+    // check if the token is expired
+    const isExpired = ti.exp < Math.floor(Date.now() / 1000);
+    return {
+        raw: token,
+        ti,
+        isExpired,
+    }
+}
