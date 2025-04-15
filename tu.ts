@@ -32,7 +32,7 @@ export function trimPrefix(str: string, prefix: string): string {
     return str;
 }
 
-export function hashString(s: string) {
+export function hashString(s: string): number {
     let hash = 0;
     if (s.length === 0) return hash;
     for (let i = 0; i < s.length; i++) {
@@ -283,7 +283,7 @@ export function getDateBoundaries(t: Date, type: 'week' | 'month' | 'day' | 'yea
     will construct UTC date instead of local date.
     @see https://www.google.com/search?q=date-only+forms+are+interpreted+as+a+UTC+time
 */
-export function parseDate(s: string) {
+export function parseDate(s: string) : Date {
     if (!s.includes(':')) {
         s = s + 'T00:00:00'
     }
