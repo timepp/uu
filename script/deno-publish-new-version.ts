@@ -18,24 +18,45 @@ async function run(simpleCmd: string, args?: string[]) {
     return new TextDecoder().decode(stdout)
 }
 
-const json = JSON.parse(Deno.readTextFileSync('deno.json'))
-// increase the semver version by 1
-const version = json.version.split('.').map(Number)
-console.log(`current version: ${json.version}`)
+async function isWorkingDirClean() {
+    const cmd = new Deno.Command('git', {
+        args: ['status', '--porcelain'],
+        stdout: 'piped',
+        stderr: 'piped'
+    })
+    const { code, stdout } = await cmd.output()
+    if (code !== 0) {
+        console.error(`Error: ${new TextDecoder().decode(stdout)}`)
+    }
+    return new TextDecoder().decode(stdout).trim() === ''
+}
 
-version[2]++
-json.version = version.join('.')
-Deno.writeTextFileSync('deno.json', JSON.stringify(json, null, 2))
+async function main() {
+    if (await isWorkingDirClean()) {
+        console.log('Working directory is clean.')
+        return
+    }
 
-console.log(`new version: ${json.version}`)
+    const json = JSON.parse(Deno.readTextFileSync('deno.json'))
+    // increase the semver version by 1
+    const version = json.version.split('.').map(Number)
+    console.log(`current version: ${json.version}`)
 
-const commitMessage = Deno.args[0] || prompt('Enter commit message: ')
-if (!commitMessage) throw new Error('Commit message is required')
+    version[2]++
+    json.version = version.join('.')
+    Deno.writeTextFileSync('deno.json', JSON.stringify(json, null, 2))
 
-console.log(`committing changes...`)
-await run(`git add *`)
-await run('git', ['commit', '-m', "${commitMessage}"])
+    console.log(`new version: ${json.version}`)
 
-console.log(`publishing new version...`)
-await run(`deno publish`)
+    const commitMessage = Deno.args[0] || prompt('Enter commit message: ')
+    if (!commitMessage) throw new Error('Commit message is required')
 
+    console.log(`committing changes...`)
+    await run(`git add *`)
+    await run('git', ['commit', '-m', "${commitMessage}"])
+
+    console.log(`publishing new version...`)
+    await run(`deno publish`)
+}
+
+await main()
