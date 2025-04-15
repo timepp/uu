@@ -1,3 +1,65 @@
+/// get time as YYYY-MM-DD HH:mm:ss
+/// timeZoneOffset is in minutes, e.g. 
+//     -480: for UTC+8
+//     480: for UTC-8
+//     0: for UTC
+//     undefined: for local device timezone (so the result can be different on different devices)
+export function formatTime(d: Date, timeZoneOffset?: number): string {
+    const t = d.getTime()
+    const date = new Date(t - (timeZoneOffset??d.getTimezoneOffset()) * 60 * 1000)
+    return date.toISOString().slice(0, 19).replace('T', ' ')
+}
+
+export function formatFloat(n: number, digits = 2, mininumDigits = 0): string {
+    return n.toLocaleString(undefined, { 
+        minimumFractionDigits: mininumDigits, 
+        maximumFractionDigits: digits,
+        useGrouping: false,
+    })
+}
+
+export function trimSuffix(str: string, suffix: string): string {
+    if (str.endsWith(suffix)) {
+        return str.slice(0, -suffix.length);
+    }
+    return str;
+}
+
+export function trimPrefix(str: string, prefix: string): string {
+    if (str.startsWith(prefix)) {
+        return str.slice(prefix.length);
+    }
+    return str;
+}
+
+export function hashString(s: string) {
+    let hash = 0;
+    if (s.length === 0) return hash;
+    for (let i = 0; i < s.length; i++) {
+        hash = (hash << 5) - hash;
+        hash = hash + s.charCodeAt(i);
+        hash = hash & hash;
+    }
+    return hash;
+}
+
+
+export function toFileSystemCompatibleName(name: string): string {
+    // 1. Remove leading and trailing spaces
+    name = name.trim()
+
+    // 2. Replace invalid characters with underscores
+    const invalidChars = /[<>:"/\\|?*]/g
+    name = name.replace(invalidChars, '_')
+
+    // 3. Limit length to 255 characters
+    if (name.length > 255) {
+        name = name.slice(0, 255)
+    }
+
+    return name
+}
+
 function traverseObjectInternal(obj: any, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => void, path: string[], seenObjects: WeakSet<object>): void {
     if (typeof obj !== 'object' || obj === null) {
         callback(path, obj, 'leaf');
@@ -28,42 +90,6 @@ export function dataProperties(arr: object[]): string[] {
         }
     }
     return [...propSet]
-}
-
-/// get time as YYYY-MM-DD HH:mm:ss
-/// timeZoneOffset is in minutes, e.g. 
-//     -480: for UTC+8
-//     480: for UTC-8
-//     0: for UTC
-//     undefined: for local device timezone (so the result can be different on different devices)
-export function formatTime(d: Date, timeZoneOffset?: number): string {
-    const t = d.getTime()
-    const date = new Date(t - (timeZoneOffset??d.getTimezoneOffset()) * 60 * 1000)
-    return date.toISOString().slice(0, 19).replace('T', ' ')
-}
-
-export function formatFloat(n: number, digits = 2, mininumDigits = 0): string {
-    return n.toLocaleString(undefined, { 
-        minimumFractionDigits: mininumDigits, 
-        maximumFractionDigits: digits,
-        useGrouping: false,
-    })
-}
-
-export function toFileSystemCompatibleName(name: string): string {
-    // 1. Remove leading and trailing spaces
-    name = name.trim()
-
-    // 2. Replace invalid characters with underscores
-    const invalidChars = /[<>:"/\\|?*]/g
-    name = name.replace(invalidChars, '_')
-
-    // 3. Limit length to 255 characters
-    if (name.length > 255) {
-        name = name.slice(0, 255)
-    }
-
-    return name
 }
 
 // catch all excpetion and return a default value if error occurs
@@ -251,6 +277,17 @@ export function getDateBoundaries(t: Date, type: 'week' | 'month' | 'day' | 'yea
     end.setHours(23, 59, 59, 999);
 
     return { start, end };
+}
+
+/** This function fixes the bug in Date that when time part it's not given, it 
+    will construct UTC date instead of local date.
+    @see https://www.google.com/search?q=date-only+forms+are+interpreted+as+a+UTC+time
+*/
+export function parseDate(s: string) {
+    if (!s.includes(':')) {
+        s = s + 'T00:00:00'
+    }
+    return new Date(s)
 }
 
 /** replace html template
