@@ -56,7 +56,10 @@ async function main() {
     await run('git', ['commit', '-m', "${commitMessage}"])
 
     console.log(`publishing new version...`)
-    await run(`deno publish`)
+    const cmd = new Deno.Command('deno', {
+        args: ['publish'],
+    })
+    cmd.spawn()
 }
 
 await main()
