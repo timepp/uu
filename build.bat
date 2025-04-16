@@ -1,0 +1,1 @@
+deno run -A script\build.ts

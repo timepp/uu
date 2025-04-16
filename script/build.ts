@@ -1,11 +1,14 @@
 import * as ma from './memory-asset.ts'
-
-const files = [
-    {name: 'uu.ts', path: 'uu.ts'}
-]
+import * as hash from './hash.ts'
+import * as assets from './assets.ts'
 
 const myDir = import.meta.dirname
 
-// const version = JSON.parse(Deno.readTextFileSync('jsr.json')).version
+for (const file of assets.files) {
+    console.log(`updating hash: ${file.name}`)
+    const filePath = `${file.path}`
+    hash.updateHash(filePath)
+}
 
-ma.createMemoryAssets(files, `${myDir}/bootstrap-assets.ts`)
+ma.createMemoryAssets(assets.files, `${myDir}/bootstrap-assets.ts`)
+console.log('Memory assets created at bootstrap-assets.ts')

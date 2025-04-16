@@ -15,3 +15,9 @@ Since browser do not natively support importing remote modules, the reusing is d
 
 Simply `import * as uu from 'jsr:@timepp/uu' in Deno environment.
 
+## Development
+
+### Build for the `install` command
+
+1. config files targeted for `install` in `assets.ts`
+2. run `build.ts` to hash the files and add them to bootstrap-assets
