@@ -1,5 +1,5 @@
 // tu: a set of utility functions
-// hash: 1ad088fcc3b7156d910250f248a6103614e895669f75b8bb5c313c994cd1a6cc
+// hash: 9a4c8f6d9a3064459500e0cbbf459a3fcd9bf8fcf4c78733b2d9d66546a742b1
 // Please do not modify this file directly. Use the following command to update this file on a deno environment:
 // deno run -A --reload jsr:@timepp/uu/install
 
@@ -36,6 +36,56 @@ export function trimPrefix(str: string, prefix: string): string {
         return str.slice(prefix.length);
     }
     return str;
+}
+
+export function trimEmptyLines(str: string, ...locations: ('head' | 'tail' | 'middle')[]): string {
+    let lines = str.split('\n');
+
+    // Handle head (leading) empty lines
+    if (locations.includes('head')) {
+        lines = lines.slice(lines.findIndex(line => line.trim() !== ''));
+    }
+
+    // Handle tail (trailing) empty lines
+    if (locations.includes('tail')) {
+        let end = lines.length - 1;
+        while (end >= 0 && lines[end].trim() === '') {
+            end--;
+        }
+        lines = lines.slice(0, end + 1);
+    }
+
+    // Handle middle empty lines
+    if (locations.includes('middle')) {
+        lines = lines.filter(line => line.trim() !== '');
+    }
+
+    return lines.join('\n');
+}
+
+export function indentTextWithSpaces(text: string, spaces: number): string {
+    const indent = ' '.repeat(spaces);
+    return text.split('\n').map(line => indent + line).join('\n');
+}
+
+export function getIndention(text: string): number {
+    let indention = 0
+    for (let i = 0; i < text.length; i++) {
+        if (text[i] === ' ') {
+            indention++
+        } else {
+            break
+        }
+    }
+    return indention
+}
+
+export function unIndentTextWithSpaces(text: string, spaces: number): string {
+    // if spaces is more than leading spaces, just remove all leading spaces
+    return text.split('\n').map(line => {
+        const removeCount = Math.min(getIndention(line), spaces)
+        return line.slice(removeCount);
+    }).join('\n');
 }
 
 export function hashString(s: string): number {

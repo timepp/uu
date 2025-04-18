@@ -59,3 +59,13 @@ Deno.test('derivedUrl', async () => {
     const newUrl = uu.derivedUrl(url, paramsToAdd, paramsToRemove)
     ut.assertEquals(newUrl, 'https://example.com/path?name=newValue&newParam=newValue')
 })
+
+Deno.test('indention', () => {
+    ut.assertEquals(uu.getIndention('   fire'), 3)
+    ut.assertEquals(uu.indentTextWithSpaces('fire', 4), '    fire')
+    ut.assertEquals(uu.unIndentTextWithSpaces('   fire', 4), 'fire')
+    ut.assertEquals(uu.unIndentTextWithSpaces('   fire', 3), 'fire')
+    ut.assertEquals(uu.unIndentTextWithSpaces('   fire', 2), ' fire')
+    ut.assertEquals(uu.trimEmptyLines(' \n\n  fire\n\n', 'head'), '  fire\n\n')
+    ut.assertEquals(uu.trimEmptyLines(' \n\n  fire\n\n', 'tail'), ' \n\n  fire')
+})
