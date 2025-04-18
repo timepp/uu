@@ -1,5 +1,5 @@
 // tu: a set of utility functions
-// hash: 9a4c8f6d9a3064459500e0cbbf459a3fcd9bf8fcf4c78733b2d9d66546a742b1
+// hash: fca00ce6799a39149684e46e23d8e69756354ecab60333b49f7111903f821340
 // Please do not modify this file directly. Use the following command to update this file on a deno environment:
 // deno run -A --reload jsr:@timepp/uu/install
 
@@ -78,6 +78,16 @@ export function getIndention(text: string): number {
         }
     }
     return indention
+}
+
+// take the first line as reference, indent or unindent accordingly
+export function ensureIndention(text: string, spaces: number): string {
+    const indention = getIndention(text)
+    if (indention >= spaces) {
+        return unIndentTextWithSpaces(text, indention - spaces)
+    } else {
+        return indentTextWithSpaces(text, spaces - indention)
+    }
 }
 
 export function unIndentTextWithSpaces(text: string, spaces: number): string {
