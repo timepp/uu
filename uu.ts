@@ -3,7 +3,7 @@
 // Please do not modify this file directly. Use the following command to update this file on a deno environment:
 // deno run -A --reload jsr:@timepp/uu
 
-function traverseObjectInternal(obj: any, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => void, path: string[], seenObjects: WeakSet<object>): void {
+function traverseObjectInternal(obj: any, maxdepth: number, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => void, path: string[], seenObjects: Set<object>): void {
     if (typeof obj !== 'object' || obj === null) {
         callback(path, obj, 'leaf');
         return;
@@ -14,15 +14,44 @@ function traverseObjectInternal(obj: any, callback: (path: string[], value: any,
     } else {
         seenObjects.add(obj);
         callback(path, obj, 'object');
+        if (path.length >= maxdepth) return;
         for (const key in obj) {
-            traverseObjectInternal(obj[key], callback, [...path, key], seenObjects);
+            traverseObjectInternal(obj[key], maxdepth, callback, [...path, key], seenObjects);
         }
     }
 }
 
-export function traverseObject(obj: any, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => void): void {
-    const seenObjects = new WeakSet<object>()
-    traverseObjectInternal(obj, callback, [], seenObjects)
+export function traverseObject(obj: any, maxdepth: number, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => void): void {
+    const seenObjects = new Set<object>()
+    traverseObjectInternal(obj, maxdepth, callback, [], seenObjects)
+}
+
+// used in json.stringify
+export function getStringifyReplacer(limit: {maxStringLength?: number, maxArraySize?:number} = {}) {
+    const seen = new WeakMap<object, string>()
+    return (key, value) => {
+        // circular detection
+        if (typeof value === "object" && value !== null) {
+            const previousKey = seen.get(value)
+            if (previousKey) {
+                return `<<circular ref to ${previousKey}>>`
+            }
+            seen.set(value, key)
+        }
+
+        // string length limit
+        if (typeof value === 'string' && limit.maxStringLength && value.length > limit.maxStringLength) {
+            return `${value.slice(0, limit.maxStringLength - 12)} …${value.length - limit.maxStringLength + 12} more chars…`
+        }
+
+        // array size limit
+        // maxArraySize 10 => <9 items> -> <10 items> -> <9 items> ... 2 more items ...
+        if (Array.isArray(value) && limit.maxArraySize && value.length > limit.maxArraySize) {
+            return value.slice(0, limit.maxArraySize - 1).concat(`…${value.length - limit.maxArraySize + 1} more items…`)
+        }
+
+        return value
+    }
 }
 
 export function dataProperties(arr: object[]) {
@@ -281,34 +310,6 @@ export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>) {
     }
 }
 
-// show information dialog, content is normal text, dialog no longer fix height
-export function showInfo(title: string, content: string) {
-    const dialog = createElement(document.body, 'dialog', [])
-
-    const dc = createElement(dialog, 'div', [])
-
-    const header = createElement(dc, 'div', [])
-    header.style.textAlign = "center"
-    createElement(header, 'h2', [], title)
-    createElement(dc, 'hr', [])
-
-    const main = createElement(dc, 'div', [])
-    main.style.maxWidth = "800px"
-    const h = segmentByRegex(content, [[/error:/ig, 'red']])
-    // main.appendChild(h)
-
-    createElement(dc, 'hr', [])
-
-    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
-    const closeButton = createElement(footer, 'button', ['btn', 'btn-primary'], 'Close')
-    closeButton.onclick = () => {
-        dialog.close()
-        dialog.remove()
-    }
-    dialog.showModal()
-    return dialog
-}
-
 export function highlightText(text: string, rules: [RegExp, string][]) {
     const parts = segmentByRegex(text, rules)
     return parts.map(part => {
@@ -341,34 +342,34 @@ export function createJsonView(content: string) {
     return pre
 }
 
-export function showLargeJsonResult(title: string, content: string) {
-    const dialog = createElement(document.body, 'dialog', [])
-    dialog.style.width = "80vw";  
-    dialog.style.height = "80vh"; 
-
+export function showInDialog(title: string, content: HTMLElement) {
+    const dialog = createElement(document.body, 'dialog', [], '', {minWidth: '50vw'})
     const dc = createElement(dialog, 'div', [])
-    dc.style.width = "100%";   // 宽度100%
-    dc.style.height = "100%";  // 高度100%
-    dc.style.display = "flex";
-    dc.style.alignItems = "center";
-    dc.style.flexDirection = "column";
-
     const header = createElement(dc, 'div', [])
+    header.style.textAlign = "center"
     createElement(header, 'h2', [], title)
+    createElement(dc, 'hr', [])
 
-    const main = createElement(dc, 'pre', [])
-    const spans = highlightText(content, [[/"[^"]+":/g, 'blue'], [/…[0-9]+ more (chars|items)…/g, 'red']])
-    main.append(...spans)
-    main.style.flexGrow = "1";   // 让 textarea 占满剩余空间
-    main.style.width = "100%";   // 宽度100%
+    dc.appendChild(content)
 
-    const closeButton = createElement(dc, 'button', ['btn', 'btn-primary'], 'Close')
+    createElement(dc, 'hr', [])
+    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
+    const closeButton = createElement(footer, 'button', ['btn', 'btn-primary'], 'Close')
     closeButton.onclick = () => {
         dialog.close()
         dialog.remove()
     }
     dialog.showModal()
     return dialog
+}
+
+export function showLargeJsonResult(title: string, content: string) {
+    const obj = JSON.parse(content)
+    const trimmedContent = JSON.stringify(obj, getStringifyReplacer({maxStringLength: 80, maxArraySize: 20}), 2)
+    const main = createElement(null, 'pre', [])
+    const spans = highlightText(trimmedContent, [[/"[^"]+":/g, 'blue'], [/…[0-9]+ more (chars|items)…/g, 'red']])
+    main.append(...spans)
+    showInDialog(title, main)
 }
 
 export type SelectOption = {
@@ -389,7 +390,13 @@ export async function showSelection(title: string, data: string[], options: Part
     createElement(header, 'h2', [], title)
     const selectedContent = createElement(dc, 'div', [])
     // createElement(dc, 'hr', ['w-100'])
-    
+    const toolbar = createElement(dc, 'div', ['btn-group', 'mb-2', 'mt-2'])
+    const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-primary', 'me-2'], 'Select All')
+    const deselectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-primary', 'me-2'], 'Deselect All')
+    if (options.singleSelect) {
+        selectAllBtn.classList.add('d-none')
+        deselectAllBtn.classList.add('d-none')
+    }
     // filter text
     const filter = createElement(dc, 'input', ['form-control', 'mt-2', 'mb-2'])
     filter.placeholder = "Filter"
@@ -458,6 +465,20 @@ export async function showSelection(title: string, data: string[], options: Part
         resolver = resolve
     })
 
+    selectAllBtn.onclick = () => {
+        selected = options.preserveOrder ? data : [...data]
+        alert.classList.add('d-none')
+        okBtn.disabled = false
+        syncSelected()
+    }
+
+    deselectAllBtn.onclick = () => {
+        selected = []
+        alert.classList.add('d-none')
+        okBtn.disabled = false
+        syncSelected()
+    }
+
     okBtn.onclick = () => {
         dialog.close()
         dialog.remove()
@@ -483,21 +504,37 @@ export type TableColumnProperty = {
     style?: Partial<CSSStyleDeclaration>
 }
 export type TablePresentation = {
-    columns: string[]
     columnProperties: Record<string, TableColumnProperty>
-    sortBy: {
-        column: string
-        order: 'asc' | 'desc'
-    }[]
 
     // If not empty, raw index will be shown in the first column with the given name
     // note: this column can be hide / sort as well
     // typical usages is passing a '#' here
     rawIndexColumn: string
 
-    pageSize?: number
-    onRowClick: (item: any) => void
-    stateKey: string // used to save the state of the table in local storage
+    // if present, paging will be enabled
+    // if not present, all rows will be shown
+    pageSize: number
+
+    // use this with caution, as the column width might change due to the combination effect of sorting+paging
+    // For example, you click a column header, 
+    //    the data in current page are changed
+    //    all columns are resized to fit the new data
+    //    the column header under your mouse is changed to another one
+    //    you wanted to sort in reverse order, so you click at the same position again
+    //    but the column header is different now
+    // To avoid this, either: set all column width explicitly, or disable paging
+    // There will always be a sort dialog no matter what is option is
+    enableSortByClickingColumnHeader: boolean
+
+    onCellClick: (item: any, prop: string, dataIndex: number) => void
+
+    columns: string[]
+    sortBy: {
+        column: string
+        order: 'asc' | 'desc'
+    }[]
+    // If not empty, sort and column settings will be saved to local storage with the given key
+    stateKey: string
 }
 
 export function createTableFromArray(arr: any[], presentation: Partial<TablePresentation> = {}) {
@@ -531,7 +568,7 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
     const lastBtn = createElement(paging, 'button', ['btn', 'btn-primary'], '>>')
 
 
-    const table = createElement(view, 'table', ['table', 'table-striped', 'table-bordered', 'table-hover'])
+    const table = createElement(view, 'table', ['table', 'table-bordered', 'table-hover'])
     const thead = createElement(table, 'thead')
     const tbody = createElement(table, 'tbody')
 
@@ -546,19 +583,23 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
     function constructTable() {
         const tr = createElement(thead, 'tr', [])
         for (const prop of properties) {
-            const th = createElement(tr, 'th', [], prop, {cursor: 'pointer', userSelect: 'none'})
-            th.onclick = () => {
-                const s = state.sortBy?.find(s => s.column === prop)
-                if (s) {
-                    if (s.order === 'asc') {
-                        state.sortBy = [{column: prop, order: 'desc'}]
-                    } else if (s.order === 'desc') {
-                        state.sortBy = []
+            const th = createElement(tr, 'th', [], prop)
+            if (presentation.enableSortByClickingColumnHeader) {
+                th.style.cursor = 'pointer'
+                th.style.userSelect = 'none'
+                th.onclick = () => {
+                    const s = state.sortBy?.find(s => s.column === prop)
+                    if (s) {
+                        if (s.order === 'asc') {
+                            state.sortBy = [{column: prop, order: 'desc'}]
+                        } else if (s.order === 'desc') {
+                            state.sortBy = []
+                        }
+                    } else {
+                        state.sortBy = [{column: prop, order: 'asc'}]
                     }
-                } else {
-                    state.sortBy = [{column: prop, order: 'asc'}]
+                    applySort()
                 }
-                applySort()
             }
         }
     
@@ -566,24 +607,23 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
         for (const [i, item] of arr.entries()) {
             const tr = createElement(tbody, 'tr', []);
             (tr as Row).rawIndex = i
-            for (const prop of properties) {
+            for (const [j, prop] of properties.entries()) {
                 const td = createElement(tr, 'td', [], '', presentation.columnProperties?.[prop]?.style)
                 const v = item[prop]
                 const formater = presentation.columnProperties?.[prop]?.formater || defaultColumnFormater
-                const formattedValue = (prop === presentation.rawIndexColumn)? `${i}` : formater(v)
+                const formattedValue = (prop === presentation.rawIndexColumn)? `${i+1}` : formater(v)
                 if (typeof formattedValue === 'string') {
                     td.textContent = formattedValue
                 }
                 else if (formattedValue instanceof HTMLElement) {
                     td.appendChild(formattedValue)
                 }
-            }
-    
-            if (presentation.onRowClick) {
-                tr.onclick = () => {
-                    presentation.onRowClick!(item)
+
+                if (presentation.onCellClick) {
+                    td.onclick = () => {
+                        presentation.onCellClick!(item, prop, i)
+                    }
                 }
-                tr.style.cursor = 'pointer'
             }
         }
     }
@@ -693,9 +733,7 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
         const r = await showSelection('Select Fields', properties, {initialSelection: state.columns??properties})
         if (r === undefined) return
 
-        // Note: select all means not just select all this time, but for future as well
-        //       so we cannot just save the current full set of properties
-        //       we need to save `undefined` to express this semantics
+        // Select all means not just select all this time, but for future as well
         // TODO: find a more descriptive way
         state.columns = (r.length === properties.length)? undefined : r
         showhideColumns()

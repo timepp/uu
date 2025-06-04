@@ -15,9 +15,23 @@ const data = {
     }
 }
 const jv = uu.createJsonView(JSON.stringify(data, null, 2))
-document.body.appendChild(jv)
+// document.body.appendChild(jv)
 
 const arr = Object.entries(window).map(([k, v]) => {
     return {key: k, value: v, type: typeof v}
 })
-document.body.appendChild(uu.createTableFromArray(arr, {stateKey: 'windowTable', rawIndexColumn: '#', pageSize: 10}))
+
+const e = uu.createTableFromArray(arr, {
+    stateKey: 'windowTable', 
+    rawIndexColumn: '#', 
+    pageSize: 10,
+    onCellClick: (item, prop) => {
+        if (prop === 'value') {
+            const value = item.value
+            const text = JSON.stringify(value, uu.getStringifyReplacer({maxStringLength: 10}), 2)
+            uu.showInDialog(`window.${item.key}`, uu.createJsonView(text))
+        }
+    }
+})
+
+document.body.appendChild(e)

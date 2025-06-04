@@ -16,7 +16,7 @@ Deno.test('object traverse', async () => {
     data.address.recursive = data.address // Creating a recursive reference
     
     const arr: any[] = []
-    uu.traverseObject(data, (path, value, type) => arr.push([path, value, type]))
+    uu.traverseObject(data, Infinity, (path, value, type) => arr.push([path, value, type]))
     // filter out the object nodes
     const leafs = arr.filter(v => v[2] === 'leaf')
     ut.assertEquals(JSON.stringify(leafs), `[[["name"],"test","leaf"],[["age"],30,"leaf"],[["hobbies","0"],"reading","leaf"],[["hobbies","1"],"gaming","leaf"],[["address","city"],"New York","leaf"],[["address","zip"],"10001","leaf"],[["address","r1","r2"],"r4","leaf"]]`)
@@ -26,6 +26,13 @@ Deno.test('object traverse', async () => {
 
     const loopPaths = arr.filter(v => v[2] === 'loop').map(v => v[0])
     ut.assertEquals(loopPaths, [["address", "recursive"]])
+
+    const obj2 = {
+        name: 'test', 
+        v: {x: 100, y: {}}
+    }
+    obj2.v.y = obj2.v
+    ut.assertEquals(JSON.stringify(obj2, uu.getStringifyReplacer()), `{"name":"test","v":{"x":100,"y":"<<circular ref to v>>"}}`)
 })
 
 Deno.test('data format', async () => {
@@ -41,7 +48,7 @@ Deno.test('data format', async () => {
 Deno.test('highLight', async () => {
     const text = `{"name": "value3389"}`
 
-    const result1 = uu.highLight(text, [[/"[^"]+":/g, 'key'], [/"[^"]+"/g, 'string'], [/\d+/g, 'number']])
+    const result1 = uu.segmentByRegex(text, [[/"[^"]+":/g, 'key'], [/"[^"]+"/g, 'string'], [/\d+/g, 'number']])
     console.log(result1)
     ut.assertEquals(result1, [
         { category: '', content: '{' },
@@ -59,3 +66,4 @@ Deno.test('derivedUrl', async () => {
     const newUrl = uu.derivedUrl(url, paramsToAdd, paramsToRemove)
     ut.assertEquals(newUrl, 'https://example.com/path?name=newValue&newParam=newValue')
 })
+
