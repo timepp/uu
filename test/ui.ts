@@ -21,3 +21,6 @@ const arr = Object.entries(window).map(([k, v]) => {
     return {key: k, value: v, type: typeof v}
 })
 document.body.appendChild(uu.createTableFromArray(arr, {stateKey: 'windowTable', rawIndexColumn: '#', pageSize: 10}))
+
+const xxx = await uu.showInputDialog("title", "input")
+console.log(xxx)

@@ -170,6 +170,48 @@ export function showLargeJsonResult(title: string, content: string) {
     return dialog
 }
 
+export async function showInputDialog(title: string, placeholder: string, initialValue?: string) {
+    const dialog = createElement(document.body, 'dialog', [], '', {width: '400px'})
+    const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
+    const header = createElement(dc, 'div', [])
+    createElement(header, 'h2', [], title)
+    const input = createElement(dc, 'input', ['form-control'], '', {marginTop: '10px'})
+    input.placeholder = placeholder
+    if (initialValue) input.value = initialValue
+    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-end', 'mt-2'])
+    const okBtn = createElement(footer, 'button', ['btn', 'btn-primary'], 'OK')
+    const cancelBtn = createElement(footer, 'button', ['btn', 'btn-secondary', 'ms-2'], 'Cancel')
+
+    let resolver: ((value: string | undefined) => void)
+    const promise = new Promise<string | undefined>((resolve) => {
+        resolver = resolve
+    })
+
+    okBtn.onclick = () => {
+        dialog.close()
+        dialog.remove()
+        resolver(input.value)
+    }
+    
+    cancelBtn.onclick = () => {
+        dialog.close()
+        dialog.remove()
+        resolver(undefined)
+    }
+
+    // handle esc key to close the dialog
+    dialog.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            dialog.close()
+            dialog.remove()
+            resolver(undefined)
+        }
+    })
+
+    dialog.showModal()
+    return promise
+}
+
 export type SelectOption = {
     singleSelect: boolean
     preserveOrder: boolean
