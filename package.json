@@ -1,6 +1,6 @@
 {
   "name": "tpuu",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "UU aims to provide the following reusable constructs for modern development:\r - script development using typescript and Deno\r - web development using typescript and Vite, without any transpilation step",
   "main": "dist/uu.js",
   "type": "module",
@@ -9,8 +9,10 @@
     "test": "test"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc"
+    "test": "deno test",
+    "build": "tsc",
+    "ui-test": "cd ui-test && vite --open",
+    "incver": "deno run -A script/increase-ver.ts"
   },
   "files": [
     "dist/**/*"

@@ -102,7 +102,7 @@ export function unIndentTextWithSpaces(text: string, spaces: number): string {
     }).join('\n');
 }
 
-export function hashString(s: string): number {
+export function simpleHash(s: string): number {
     let hash = 0;
     if (s.length === 0) return hash;
     for (let i = 0; i < s.length; i++) {
@@ -113,6 +113,16 @@ export function hashString(s: string): number {
     return hash;
 }
 
+/** Hash a string using the Web Crypto API
+ * 
+ * @param str the string to hash
+ * @param algo algo which will be passed to crypto.subtle.digest
+ * @returns hash string in hex format
+ */
+export async function hash(str: string, algo: AlgorithmIdentifier = 'SHA-256'): Promise<string> {
+    const arr = await crypto.subtle.digest(algo, new TextEncoder().encode(str))
+    return Array.from(new Uint8Array(arr)).map(b => b.toString(16).padStart(2, '0')).join('')
+}
 
 export function toFileSystemCompatibleName(name: string): string {
     // 1. Remove leading and trailing spaces

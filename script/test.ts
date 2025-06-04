@@ -76,3 +76,8 @@ Deno.test('indention', () => {
     ut.assertEquals(tu.trimEmptyLines(' \n\n  fire\n\n', 'head'), '  fire\n\n')
     ut.assertEquals(tu.trimEmptyLines(' \n\n  fire\n\n', 'tail'), ' \n\n  fire')
 })
+
+Deno.test('hash', async () => {
+    console.log('hash of "hello":', tu.simpleHash('hello'))
+    console.log('hash of "world":', await tu.hash('world'))
+})

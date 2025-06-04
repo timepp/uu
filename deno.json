@@ -1,9 +1,8 @@
 {
   "name": "@timepp/uu",
-  "version": "0.1.20",
+  "version": "1.0.2",
   "license": "MIT",
   "exports": {
-    ".": "./tu.ts",
-    "./install": "./script/install.ts"
+    ".": "./src/tu.ts"
   }
 }
