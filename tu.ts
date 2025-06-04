@@ -16,6 +16,10 @@ export function formatTime(d: Date, timeZoneOffset?: number): string {
     return date.toISOString().slice(0, 19).replace('T', ' ')
 }
 
+export function formatDate(d: Date, timeZoneOffset?: number): string {
+    return formatTime(d, timeZoneOffset).slice(0, 10)
+}
+
 export function formatFloat(n: number, digits = 2, mininumDigits = 0): string {
     return n.toLocaleString(undefined, { 
         minimumFractionDigits: mininumDigits, 
@@ -23,6 +27,7 @@ export function formatFloat(n: number, digits = 2, mininumDigits = 0): string {
         useGrouping: false,
     })
 }
+
 
 export function trimSuffix(str: string, suffix: string): string {
     if (str.endsWith(suffix)) {
