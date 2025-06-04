@@ -5,15 +5,15 @@ import * as fs from 'jsr:@std/fs@1.0.14'
 import { assets } from './bootstrap-assets.ts'
 import * as ma from './memory-asset.ts'
 
-// check hash if uu.ts exists
-const uuFile = 'uu.ts'
-if (fs.existsSync(uuFile)) {
-    console.log('checking existing uu.ts...')
-    const {isValid, oldHash, newHash} = await hash.validateHash(uuFile)
-    if (!isValid) {
-        const newFile = uuFile + '.' + newHash
-        fs.moveSync(uuFile, newFile, { overwrite: true })
-        console.log('uu.ts has local modifications, please review it. Renamed to', newFile)
+for (const file of Object.keys(assets)) {
+    // check hash if uu.ts exists
+    if (fs.existsSync(file)) {
+        const { isValid, oldHash, newHash } = await hash.validateHash(file)
+        if (!isValid) {
+            const newFile = file + '.' + newHash
+            fs.moveSync(file, newFile, { overwrite: true })
+            console.log('file has local modifications, please review it. Renamed to', newFile)
+        }
     }
 }
 

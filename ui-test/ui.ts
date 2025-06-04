@@ -1,4 +1,4 @@
-import * as uu from '../uu.ts'
+import * as uu from '../src/uu.ts'
 
 const div = uu.createElement(document.body, 'div', [], 'Hello, world!', {color: 'red'})
 const data = {

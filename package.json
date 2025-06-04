@@ -1,0 +1,31 @@
+{
+  "name": "tpuu",
+  "version": "1.0.1",
+  "description": "UU aims to provide the following reusable constructs for modern development:\r - script development using typescript and Deno\r - web development using typescript and Vite, without any transpilation step",
+  "main": "dist/uu.js",
+  "type": "module",
+  "types": "dist/uu.d.ts",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/timepp/uu.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/timepp/uu/issues"
+  },
+  "homepage": "https://github.com/timepp/uu#readme",
+  "devDependencies": {
+    "vite": "^6.3.5"
+  }
+}

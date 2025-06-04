@@ -1,8 +1,7 @@
 import * as vite from 'npm:vite'
 
-
 const frontend = await vite.createServer({
-    root: './test',
+    root: './ui-test',
     server: {
         port: 3003,
         host: true,
