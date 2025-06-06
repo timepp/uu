@@ -1,8 +1,4 @@
 // tu: a set of utility functions
-// hash: fca00ce6799a39149684e46e23d8e69756354ecab60333b49f7111903f821340
-// Please do not modify this file directly. Use the following command to update this file on a deno environment:
-// deno run -A --reload jsr:@timepp/uu/install
-
 
 /// get time as YYYY-MM-DD HH:mm:ss
 /// timeZoneOffset is in minutes, e.g. 

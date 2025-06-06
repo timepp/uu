@@ -1,7 +1,4 @@
 // uu: a set of utility functions for modern web UI
-// hash: ffebc424efe9136ea8bc8c1478ed51fb1c86677f3b37294b77678d5419faec42
-// Please do not modify this file directly. Use the following command to update this file on a deno environment:
-// deno run -A --reload jsr:@timepp/uu/install
 
 import * as tu from './tu.js'
 export * from './tu.js'
@@ -60,34 +57,6 @@ export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>) {
     }
 }
 
-// show information dialog, content is normal text, dialog no longer fix height
-export function showInfo(title: string, content: string) {
-    const dialog = createElement(document.body, 'dialog', [])
-
-    const dc = createElement(dialog, 'div', [])
-
-    const header = createElement(dc, 'div', [])
-    header.style.textAlign = "center"
-    createElement(header, 'h2', [], title)
-    createElement(dc, 'hr', [])
-
-    const main = createElement(dc, 'div', [])
-    main.style.maxWidth = "800px"
-    const h = tu.segmentByRegex(content, [[/error:/ig, 'red']])
-    // main.appendChild(h)
-
-    createElement(dc, 'hr', [])
-
-    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
-    const closeButton = createElement(footer, 'button', ['btn', 'btn-primary'], 'Close')
-    closeButton.onclick = () => {
-        dialog.close()
-        dialog.remove()
-    }
-    dialog.showModal()
-    return dialog
-}
-
 export function highlightText(text: string, rules: [RegExp, string][]) {
     const parts = tu.segmentByRegex(text, rules)
     return parts.map(part => {
@@ -120,7 +89,7 @@ export function createJsonView(content: string) {
     return pre
 }
 
-export function showInDialog(title: string, content: HTMLElement) {
+export function showInDialog(title: string, content: string|HTMLElement) {
     const dialog = createElement(document.body, 'dialog', [], '', {minWidth: '50vw'})
     const dc = createElement(dialog, 'div', [])
     const header = createElement(dc, 'div', [])
@@ -128,7 +97,11 @@ export function showInDialog(title: string, content: HTMLElement) {
     createElement(header, 'h2', [], title)
     createElement(dc, 'hr', [])
 
-    dc.appendChild(content)
+    if (typeof content === 'string') {
+        dc.textContent = content
+    } else {
+        dc.appendChild(content)
+    }
 
     createElement(dc, 'hr', [])
     const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
@@ -154,7 +127,7 @@ export async function showInputDialog(title: string, placeholder: string, initia
     const dialog = createElement(document.body, 'dialog', [], '', {width: '400px'})
     const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
     const header = createElement(dc, 'div', [])
-    createElement(header, 'h2', [], title)
+    createElement(header, 'h4', [], title)
     const input = createElement(dc, 'input', ['form-control'], '', {marginTop: '10px'})
     input.placeholder = placeholder
     if (initialValue) input.value = initialValue
@@ -201,27 +174,30 @@ export type SelectOption = {
     // otherwise, return a selection if checker can fix invalid selection
     // otherwise, return an error message
     checker: (oldSelection: string[], newSelection: string[]) => string[] | string
+
+    // used to apply custom styles to individual items
+    styleModifier: (item: string, elem: HTMLElement) => void
 }
 
 export async function showSelection(title: string, data: string[], options: Partial<SelectOption>) {
     const dialog = createElement(document.body, 'dialog', [], '', {width: '80vw'})
     const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
     const header = createElement(dc, 'div', [])
-    createElement(header, 'h2', [], title)
-    const selectedContent = createElement(dc, 'div', [])
+    createElement(header, 'h3', [], title)
     // createElement(dc, 'hr', ['w-100'])
-    const toolbar = createElement(dc, 'div', ['btn-group', 'mb-2', 'mt-2'])
-    const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-primary', 'me-2'], 'Select All')
-    const deselectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-primary', 'me-2'], 'Deselect All')
+    const toolbar = createElement(dc, 'div', ['input-group', 'mb-4', 'mt-2'])
+    const selectedContent = createElement(toolbar, 'span', ['input-group-text'])
+    const filter = createElement(toolbar, 'input', ['form-control', "ms-4", 'me-4'], '')
+    const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], 'Select All')
+
     if (options.singleSelect) {
         selectAllBtn.classList.add('d-none')
-        deselectAllBtn.classList.add('d-none')
+        // deselectAllBtn.classList.add('d-none')
     }
     // filter text
-    const filter = createElement(dc, 'input', ['form-control', 'mt-2', 'mb-2'])
     filter.placeholder = "Filter"
     
-    const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap'])
+    const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2'], '', {backgroundColor: 'rgb(255, 255, 244)', padding: '10px'})
     createElement(dc, 'hr', ['w-100'])
     const alert = createElement(dc, 'div', ['alert', 'alert-danger', 'd-none'])
     const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
@@ -231,11 +207,11 @@ export async function showSelection(title: string, data: string[], options: Part
 
     function syncSelected() {
         selectedContent.innerHTML = ''
-        createElement(selectedContent, 'span', ['m-1'], 'Selected: ', {color: 'blue'})
+        createElement(selectedContent, 'span', ['me-2'], 'Selected: ', {color: 'blue'})
         for (let i = 0; i < selected.length; i++) {
             const item = selected[i]
             const text = options.preserveOrder ? `${i + 1}: ${item}` : item
-            createElement(selectedContent, 'span', ['m-1'], text)
+            createElement(selectedContent, 'span', ['me-1'], text)
         }
 
         for (const item of main.children) {
@@ -247,7 +223,7 @@ export async function showSelection(title: string, data: string[], options: Part
     }
 
     for (const item of data) {
-        const span = createElement(main, 'span', ['multi-select', 'rounded-1', 'p-1', 'm-1'], item)
+        const span = createElement(main, 'span', ['rounded-1', 'p-2', 'text-center', 'd-inline-block'], item, {minWidth: '100px'})
         span.style.cursor = "pointer"
         span.onclick = () => {
             const oldSelection = [...selected]
@@ -266,6 +242,9 @@ export async function showSelection(title: string, data: string[], options: Part
                 okBtn.disabled = false
             }
             syncSelected()
+        }
+        if (options.styleModifier) {
+            options.styleModifier(item, span)
         }
     }
 
@@ -286,14 +265,12 @@ export async function showSelection(title: string, data: string[], options: Part
     })
 
     selectAllBtn.onclick = () => {
-        selected = options.preserveOrder ? data : [...data]
-        alert.classList.add('d-none')
-        okBtn.disabled = false
-        syncSelected()
-    }
+        if (selected.length === data.length) {
+            selected = []
+        } else {
+            selected = options.preserveOrder ? data : [...data]
+        }
 
-    deselectAllBtn.onclick = () => {
-        selected = []
         alert.classList.add('d-none')
         okBtn.disabled = false
         syncSelected()
@@ -550,7 +527,12 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
     }
 
     fieldSelect.onclick = async () => {
-        const r = await showSelection('Select Fields', properties, {initialSelection: state.columns??properties})
+        const r = await showSelection('Select Fields', properties, {initialSelection: state.columns??properties, styleModifier: (item, elem) => {
+            if (item === presentation.rawIndexColumn) {
+                elem.style.fontWeight = 'bold'
+                elem.style.borderBottom = '2px solid blue'
+            }
+        }})
         if (r === undefined) return
 
         // Select all means not just select all this time, but for future as well
@@ -587,9 +569,11 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
         applyPaging()
     }
 
-    pageText.onclick = () => {
-        const page = Number(prompt('Page size', `${presentation.pageSize || 20}`))
-        gotoPage(page - 1)
+    pageText.onclick = async () => {
+        const page = await showInputDialog('Go to Page', 'Enter page number', `${presentation.pageSize || 20}`)
+        if (page) {
+            gotoPage(Number(page) - 1)
+        }
     }
     firstBtn.onclick = () => gotoPage(0)
     prevBtn.onclick = () => gotoPage(currentPage - 1)
