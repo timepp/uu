@@ -15,7 +15,7 @@ Deno.test('object traverse', () => {
     }
     data.address.recursive = data.address // Creating a recursive reference
     
-    const arr: any[] = []
+    const arr: [string[], unknown, string][] = []
     tu.traverseObject(data, -1, (path, value, type) => arr.push([path, value, type]))
     // filter out the object nodes
     const leafs = arr.filter(v => v[2] === 'leaf')
@@ -59,7 +59,7 @@ Deno.test('highLight', () => {
     ])
 })
 
-Deno.test('derivedUrl', async () => {
+Deno.test('derivedUrl', () => {
     const url = 'https://example.com/path?name=value&age=30&extra=extra'
     const paramsToAdd = { name: 'newValue', newParam: 'newValue' }
     const paramsToRemove = /age|extra/
