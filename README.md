@@ -6,14 +6,9 @@ UU aims to provide the following reusable constructs for modern development:
 
 ## Usage
 
-### With package manager
+### With npm
 
-### Without package manager
-
-Since browser do not natively support importing remote modules, the reusing is done by the following steps:
-1. Run `deno run -A --reload jsr:@timepp/uu/install` to copy necessary files directly to your local repo. This can be considered as a simplified step to `npm install` but without the heavy node_modules folder and transpilation configurations.
-2. Import the files in your code using `import { ... } from './path/to/your/local/uu/...`
-3. (optional) Run `deno run -A --reload jsr:@timepp/uu/install` at any time to upgrade the files to the latest version.
+`npm install tpuu`
 
 ## Reusing script components
 
@@ -26,8 +21,25 @@ Simply `import * as uu from 'jsr:@timepp/uu' in Deno environment.
 - `package.json`: used for publishing the package to npm registry
 - `src/uu.ts`: UI specific library, which is used in the browser.
 - `src/tu.ts`: Non UI specific, can be used in both browser and Deno environments
+- `dist`: artifacts for npm
+- `script/increase-ver.ts`: script to increase version number
+- `script/test.ts`: script for cli test
+- `ui-test`: directory for UI tests
 
-### Build for the `install` command
+### Publishing
 
-1. config files targeted for `install` in `assets.ts`
-2. run `build.ts` to hash the files and add them to bootstrap-assets
+First you need to invoke npm command to update the version:
+
+```
+npm run incver
+```
+
+#### Publish to npm
+
+1. Run `npm run build` to build the package
+1. Run `npm publish` to publish the package to the npm registry
+
+#### Publish to Deno
+
+1. Run `deno publish` to publish the package to the Deno registry
+
