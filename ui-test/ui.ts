@@ -1,4 +1,6 @@
-import * as uu from '../src/uu.ts'
+/// <reference types="https://cdn.jsdelivr.net/gh/timepp/uu@v1.0.4/dist/uu.d.ts" />
+
+import * as uu from 'https://cdn.jsdelivr.net/gh/timepp/uu@v1.0.4/dist/uu.js'
 
 const div = uu.createElement(document.body, 'div', [], 'Hello, world!', {color: 'red'})
 const data = {

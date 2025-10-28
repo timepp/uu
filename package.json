@@ -1,6 +1,6 @@
 {
   "name": "tpuu",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "UU aims to provide the following reusable constructs for modern development:\r - script development using typescript and Deno\r - web development using typescript and Vite, without any transpilation step",
   "main": "dist/uu.js",
   "type": "module",
