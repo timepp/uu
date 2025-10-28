@@ -10,7 +10,25 @@ export function triggerDownload(blob, filename) {
     a.click();
     document.body.removeChild(a);
 }
-export function createElement(parent, tagName, classes = [], text, style = {}) {
+export function derivedUrl(oldUrl, paramsToAdd, paramsToRemove) {
+    const url = new URL(oldUrl);
+    if (paramsToRemove) {
+        const keys = [...url.searchParams.keys()];
+        for (const key of keys) {
+            if (paramsToRemove.test(key)) {
+                url.searchParams.delete(key);
+            }
+        }
+    }
+    for (const [key, value] of Object.entries(paramsToAdd)) {
+        url.searchParams.set(key, value);
+    }
+    return url.toString();
+}
+export function derivedCurrentUrl(paramsToAdd, paramsToRemove) {
+    return derivedUrl(window.location.href, paramsToAdd, paramsToRemove);
+}
+export function createElement(parent, tagName, classes = [], text, style = {}, attributes = {}) {
     const e = document.createElement(tagName);
     e.classList.add(...classes);
     if (parent)
@@ -21,6 +39,9 @@ export function createElement(parent, tagName, classes = [], text, style = {}) {
         if (value !== undefined) {
             e.style[key] = value;
         }
+    }
+    for (const [key, value] of Object.entries(attributes)) {
+        e[key] = value;
     }
     return e;
 }
@@ -95,20 +116,45 @@ export function createJsonView(content) {
     return pre;
 }
 export function showInDialog(title, content) {
-    const dialog = createElement(document.body, 'dialog', [], '', { minWidth: '50vw' });
-    const dc = createElement(dialog, 'div', []);
-    const header = createElement(dc, 'div', []);
+    const dialog = createElement(document.body, 'dialog', [], '', {
+        minWidth: '50vw',
+        maxHeight: '90vh',
+        padding: '0',
+        border: 'none',
+        borderRadius: '8px'
+    });
+    const dc = createElement(dialog, 'div', [], '', {
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        maxHeight: '90vh'
+    });
+    // Fixed header
+    const header = createElement(dc, 'div', [], '', {
+        padding: '20px 20px 0 20px',
+        flexShrink: '0'
+    });
     header.style.textAlign = "center";
     createElement(header, 'h2', [], title);
-    createElement(dc, 'hr', []);
+    createElement(dc, 'hr', [], '', { margin: '10px 0', flexShrink: '0' });
+    // Scrollable content area
+    const contentArea = createElement(dc, 'div', [], '', {
+        flex: '1',
+        overflow: 'auto',
+        padding: '0 20px'
+    });
     if (typeof content === 'string') {
-        dc.textContent = content;
+        contentArea.textContent = content;
     }
     else {
-        dc.appendChild(content);
+        contentArea.appendChild(content);
     }
-    createElement(dc, 'hr', []);
-    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center']);
+    // Fixed footer
+    createElement(dc, 'hr', [], '', { margin: '10px 0', flexShrink: '0' });
+    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'], '', {
+        padding: '0 20px 20px 20px',
+        flexShrink: '0'
+    });
     const closeButton = createElement(footer, 'button', ['btn', 'btn-primary'], 'Close');
     closeButton.onclick = () => {
         dialog.close();
@@ -283,8 +329,8 @@ export function createTableFromArray(arr, presentation = {}) {
     // overall dom
     const view = createElement(null, 'div');
     const toolbar = createElement(view, 'div', ['input-group', 'mb-3']);
-    const fieldSelect = createElement(toolbar, 'button', ['btn', 'btn-primary', 'me-2'], 'Columns');
-    const sortBtn = createElement(toolbar, 'button', ['btn', 'btn-primary'], 'Sort');
+    const fieldSelect = createElement(toolbar, 'button', ['btn', 'btn-secondary', 'me-2'], 'Columns');
+    const sortBtn = createElement(toolbar, 'button', ['btn', 'btn-secondary'], 'Sort');
     const sortHint = createElement(toolbar, 'span', ['input-group-text', 'me-2'], '');
     createElement(toolbar, 'span', ['input-group-text'], 'Filter');
     const filter = createElement(toolbar, 'input', ['form-control'], '');
@@ -505,4 +551,26 @@ export function createTableFromArray(arr, presentation = {}) {
     applyFilter('');
     applySort();
     return view;
+}
+export function rgbValue(obj) {
+    return `rgb(${obj.r}, ${obj.g}, ${obj.b})`;
+}
+export function syncClass(element, className, enabled) {
+    if (enabled) {
+        element.classList.add(className);
+    }
+    else {
+        element.classList.remove(className);
+    }
+}
+export function syncChildClass(parent, childSelector, className, enabled) {
+    const children = parent.querySelectorAll(childSelector);
+    children.forEach(child => syncClass(child, className, enabled));
+}
+export function syncDisplay(element, visible) {
+    element.style.display = visible ? '' : 'none';
+}
+export function syncChildDisplay(parent, childSelector, visible) {
+    const children = parent.querySelectorAll(childSelector);
+    children.forEach(child => syncDisplay(child, visible));
 }

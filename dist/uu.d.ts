@@ -1,6 +1,8 @@
 export * from './tu.js';
 export declare function triggerDownload(blob: Blob, filename: string): void;
-export declare function createElement<K extends keyof HTMLElementTagNameMap>(parent: Element | null, tagName: K, classes?: string[], text?: string, style?: Partial<CSSStyleDeclaration>): HTMLElementTagNameMap[K];
+export declare function derivedUrl(oldUrl: string, paramsToAdd: Record<string, string>, paramsToRemove?: RegExp): string;
+export declare function derivedCurrentUrl(paramsToAdd: Record<string, string>, paramsToRemove?: RegExp): string;
+export declare function createElement<K extends keyof HTMLElementTagNameMap>(parent: Element | null, tagName: K, classes?: string[], text?: string, style?: Partial<CSSStyleDeclaration>, attributes?: Partial<Record<keyof HTMLElementTagNameMap[K], any>>): HTMLElementTagNameMap[K];
 export declare function forEachTableCell(table: HTMLTableElement, callback: (cell: HTMLTableCellElement, row: number, col: number) => void): void;
 export declare function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>): Promise<T>;
 export declare function highlightText(text: string, rules: [RegExp, string][]): HTMLSpanElement[];
@@ -34,3 +36,12 @@ export type TablePresentation = {
     stateKey: string;
 };
 export declare function createTableFromArray(arr: any[], presentation?: Partial<TablePresentation>): HTMLDivElement;
+export declare function rgbValue(obj: {
+    r: number;
+    g: number;
+    b: number;
+}): string;
+export declare function syncClass(element: HTMLElement, className: string, enabled: boolean): void;
+export declare function syncChildClass(parent: HTMLElement, childSelector: string, className: string, enabled: boolean): void;
+export declare function syncDisplay(element: HTMLElement, visible: boolean): void;
+export declare function syncChildDisplay(parent: HTMLElement, childSelector: string, visible: boolean): void;
