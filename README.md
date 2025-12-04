@@ -37,9 +37,10 @@ npm run incver
 #### Publish to npm
 
 1. Run `npm run build` to build the package
+1. commit local changes (and push to remote repository)
 1. Run `npm publish` to publish the package to the npm registry
 
 #### Publish to Deno
 
-1. Run `deno publish` to publish the package to the Deno registry
+1. Run `deno publish --allow-slow-types` to publish the package to the Deno registry
 
