@@ -24,6 +24,18 @@ export function formatFloat(n: number, digits = 2, mininumDigits = 0) {
     })
 }
 
+export function formatFileSize(size: number): string {
+    if (size < 1024) {
+        return size + ' B'
+    } else if (size < 1024 * 1024) {
+        return (size / 1024).toFixed(2) + ' KB'
+    } else if (size < 1024 * 1024 * 1024) {
+        return (size / (1024 * 1024)).toFixed(2) + ' MB'
+    } else {
+        return (size / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+    }
+}
+
 export function trimSuffix(str: string, suffix: string): string {
     if (str.endsWith(suffix)) {
         return str.slice(0, -suffix.length);
@@ -136,54 +148,94 @@ export function toFileSystemCompatibleName(name: string): string {
     return name
 }
 
-function traverseObjectInternal(obj: any, maxDepth: number, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => void, path: string[], seenObjects: WeakSet<object>): void {
+function traverseObjectInternal(obj: any, maxDepth: number, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => number|void, path: string[], seenObjects: WeakSet<object>): number | void {
     if (typeof obj !== 'object' || obj === null) {
-        callback(path, obj, 'leaf');
-        return;
+        return callback(path, obj, 'leaf');
     }
 
     if (seenObjects.has(obj)) {
-        callback(path, obj, 'loop');
+        return callback(path, obj, 'loop');
     } else {
         seenObjects.add(obj);
-        callback(path, obj, 'object');
+        {
+            const ret = callback(path, obj, 'object');
+            if (ret === 0) return ret; // stop traversing sub-properties
+            if (ret === -1) return ret; // stop all traversing
+        }
+
         if (maxDepth >= 0 && path.length >= maxDepth) return;
         for (const key in obj) {
-            traverseObjectInternal(obj[key], maxDepth, callback, [...path, key], seenObjects);
+            const ret = traverseObjectInternal(obj[key], maxDepth, callback, [...path, key], seenObjects);
+            if (ret === -1) return ret; // stop all traversing
         }
     }
 }
 
-export function traverseObject(obj: any, maxDepth: number, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => void): void {
+/**
+ * Recursively traverse an object and its properties.
+ * @param obj The object to traverse.
+ * @param maxDepth Maximum depth to traverse. Use -1 for unlimited depth.
+ * @param callback Return values: void/1 to continue, 0 to stop traversing sub-properties, -1 to stop all traversing.
+ */
+export function traverseObject(obj: any, maxDepth: number, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => number|void): void {
     const seenObjects = new WeakSet<object>()
     traverseObjectInternal(obj, maxDepth, callback, [], seenObjects)
 }
 
+// fuzzy find first matching keyword in object (deep)
+export function fuzzyFind(obj: object, keyword: string, caseSensitive = true) {
+    let path = null as string[] | null
+    traverseObject(obj, -1, (p, v, t) => {
+        if (t === 'leaf' && v !== null && v !== undefined) {
+            if (typeof v === 'number') {
+                if (`${v}` === keyword) {
+                    path = p
+                    return -1
+                }
+            }
+            else if (caseSensitive ? `${v}`.includes(keyword) : `${v}`.toLowerCase().includes(keyword.toLowerCase())) {
+                path = p
+                return -1
+            }
+        }
+    })
+    return path
+}
+
 // used in json.stringify
-export function getStringifyReplacer(limit: {maxStringLength?: number, maxArraySize?:number} = {}) {
-    const seen = new WeakMap<object, string>()
-    return (key:string, value:any) => {
+export class StringifyReplacer {
+    limitResult = {
+        trimmedStrings: 0,
+        trimmedArrays: 0,
+    }
+    seen = new WeakMap<object, string>()
+    constructor(private limit: {maxStringLength?: number, maxArraySize?:number} = {}) {}
+    replace(key:string, value:any) {
         // circular detection
         if (typeof value === "object" && value !== null) {
-            const previousKey = seen.get(value)
+            const previousKey = this.seen.get(value)
             if (previousKey) {
                 return `<<circular ref to ${previousKey}>>`
             }
-            seen.set(value, key)
+            this.seen.set(value, key)
         }
 
         // string length limit
-        if (typeof value === 'string' && limit.maxStringLength && value.length > limit.maxStringLength) {
-            return `${value.slice(0, limit.maxStringLength - 12)} …${value.length - limit.maxStringLength + 12} more chars…`
+        if (typeof value === 'string' && this.limit.maxStringLength && value.length > this.limit.maxStringLength) {
+            this.limitResult.trimmedStrings++
+            return `${value.slice(0, this.limit.maxStringLength - 12)} …${value.length - this.limit.maxStringLength + 12} more chars…`
         }
 
         // array size limit
-        // maxArraySize 10 => <9 items> -> <10 items> -> <9 items> ... 2 more items ...
-        if (Array.isArray(value) && limit.maxArraySize && value.length > limit.maxArraySize) {
-            return value.slice(0, limit.maxArraySize - 1).concat(`…${value.length - limit.maxArraySize + 1} more items…`)
+        if (Array.isArray(value) && this.limit.maxArraySize && value.length > this.limit.maxArraySize) {
+            this.limitResult.trimmedArrays++
+            return value.slice(0, this.limit.maxArraySize - 1).concat(`…${value.length - this.limit.maxArraySize + 1} more items…`)
         }
 
         return value
+    }
+    getLimitResult() {
+        return this.limitResult
     }
 }
 
@@ -285,7 +337,7 @@ export function segmentByRegex(text: string, hc: [RegExp, string][]): {content: 
         for (const match of text.matchAll(re)) {
             if (match.index !== undefined) {
                 const matchStart = match.index;
-                const matchEnd = matchStart + match.length;
+                const matchEnd = matchStart + match[0].length;
 
                 // 检查是否与已有匹配项重叠
                 let overlap = false;
@@ -308,7 +360,6 @@ export function segmentByRegex(text: string, hc: [RegExp, string][]): {content: 
 
     // 按 `index` 从小到大排序，确保匹配顺序正确
     matches.sort((a, b) => a.index - b.index);
-    console.log(matches)
     
     // run through the text and create pieces
     const pieces: { content: string, category: string }[] = [];
@@ -334,8 +385,16 @@ export function segmentByRegex(text: string, hc: [RegExp, string][]): {content: 
 /// - boolean: true/false
 /// - null: null
 /// - punctuation: {, }, [, ], :, ,
-export function segmentJson(text: string): {content: string, category: 'key' | 'string' | 'number' | 'true' | 'false' | 'null' | 'punctuation' | ''}[] {
-    return segmentByRegex(text, [
+export type JsonSegment = {
+    content: string,
+    category: 'key' | 'string' | 'number' | 'true' | 'false' | 'null' | 'punctuation' | ''
+}
+export function segmentJson(text: string): JsonSegment[] {
+    return segmentByRegex(text, getJsonRegexps()) as JsonSegment[]
+}
+
+export function getJsonRegexps(): [RegExp, string][] {
+    return [
         [/"[^"]+":/g, 'key'],
         [/"(?:[^"\\]|\\.)*"/g, 'string'], // 支持转义的字符串匹配
         [/\d+/g, 'number'],
@@ -343,10 +402,7 @@ export function segmentJson(text: string): {content: string, category: 'key' | '
         [/false/g, 'false'],
         [/null/g, 'null'],
         [/[{}[\]:,]/g, 'punctuation'],
-    ]) as {
-        content: string,
-        category: 'key' | 'string' | 'number' | 'true' | 'false' | 'null' | 'punctuation' | ''
-    }[]
+    ]
 }
 
 /** get the date boundaries for a given date and type
@@ -360,8 +416,7 @@ export function getDateBoundaries(t: Date, type: 'week' | 'month' | 'day' | 'yea
 
     switch (type) {
         case 'week':
-            const day = start.getDay();
-            start.setDate(start.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
+            start.setDate(start.getDate() - (start.getDay() + 6) % 7 + offset * 7);
             end.setDate(start.getDate() + 6);
             break;
         case 'month':
@@ -453,4 +508,11 @@ export function derivedUrl(oldUrl: string, paramsToAdd: Record<string, string>, 
 
 export function derivedCurrentUrl(paramsToAdd: Record<string, string>, paramsToRemove?: RegExp) {
     return derivedUrl(window.location.href, paramsToAdd, paramsToRemove)
+}
+
+export function shuffleArray<T>(array: T[]) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
 }

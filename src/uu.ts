@@ -3,7 +3,20 @@
 import * as tu from './tu.js'
 export * from './tu.js'
 
-export function triggerDownload(blob: Blob, filename: string) {
+export type AnnotatedString = {
+    value: string,
+    comment?: string
+}
+export type AutofillProvider = (category: string) => AnnotatedString[]
+
+let autofillProvider = (category: string) => [] as AnnotatedString[]
+
+export function setAutofillProvider(provider: AutofillProvider) {
+    autofillProvider = provider
+}
+
+export function triggerDownload(data: Blob | string | object, filename: string) {
+    const blob = data instanceof Blob ? data : new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -42,7 +55,7 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
     attributes: Partial<Record<keyof HTMLElementTagNameMap[K], any>> = {}
 ) {
     const e = document.createElement(tagName)
-    e.classList.add(...classes)
+    e.classList.add(...classes.filter(c => c))
     if (parent) parent.appendChild(e)
     if (text) e.textContent = text
     for (const [key, value] of Object.entries(style)) {
@@ -56,6 +69,12 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
     return e
 }
 
+export function createButton(parent: Element | null, classes: string[] = [], text: string, onclick = () => {}) {
+    const button = createElement(parent, 'button', classes, text)
+    button.onclick = onclick
+    return button
+}
+
 export function forEachTableCell(table: HTMLTableElement, callback: (cell: HTMLTableCellElement, row: number, col: number) => void) {
     // row: 0 is header, 1 is first row
     for (let i = 0; i < table.rows.length; i++) {
@@ -67,13 +86,29 @@ export function forEachTableCell(table: HTMLTableElement, callback: (cell: HTMLT
     }
 }
 
-export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>) {
+export async function asyncGet<T>(fn: () => T) {
+    await new Promise(resolve => setTimeout(resolve, 100))
+    const r = fn()
+    return r
+}
+
+/** Call a longer running synchronous function with a progress dialog
+    It runs an async wrapper by setTimeout to avoid blocking the UI thread
+    This is only a workaround if you cannot run the function in async context
+*/
+export function asyncCallFunctionWithProgress(fn: () => void, hint = 'Please wait...') {
+    setTimeout(async() => {
+        callAsyncFunctionWithProgress(() => asyncGet(fn), hint)
+    }, 0)
+}
+
+export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>, hint = 'Please wait...'): Promise<T> {
     const dialog = createElement(document.body, 'dialog', [])
     const dc = createElement(dialog, 'div', [])
     dc.style.textAlign = "center"
-    createElement(dc, 'h4', ['m-2'], 'Please wait...')
+    createElement(dc, 'h4', ['m-2', 'text-center'], hint)
     // show a centered spinner
-    createElement(dc, 'div', ['spinner-border', 'text-primary'], '')
+    const spinner = createElement(dc, 'div', ['spinner-border', 'text-primary'], '')
     dialog.showModal()
     try {
         const r = await fn()
@@ -81,10 +116,53 @@ export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>) {
         dialog.remove()
         return r
     } catch (e) {
-        dialog.close()
-        dialog.remove()
+        spinner.remove()
+        createElement(dc, 'div', ['text-danger', 'mt-2'], 'Error occurred:')
+        createElement(dc, 'hr')
+        if (e instanceof Error) {
+            createElement(dc, 'pre', ['text-start', 'overflow-auto'], e.stack || e.message)
+        } else {
+            const jsonView = createJsonView(JSON.stringify(e, null, 2))
+            jsonView.style.textAlign = "left"
+            dc.appendChild(jsonView)
+        }
+        createElement(dc, 'hr')
+        const buttonContainer = createElement(dc, 'div', ['text-center', 'mt-2'])
+        createButton(buttonContainer, ['btn', 'btn-primary'], 'Close', () => {
+            dialog.close()
+            dialog.remove()
+        })
+        // dialog.close()
+        // dialog.remove()
         throw e
     }
+}
+
+// show information dialog, content is normal text, dialog no longer fix height
+export function showInfo(title: string, content: string) {
+    const dialog = createElement(document.body, 'dialog', [])
+
+    const dc = createElement(dialog, 'div', [])
+
+    const header = createElement(dc, 'div', [])
+    header.style.textAlign = "center"
+    createElement(header, 'h2', [], title)
+    createElement(dc, 'hr', [])
+
+    const main = createElement(dc, 'div', [])
+    main.style.maxWidth = "800px"
+    createElement(main, 'pre', [], content)
+
+    createElement(dc, 'hr', [])
+
+    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
+    const closeButton = createElement(footer, 'button', ['btn', 'btn-primary'], 'Close')
+    closeButton.onclick = () => {
+        dialog.close()
+        dialog.remove()
+    }
+    dialog.showModal()
+    return dialog
 }
 
 export function highlightText(text: string, rules: [RegExp, string][]) {
@@ -98,30 +176,76 @@ export function highlightText(text: string, rules: [RegExp, string][]) {
     })
 }
 
-export function createJsonView(content: string) {
-    const parts = tu.segmentJson(content)
+export function createJsonView(content: string, customColors: [RegExp, string][] = []) {
+    const parts = tu.segmentByRegex(content, [...customColors, ...tu.getJsonRegexps() ])
     const pre = createElement(null, 'pre', [])
+    pre.style.overflowX = 'wrap'
+    // Enable word wrapping for the pre element
+    pre.style.whiteSpace = 'pre-wrap'
+    pre.style.wordWrap = 'break-word'
 
     for (const part of parts) {
         const span = createElement(pre, 'span')
         span.textContent = part.content
+        // Enable word wrapping for individual spans
+        span.style.wordWrap = 'break-word'
+        span.style.whiteSpace = 'pre-wrap'
         switch (part.category) {
             case 'key': span.style.color = 'blue'; break
             // case 'string': span.style.color = 'purple'; break
             case 'number': span.style.color = '#f439e6'; break
             case 'true': span.style.color = 'green'; break
-            case 'false': span.style.color = 'red'; break
-            case 'null': span.style.backgroundColor = 'yellow'; break
+            case 'false': span.style.color = 'grey'; break
+            case 'null': span.style.color = 'lightblue'; break
             case 'punctuation': span.style.fontWeight = "800"; break
+            case '': break
+            default: span.style.color = part.category; break
         }
     }
 
     return pre
 }
 
-export function showInDialog(title: string, content: string|HTMLElement) {
+// more lightweight: for large json
+export function createLargeJsonView(content: string) {
+    const main = createElement(null, 'pre', [])
+    const spans = highlightText(content, [[/"[^"]+":/g, 'blue'], [/…[0-9]+ more (chars|items)…/g, 'red']])
+    main.append(...spans)
+    return main
+}
+
+export function showDialog(classes: string[] = [], style: Partial<CSSStyleDeclaration> = {}, softDismissable = true, onCreate: (dialog: HTMLDialogElement, finisher: (value?: string) => void) => void) {
+    const dialog = createElement(document.body, 'dialog', classes, '', style)
+    let resolver: ((value?: string) => void)
+    const promise = new Promise<string|undefined>((resolve) => {
+        resolver = resolve
+    })
+    const finishFunc = (value?: string) => {
+        dialog.close()
+        dialog.remove()
+        resolver(value)
+    }
+    if (softDismissable) {
+        dialog.addEventListener('cancel', () => {
+            finishFunc()
+        })
+        dialog.addEventListener('click', (e) => {
+            if (e.target === dialog) {
+                finishFunc()
+            }
+        })
+    }
+    onCreate(dialog, finishFunc)
+    dialog.showModal()
+    return promise
+}
+
+// If the handler returns true, the dialog will be closed
+export type ButtonAction = () => boolean|void|Promise<boolean|void>
+export function showInDialog(title: string, content: string|HTMLElement, actions: string[] | Record<string, ButtonAction> = ['Close']) {
     const dialog = createElement(document.body, 'dialog', [], '', {
         minWidth: '50vw', 
+        maxWidth: '90vw',
         maxHeight: '90vh',
         padding: '0',
         border: 'none',
@@ -137,12 +261,14 @@ export function showInDialog(title: string, content: string|HTMLElement) {
     
     // Fixed header
     const header = createElement(dc, 'div', [], '', {
-        padding: '20px 20px 0 20px',
-        flexShrink: '0'
+        // padding: '20px 20px 0 20px',
+        // flexShrink: '0'
     })
     header.style.textAlign = "center"
-    createElement(header, 'h2', [], title)
-    createElement(dc, 'hr', [], '', {margin: '10px 0', flexShrink: '0'})
+    if (title) {
+        createElement(header, 'h4', ['mt-3'], title)
+        createElement(dc, 'hr')
+    }
 
     // Scrollable content area
     const contentArea = createElement(dc, 'div', [], '', {
@@ -158,69 +284,216 @@ export function showInDialog(title: string, content: string|HTMLElement) {
     }
 
     // Fixed footer
-    createElement(dc, 'hr', [], '', {margin: '10px 0', flexShrink: '0'})
+    createElement(dc, 'hr')
     const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'], '', {
         padding: '0 20px 20px 20px',
         flexShrink: '0'
     })
-    const closeButton = createElement(footer, 'button', ['btn', 'btn-primary'], 'Close')
-    closeButton.onclick = () => {
-        dialog.close()
-        dialog.remove()
-    }
-    dialog.showModal()
-    return dialog
-}
 
-export function showLargeJsonResult(title: string, content: string) {
-    const obj = JSON.parse(content)
-    const trimmedContent = JSON.stringify(obj, tu.getStringifyReplacer({maxStringLength: 80, maxArraySize: 20}), 2)
-    const main = createElement(null, 'pre', [])
-    const spans = highlightText(trimmedContent, [[/"[^"]+":/g, 'blue'], [/…[0-9]+ more (chars|items)…/g, 'red']])
-    main.append(...spans)
-    showInDialog(title, main)
-}
-
-export async function showInputDialog(title: string, placeholder: string, initialValue?: string) {
-    const dialog = createElement(document.body, 'dialog', [], '', {width: '400px'})
-    const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
-    const header = createElement(dc, 'div', [])
-    createElement(header, 'h4', [], title)
-    const input = createElement(dc, 'input', ['form-control'], '', {marginTop: '10px'})
-    input.placeholder = placeholder
-    if (initialValue) input.value = initialValue
-    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-end', 'mt-2'])
-    const okBtn = createElement(footer, 'button', ['btn', 'btn-primary'], 'OK')
-    const cancelBtn = createElement(footer, 'button', ['btn', 'btn-secondary', 'ms-2'], 'Cancel')
-
-    let resolver: ((value: string | undefined) => void)
-    const promise = new Promise<string | undefined>((resolve) => {
+    let resolver: ((value: string) => void)
+    const promise = new Promise<string>((resolve) => {
         resolver = resolve
     })
-
-    okBtn.onclick = () => {
+    const finishWith = (action: string) => {
         dialog.close()
         dialog.remove()
-        resolver(input.value)
-    }
-    
-    cancelBtn.onclick = () => {
-        dialog.close()
-        dialog.remove()
-        resolver(undefined)
+        resolver(action)
     }
 
-    // handle esc key to close the dialog
-    dialog.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            dialog.close()
-            dialog.remove()
-            resolver(undefined)
+    if (typeof actions === 'object' && !Array.isArray(actions)) {
+        for (const [btnText, handler] of Object.entries(actions)) {
+            const button = createElement(footer, 'button', ['btn', 'btn-primary', 'ms-2', 'me-2'], btnText)
+            button.onclick = async () => {
+                const shouldClose = await handler()
+                if (shouldClose) {
+                    finishWith(btnText)
+                }
+            }
         }
-    })
+    } else {
+        for (const btnText of actions) {
+            const button = createElement(footer, 'button', ['btn', 'btn-primary', 'ms-2', 'me-2'], btnText)
+            button.onclick = () => {
+                finishWith(btnText)
+            }
+        }
+    }
 
     dialog.showModal()
     return promise
+}
+
+// information extractor is used to construct a information pane based on the object data
+export type InformationExtractor = (obj: object) => HTMLElement | Promise<HTMLElement>
+let informationExtractor: InformationExtractor | null = null
+export function setInformationExtractor(extractor: InformationExtractor) {
+    informationExtractor = extractor
+}
+
+export function showJsonResult(title: string, content: string | object) {
+    const obj = typeof content === 'string' ? JSON.parse(content) : content
+    const replacer = new tu.StringifyReplacer({maxStringLength: 80, maxArraySize:20})
+    const trimmedText = JSON.stringify(obj, replacer.replace.bind(replacer), 2)
+    const r = replacer.getLimitResult()
+    const trimmed = r.trimmedArrays + r.trimmedStrings > 0
+    const fullText = trimmed ? JSON.stringify(obj, null, 2) : trimmedText
+
+    const trimForPerformance = fullText.length > 50000
+    const text = trimForPerformance ? trimmedText : fullText
+    // trimmed <=> large json
+    const trimmedContentMatcher = /"(?:[^"\\]|\\.)*…[0-9]+ more (chars|items)…"/g
+    const div = createElement(null, 'div')
+    const jsonContainer = createElement(div, 'div', ['overflow-auto'])
+
+    const view = createJsonView(text, [[trimmedContentMatcher, 'red']])
+    if (trimForPerformance) {
+        const alert = createElement(jsonContainer, 'div', ['alert', 'alert-warning'], 'showing trimmed JSON content')
+        alert.onclick = () => {
+            if (jsonContainer.contains(view)) {
+                setContent(jsonContainer, alert, createElement(null, 'pre', ['wrap-text'], fullText))
+                alert.innerText = 'showing full JSON content'
+            } else {
+                setContent(jsonContainer, alert, view)
+                alert.innerText = 'showing trimmed JSON content'
+            }
+        }
+    }
+    jsonContainer.appendChild(view)
+
+    const actions: Record<string, ButtonAction> = {
+        Copy: () => navigator.clipboard.writeText(fullText),
+        Download: () => triggerDownload(obj, `${title.replace(/\s+/g, '_')}.json`),
+    }
+    if (informationExtractor) {
+        actions.Entities = async () => {
+            showInDialog('Extracted Entities', await informationExtractor!(obj))
+        }
+    }
+    actions.Close = () => true
+
+    showInDialog(title, div, actions)
+}
+
+export async function showConfirmationDialog(title: string, text: string) {
+    return showDialog([], { width: '400px' }, true, (dialog, finish) => {
+        const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
+        const header = createElement(dc, 'div', [])
+        createElement(header, 'h4', [], title)
+        const main = createElement(dc, 'div', [], text, { marginTop: '10px' })
+        const footer = createElement(dc, 'div', ['d-flex', 'justify-content-end', 'mt-2'])
+        const okBtn = createButton(footer, ['btn', 'btn-primary'], 'OK', () => finish('ok'))
+        const cancelBtn = createButton(footer, ['btn', 'btn-secondary', 'ms-2'], 'Cancel', () => finish())
+    }).then(r => r === 'ok')
+}
+
+export function showInputDialog(title: string, placeholder: string, initialValue?: string, singleLine = true) {
+    return showDialog([], {width: '50vw'}, true, (dialog, finish) => {
+        const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
+        const header = createElement(dc, 'div', [])
+        createElement(header, 'h4', [], title)
+        const input = createElement(dc, singleLine ? 'input' : 'textarea', ['form-control'], '', {marginTop: '10px'})
+        input.placeholder = placeholder
+        if (initialValue) input.value = initialValue
+        if (singleLine) {
+            input.addEventListener('keydown', async (e: KeyboardEvent) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    finish(input.value)
+                }
+            })
+        }
+        const footer = createElement(dc, 'div', ['d-flex', 'justify-content-end', 'mt-2'])
+        const okBtn = createButton(footer, ['btn', 'btn-primary'], 'OK', () => finish(input.value))
+        const cancelBtn = createButton(footer, ['btn', 'btn-secondary', 'ms-2'], 'Cancel', () => finish())
+    })
+}
+
+/**
+ * Given an user provided handler: create input controls, handle user interactions, and show result area.
+ * @param title 
+ * @param actionName 
+ * @param valueId 
+ * @param handler 
+ * @param value 
+ * @returns 
+ */
+export function createInputAction(title: string, actionName: string, valueId: string, handler: (value: string) => Promise<HTMLElement>, value?: string) {
+    const div = createElement(null, 'div', ['border', 'border-light-subtle', 'rounded'])
+    const resultArea = createElement(null, 'div', ['mt-2', 'p-1'])
+    const {ig, input, button} = createAutofillInput(title, '', valueId, async v => {
+        const result = await callAsyncFunctionWithProgress(() => handler(v), `${actionName}`)
+        setContent(resultArea, result)
+    }, actionName)
+    if (value) {
+        input.value = value
+        button?.click()
+    }
+    div.appendChild(ig)
+    div.appendChild(resultArea)
+    return div
+}
+
+export function createAutofillInput(title: string, placeholder: string, valueId: string, handler?: (value: string) => void, btn?: string) {
+    const ig = createElement(null, 'div', ['input-group'])
+    const label = createElement(ig, 'label', ['input-group-text'], title, {minWidth: '100px'})
+    const input = createElement(ig, 'input', ['form-control'], '', {}, {placeholder})
+    let button : HTMLButtonElement | null = null
+    if (btn) {
+        button = createElement(ig, 'button', ['input-group-btn', 'btn', 'btn-primary'], btn)
+        button.onclick = () => {
+            if (handler) {
+                handler(input.value)
+            }
+        }
+    }
+    input.id = valueId
+    input.value = localStorage.getItem(`input-${valueId}`) || ''
+    label.style.cursor = 'pointer'
+    label.onclick = async () => {
+        // autofill support
+        const candidates = autofillProvider(valueId)
+        if (candidates.length !== 0) {
+            const r = await chooseOne(candidates)
+            if (r !== undefined) {
+                input.value = r
+                localStorage.setItem(`input-${valueId}`, input.value)
+            }
+        }
+        input.focus()
+    }
+    // handle pressing enter key to trigger handler
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            if (handler) {
+                handler(input.value)
+            }
+        }
+    })
+    input.onchange = () => {
+        localStorage.setItem(`input-${valueId}`, input.value)
+    }
+    return {ig, input, button}
+}
+
+export async function chooseOne(data: (string|AnnotatedString)[]) {
+    // show a dialog to choose one item from data
+    // return the chosen item, or null
+    // show comment as tooltip
+    return showDialog([], {}, true, (dialog, finish) => {
+        const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
+        const main = createElement(dc, 'div', ['d-flex', 'flex-column'], '', { marginTop: '10px', maxHeight: '60vh' })
+        for (const item of data) {
+            const value = typeof item === 'string' ? item : item.value
+            const comment = typeof item === 'string' ? '' : item.comment
+            const div = createElement(main, 'div', ['d-flex', 'align-items-center', 'mb-2'], '', { gap: '10px' })
+            const itemDiv = createElement(div, 'div', ['form-control', 'bg-light', 'hover-effect'])
+            itemDiv.style.cursor = 'pointer'
+            // hover via css    
+            const vaultSpan = createElement(itemDiv, 'span', [], value)
+            const commentSpan = createElement(itemDiv, 'span', ['text-muted', 'ms-2'], comment, { fontSize: '0.9em' })
+            div.onclick = () => finish(value)
+        }
+    })
 }
 
 export type SelectOption = {
@@ -243,19 +516,20 @@ export async function showSelection(title: string, data: string[], options: Part
     const header = createElement(dc, 'div', [])
     createElement(header, 'h3', [], title)
     // createElement(dc, 'hr', ['w-100'])
+    const selectedContent = createElement(dc, 'span', ['form-control'])
     const toolbar = createElement(dc, 'div', ['input-group', 'mb-4', 'mt-2'])
-    const selectedContent = createElement(toolbar, 'span', ['input-group-text'])
-    const filter = createElement(toolbar, 'input', ['form-control', "ms-4", 'me-4'], '')
-    const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], 'Select All')
+    const filter = createElement(toolbar, 'input', ['form-control'], '')
+    const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☑')
+    const unSelectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☐')
 
     if (options.singleSelect) {
         selectAllBtn.classList.add('d-none')
-        // deselectAllBtn.classList.add('d-none')
+        unSelectAllBtn.classList.add('d-none')
     }
     // filter text
     filter.placeholder = "Filter"
     
-    const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2'], '', {backgroundColor: 'rgb(255, 255, 244)', padding: '10px'})
+    const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2'], '', {backgroundColor: 'rgb(255, 255, 244)'})
     createElement(dc, 'hr', ['w-100'])
     const alert = createElement(dc, 'div', ['alert', 'alert-danger', 'd-none'])
     const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
@@ -323,12 +597,14 @@ export async function showSelection(title: string, data: string[], options: Part
     })
 
     selectAllBtn.onclick = () => {
-        if (selected.length === data.length) {
-            selected = []
-        } else {
-            selected = options.preserveOrder ? data : [...data]
-        }
+        selected = options.preserveOrder ? data : [...data]
+        alert.classList.add('d-none')
+        okBtn.disabled = false
+        syncSelected()
+    }
 
+    unSelectAllBtn.onclick = () => {
+        selected = []
         alert.classList.add('d-none')
         okBtn.disabled = false
         syncSelected()
@@ -354,12 +630,28 @@ export async function showSelection(title: string, data: string[], options: Part
     return promise
 }
 
-export type TableColumnProperty = {
-    formater?: (value: any) => string | HTMLElement
+export type ColumnProperty = {
+    formater?: (value: any, item?: any) => string | HTMLElement
     style?: Partial<CSSStyleDeclaration>
+    onCellClick?: (item: any, dataIndex: number) => void
 }
-export type TablePresentation = {
-    columnProperties: Record<string, TableColumnProperty>
+export type ItemAction = (item: any, dataIndex: number) => void
+export type ItemActions = Record<string, ItemAction>
+export type VisualizeConfig<T extends object> = {
+    // the default render style is 'table'
+    renderStyle: 'table' | 'tile'
+
+    showColumnSelector: boolean
+    showSortButton: boolean
+    showFilter: boolean    
+
+    columnProperties: Record<string, ColumnProperty>
+    columnFormater: (item: T, prop: string) => string | HTMLElement
+    itemActions: ItemActions | ((item: T, dataIndex: number) => ItemActions)
+
+    // used only for 'tile' render style
+    itemFormater: (item: T, dataIndex: number, columns: string[]) => HTMLElement
+    itemStyle: (item: T, dataIndex: number) =>Partial<CSSStyleDeclaration>
 
     // If not empty, raw index will be shown in the first column with the given name
     // note: this column can be hide / sort as well
@@ -370,18 +662,15 @@ export type TablePresentation = {
     // if not present, all rows will be shown
     pageSize: number
 
-    // use this with caution, as the column width might change due to the combination effect of sorting+paging
-    // For example, you click a column header, 
-    //    the data in current page are changed
-    //    all columns are resized to fit the new data
-    //    the column header under your mouse is changed to another one
-    //    you wanted to sort in reverse order, so you click at the same position again
-    //    but the column header is different now
-    // To avoid this, either: set all column width explicitly, or disable paging
-    // There will always be a sort dialog no matter what is option is
-    enableSortByClickingColumnHeader: boolean
+    // if true, nested objects will be flattened using dot notation
+    // so that their properties can be shown as columns
+    // e.g. { a: { b: 1 } } => column "a.b" with value 1
+    flattenNestedObjects: boolean
 
-    onCellClick: (item: any, prop: string, dataIndex: number) => void
+    // Do not add the default action column if no action is given manually
+    noDefaultAction: boolean
+
+    onCellClick: (item: T, prop: string, dataIndex: number) => void
 
     // initial columns to show, if not present, all columns are shown
     columns: string[]
@@ -390,215 +679,338 @@ export type TablePresentation = {
         column: string
         order: 'asc' | 'desc'
     }[]
+    // initial filter string, if not present, no filtering is applied
+    filter: string
+
+    // item filter, used to filter items given the filter string
+    // the default filter will do a deep search on all properties of the item
+    // It's recommended to provide a custom filter for better performance, if there are many large items
+    itemFilter: (item: T, filter: string) => boolean
     // If not empty, sort and column settings will be saved to local storage with the given key
     stateKey: string
 }
 
-export function createTableFromArray(arr: any[], presentation: Partial<TablePresentation> = {}) {
+export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}) {
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
     const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
-    const defaultColumnFormater = (value: any) => {
+    const generalColumnFormatter = (item: T, prop: string) => {
+        const value = item[prop as keyof T]
         if (typeof value === 'object' && value !== null) {
-            return tu.safeExecute(() => JSON.stringify(value, null, 2), e => `${e}`)
+            // return createJsonView(JSON.stringify(value, null, 2))
+            return JSON.stringify(value)
         } else {
-            return value || ''
+            return `${value}`
         }
     }
+    const itemFilter = cfg.itemFilter || ((item: T, filter: string) => {
+        return tu.fuzzyFind(item, filter) !== null
+    })
+    const renderStyle = cfg.renderStyle || 'table'
     
     // overall dom
     const view = createElement(null, 'div')
-    const toolbar = createElement(view, 'div', ['input-group', 'mb-3'])
+    const toolbar = createElement(view, 'div', ['input-group', 'mb-1'])
     const fieldSelect = createElement(toolbar, 'button', ['btn', 'btn-secondary', 'me-2'], 'Columns')
     const sortBtn = createElement(toolbar, 'button', ['btn', 'btn-secondary'], 'Sort')
-    const sortHint = createElement(toolbar, 'span', ['input-group-text', 'me-2'], '')
-    createElement(toolbar, 'span', ['input-group-text'], 'Filter')
+    const sortHint = createElement(toolbar, 'span', ['input-group-text'])
+    const randomSortBtn = createButton(toolbar, ['btn', 'btn-secondary', 'me-2'], '⧉')
+    const filterHint = createElement(toolbar, 'span', ['input-group-text'], 'Filter')
     const filter = createElement(toolbar, 'input', ['form-control'], '')
-    const counts = createElement(toolbar, 'span', ['input-group-text'], '20 / 100')
+    const counts = createElement(toolbar, 'span', ['input-group-text', 'me-2'], '20 / 100')
+    const dataContainer = createElement(view, 'div')
 
     // now paging section, which looks like 4 buttons and an edit: "<< < [8] > >>
-    const paging = createElement(toolbar, 'div', ['btn-group'])
-    const firstBtn = createElement(paging, 'button', ['btn', 'btn-primary', 'ms-2'], '<<')
-    const prevBtn = createElement(paging, 'button', ['btn', 'btn-primary'], '<')
-    const pageText = createElement(paging, 'button', ['btn', 'btn-secondary'], '20 * 2/5')
-    const nextBtn = createElement(paging, 'button', ['btn', 'btn-primary'], '>')
-    const lastBtn = createElement(paging, 'button', ['btn', 'btn-primary'], '>>')
 
-
-    const table = createElement(view, 'table', ['table', 'table-bordered', 'table-hover'])
-    const thead = createElement(table, 'thead')
-    const tbody = createElement(table, 'tbody')
-
-    // local states
-    const properties = [presentation.rawIndexColumn, ...tu.dataProperties(arr)].filter(Boolean) as string[]
-    let currentPage = 0 // page won't be persisted
-    let totalVisible = 0 // total visible rows, used for paging
-    const state = tu.createState(presentation, ['columns', 'sortBy'], presentation.stateKey)
-
-    type Row = HTMLTableRowElement & { rawIndex: number }
-    
-    function constructTable() {
-        const tr = createElement(thead, 'tr', [])
-        for (const prop of properties) {
-            const th = createElement(tr, 'th', [], prop)
-            if (presentation.enableSortByClickingColumnHeader) {
-                th.style.cursor = 'pointer'
-                th.style.userSelect = 'none'
-                th.onclick = () => {
-                    const s = state.sortBy?.find(s => s.column === prop)
-                    if (s) {
-                        if (s.order === 'asc') {
-                            state.sortBy = [{column: prop, order: 'desc'}]
-                        } else if (s.order === 'desc') {
-                            state.sortBy = []
-                        }
-                    } else {
-                        state.sortBy = [{column: prop, order: 'asc'}]
-                    }
-                    applySort()
-                }
-            }
-        }
-    
-        // create the table body
-        for (const [i, item] of arr.entries()) {
-            const tr = createElement(tbody, 'tr', []);
-            (tr as Row).rawIndex = i
-            for (const [j, prop] of properties.entries()) {
-                const td = createElement(tr, 'td', [], '', presentation.columnProperties?.[prop]?.style)
-                const v = item[prop]
-                const formater = presentation.columnProperties?.[prop]?.formater || defaultColumnFormater
-                const formattedValue = (prop === presentation.rawIndexColumn)? `${i+1}` : formater(v)
-                if (typeof formattedValue === 'string') {
-                    td.textContent = formattedValue
-                }
-                else if (formattedValue instanceof HTMLElement) {
-                    td.appendChild(formattedValue)
-                }
-
-                if (presentation.onCellClick) {
-                    td.onclick = () => {
-                        presentation.onCellClick!(item, prop, i)
-                    }
-                }
-            }
-        }
-    }
-
-    function gotoPage(page: number) {
-        const pageSize = presentation.pageSize || Infinity
-        const lastPage = Math.floor(totalVisible / pageSize)
-        if (page < 0) page = 0
-        if (page > lastPage) page = lastPage
-        currentPage = page
-        applyPaging()
-    }
-
-    function applyPaging() {
-        const pageSize = presentation.pageSize || Infinity
-        // only visible rows falling into the current page are shown, all others are hidden
-        let pos = 0
-        for (const row of tbody.children) {
-            const r = row as Row
-
-            if (r.classList.contains('invisible')) {
-                r.classList.toggle('d-none', true)
-                continue
-            }
-
-            const page = Math.floor(pos / pageSize)
-            if (page === currentPage) {
-                r.classList.toggle('d-none', false)
-            } else {
-                r.classList.toggle('d-none', true)
-            }
-            pos++
-        }
-        pageText.textContent = `${currentPage + 1} / ${Math.ceil(totalVisible / presentation.pageSize!)}`
-        if (!presentation.pageSize) {
-            paging.classList.add('d-none')
-        }
-    }
-
-    function applyFilter(s: string) {
-        totalVisible = 0
-        let total = 0
-        for (const item of tbody.children) {
-            let meet = false
-            for (const cell of item.children) {
-                if (cell.textContent?.toLowerCase().includes(s)) {
-                    meet = true
-                    break
-                }
-            }
-            total++
-            totalVisible += (meet ? 1 : 0)
-            item.classList.toggle('invisible', !meet)
-        }
-        counts.textContent = `${totalVisible} / ${total}`
-        currentPage = 0
-    }
-
-    function showhideColumns() {
-        forEachTableCell(table, (cell, row, col) => {
-            cell.style.display = (state.columns??properties).includes(properties[col]) ? '' : 'none'
+    let allProps = tu.dataProperties(arr)
+    if (cfg.flattenNestedObjects) {
+        const props = new Set<string>()
+        tu.traverseObject(arr, -1, (p, v, t) => {
+            if (t === 'leaf') props.add(p.slice(1).join('.'))
         })
+        allProps = [...props]
+    }
+    let valueFetcher = (item: any, prop: string): any => item[prop]
+    if (cfg.flattenNestedObjects) {
+        valueFetcher = (item: any, prop: string): any => {
+            const parts = prop.split('.')
+            let v = item
+            for (const part of parts) {
+                if (v === null || v === undefined) {
+                    return undefined
+                }
+                v = v[part]
+            }
+            return v
+        }
     }
 
-    function applySort() {
-        // update sort hint
+    // properties used to construct table columns
+    // presentation columns should be put before other columns but after raw index column
+    const presentationColumns = cfg.columns ?? []
+    const properties = [
+        cfg.rawIndexColumn, 
+        ...presentationColumns,
+        ...allProps.filter(p => !presentationColumns.includes(p))
+    ].filter(v => !!v) as string[]
+    
+    const state = tu.createState(cfg, ['columns', 'sortBy', 'filter'], cfg.stateKey)
+    filter.value = state.filter || ''
+
+    function tableRenderer(startIndex: number, endIndex: number) {
+        const table = createElement(null, 'table', ['table', 'table-bordered', 'table-hover'])
+        const thead = createElement(table, 'thead', ['bg-light'])
+        const tbody = createElement(table, 'tbody')
+        const tr = createElement(thead, 'tr', [])
         const sortBy = state.sortBy || []
-        sortHint.textContent = `${sortBy.map(s => `${s.column} ${toArrow(s.order)}`).join(', ')}`
-        
-        // update table header to show sort & order
-        for (const [index, prop] of properties.entries()) {
-            const th = thead.children[0].children[index] as HTMLTableCellElement
-            th.innerHTML = '' // clear the header content
+        for (const prop of state.columns ?? properties) {
+            const th = createElement(tr, 'th')
             createElement(th, 'span', [], prop)
             const i = sortBy.findIndex(s => s.column === prop)
             if (i >= 0) {
                 const s = sortBy[i]
                 createElement(th, 'span', [], toArrow(s.order))
                 if (sortBy.length > 1) {
-                    createElement(th, 'span', [], `${i + 1}`, {verticalAlign: 'super', fontSize: '0.8em'})
+                    createElement(th, 'span', [], `${i + 1}`, { verticalAlign: 'super', fontSize: '0.8em' })
+                }
+            }
+
+            th.style.cursor = 'pointer'
+            th.style.userSelect = 'none'
+            th.onclick = () => {
+                const s = state.sortBy?.find(s => s.column === prop)
+                if (s) {
+                    if (s.order === 'asc') {
+                        state.sortBy = [{ column: prop, order: 'desc' }]
+                    } else if (s.order === 'desc') {
+                        state.sortBy = []
+                    }
+                } else {
+                    state.sortBy = [{ column: prop, order: 'asc' }]
+                }
+                applySort()
+            }
+        }
+
+        if (!cfg.noDefaultAction || (cfg.itemActions)) {
+            const th = createElement(tr, 'th', ['actions-cell'], 'Actions')
+        }
+        for (let i = startIndex; i < endIndex; i++) {
+            tbody.append(createRow(data[i].item, data[i].index))
+        }
+        return table
+    }
+
+    function tileRenderer(startIndex: number, endIndex: number) {
+        const container = createElement(null, 'div', [], '', {
+            display: 'grid',
+            gap: '10px',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))'
+        })
+        for (let i = startIndex; i < endIndex; i++) {
+            if (cfg.itemFormater) {
+                container.appendChild(cfg.itemFormater(data[i].item, data[i].index, state.columns ?? properties))
+                continue
+            }
+
+            const item = data[i].item
+            const dataIndex = data[i].index
+            const card = createElement(container, 'div', ['card', 'p-1', 'hover-effect'], '', cfg.itemStyle?.(item, dataIndex))
+            // const cardBody = createElement(card, 'div', ['card-body', 'd-flex', 'flex-column', 'gap-2'])
+            for (const [j, prop] of (state.columns ?? properties).entries()) {
+                const div = createElement(card, 'div', [], '', cfg.columnProperties?.[prop]?.style)
+                if (cfg.columnProperties?.[prop]?.onCellClick) {
+                    div.style.cursor = 'pointer'
+                }
+                div.style.wordBreak = 'break-all'
+                const v = valueFetcher(item, prop)
+                const specificFormater = cfg.columnProperties?.[prop]?.formater
+                const swrapper = specificFormater ? (item: T, prop: string) => specificFormater(item[prop as keyof T], item) : null
+                const formater = swrapper || cfg.columnFormater || generalColumnFormatter
+                const formattedValue = (prop === cfg.rawIndexColumn) ? `${dataIndex + 1}` : formater(item, prop)
+                if (typeof formattedValue === 'string') {
+                    div.textContent = formattedValue
+                }
+                else if (formattedValue instanceof HTMLElement) {
+                    div.appendChild(formattedValue)
+                }
+
+                const specificClickHandler = cfg.columnProperties?.[prop]?.onCellClick
+                if (specificClickHandler) {
+                    div.onclick = () => {
+                        specificClickHandler(item, dataIndex)
+                    }
+                } else if (cfg.onCellClick) {
+                    div.onclick = () => {
+                        cfg.onCellClick!(item, prop, dataIndex)
+                    }
+                }
+            }
+            if (!cfg.noDefaultAction || (cfg.itemActions)) {
+                const td = createElement(card, 'div', ['actions-cell'])
+                const actions = (typeof cfg.itemActions === 'function') ? cfg.itemActions(item, dataIndex) : (cfg.itemActions || {})
+                const defaultActions = cfg.noDefaultAction ? {} : {
+                    raw: () => showJsonResult(`Raw data (index: ${dataIndex})`, item)
+                }
+                const allActions = { ...defaultActions, ...actions }
+                for (const [name, action] of Object.entries(allActions)) {
+                    const btn = createElement(td, 'a', ['me-2'], name)
+                    btn.style.cursor = 'pointer'
+                    btn.onclick = () => action(item, dataIndex)
+                }
+            }
+        }
+        return container
+    }
+
+    const renderer = (renderStyle === 'table') ? tableRenderer : tileRenderer
+
+    function createRow(item: T, dataIndex: number) {
+        const tr = createElement(null, 'tr', [], '', cfg.itemStyle?.(item, dataIndex));
+        for (const [j, prop] of (state.columns??properties).entries()) {
+            const td = createElement(tr, 'td', [], '', cfg.columnProperties?.[prop]?.style)
+            if (cfg.columnProperties?.[prop]?.onCellClick) {
+                td.style.cursor = 'pointer'
+            }
+            td.style.wordBreak = 'break-all'
+            const v = valueFetcher(item, prop)
+            const specificFormater = cfg.columnProperties?.[prop]?.formater
+            const swrapper = specificFormater ? (item: T, prop: string) => specificFormater(item[prop as keyof T], item) : null
+            const formater = swrapper || cfg.columnFormater || generalColumnFormatter
+            const formattedValue = (prop === cfg.rawIndexColumn) ? `${dataIndex + 1}` : formater(item, prop)
+            if (typeof formattedValue === 'string') {
+                td.textContent = formattedValue
+            }
+            else if (formattedValue instanceof HTMLElement) {
+                td.appendChild(formattedValue)
+            }
+
+            const specificClickHandler = cfg.columnProperties?.[prop]?.onCellClick
+            if (specificClickHandler) {
+                td.onclick = () => {
+                    specificClickHandler(item, dataIndex)
+                }
+            } else if (cfg.onCellClick) {
+                td.onclick = () => {
+                    cfg.onCellClick!(item, prop, dataIndex)
                 }
             }
         }
 
+        if (!cfg.noDefaultAction || (cfg.itemActions)) {
+            const td = createElement(tr, 'td', ['actions-cell'])
+            const actions = (typeof cfg.itemActions === 'function') ? cfg.itemActions(item, dataIndex) : (cfg.itemActions || {})
+            const defaultActions = cfg.noDefaultAction ? {} : {
+                raw: () => showJsonResult(`Raw data (index: ${dataIndex})`, item)
+            }
+            const allActions = { ...defaultActions, ...actions }
+            for (const [name, action] of Object.entries(allActions)) {
+                const btn = createElement(td, 'a', ['me-2'], name)
+                btn.style.cursor = 'pointer'
+                btn.onclick = () => action(item, dataIndex)
+            }
+        }
+        return tr
+    }
+
+    // data is filtered view of arr
+    const allData = arr.map((item, index) => ({item, index}))
+    let data = allData
+    const pageSize = cfg.pageSize || Infinity
+    const pager = new Pager(data.length, pageSize, (page) => gotoPage(page))
+    const pagerElem = pager.getElement()
+    toolbar.appendChild(pagerElem)
+
+    function gotoPage(page: number) {
+        // only visible rows falling into the current page are shown, all others are hidden
+        const {startIndex, endIndex} = pager.getPageRange(page)
+        dataContainer.innerHTML = ''
+        dataContainer.appendChild(renderer(startIndex, endIndex))
+    }
+
+    function applyFilter(s: string) {
+        data = allData.filter(v => itemFilter(v.item, s))
+        counts.textContent = `${data.length} / ${arr.length}`
+        // currentPage = 0
+        pager.setTotalItems(data.length)
+        // TODO: there are too many 'gotoPage' calls. 
+        applySort()
+    }
+
+    function applySort() {
+        // update sort hint
+        const sortBy = state.sortBy || []
+        sortHint.textContent = `${sortBy.map(s => `${s.column} ${toArrow(s.order)}`).join(', ')}`
+
         // sort the table rows
-        const rows = Array.from(tbody.children) as Row[]
         if (sortBy.length > 0) {
-            rows.sort((a, b) => {
+            data.sort((a, b) => {
                 for (const s of sortBy) {
-                    const aValue = (s.column === presentation.rawIndexColumn)? a.rawIndex : arr[a.rawIndex][s.column]
-                    const bValue = (s.column === presentation.rawIndexColumn)? b.rawIndex : arr[b.rawIndex][s.column]
-                    if (aValue < bValue) return s.order === 'asc' ? -1 : 1
-                    if (aValue > bValue) return s.order === 'asc' ? 1 : -1
+                    const aValue = (s.column === cfg.rawIndexColumn)? a.index : a.item[s.column as keyof T]
+                    const bValue = (s.column === cfg.rawIndexColumn)? b.index : b.item[s.column as keyof T]
+                    if (aValue === bValue) continue
+                    let ret = 0
+                    if (aValue === undefined) ret = -1
+                    else if (bValue === undefined) ret = 1
+                    else if (aValue === null) ret = -1
+                    else if (bValue === null) ret = 1
+                    else if (typeof aValue === 'number' && typeof bValue === 'number') {
+                        ret = aValue - bValue
+                    } else {
+                        ret = `${aValue}`.localeCompare(`${bValue}`, 'zh-Hans-CN', { sensitivity: 'base' })
+                    }
+                    // console.log(`"${aValue}" vs "${bValue}" => ${ret}`)
+                    if (ret !== 0) {
+                        ret = s.order === 'asc' ? ret : -ret
+                        return ret
+                    }
                 }
                 return 0
             })
         } else {
-            rows.sort((a, b) => a.rawIndex - b.rawIndex)
+            data.sort((a, b) => a.index - b.index)
         }
 
-        tbody.innerHTML = ''
-        tbody.append(...rows)
-        applyPaging()
+        gotoPage(0)
+    }
+
+    function syncRegionExistence() {
+        // we directly remove unneeded elements in toolbar
+        // rather than hiding them, so that toolbar looks cleaner (e.g. radius of borders)
+        
+        const showColumnSelector = cfg.showColumnSelector ?? (properties.length > 1)
+        const showSortButton = cfg.showSortButton ?? true
+        const showFilter = cfg.showFilter ?? (arr.length > 1)
+
+        syncExistence(fieldSelect, showColumnSelector)
+        syncExistence(sortBtn, showSortButton)
+        syncExistence(sortHint, showSortButton)
+        syncExistence(randomSortBtn, showSortButton)
+        syncExistence(filter, showFilter)
+        syncExistence(filterHint, showFilter)
+        syncExistence(counts, showFilter)
+        syncExistence(pagerElem, !!cfg.pageSize)
+
+        if (toolbar.lastElementChild) {
+            (toolbar.lastElementChild as HTMLElement).classList.remove('me-2')
+        }
     }
 
     fieldSelect.onclick = async () => {
-        const r = await showSelection('Select Fields', properties, {initialSelection: state.columns??properties, styleModifier: (item, elem) => {
-            if (item === presentation.rawIndexColumn) {
-                elem.style.fontWeight = 'bold'
-                elem.style.borderBottom = '2px solid blue'
+        const r = await showSelection('Select Fields', properties, {
+            initialSelection: state.columns??properties, 
+            preserveOrder: true,
+            styleModifier: (item, elem) => {
+                if (item === cfg.rawIndexColumn) {
+                    elem.style.fontWeight = 'bold'
+                    elem.style.borderBottom = '2px solid blue'
+                }
             }
-        }})
+        })
         if (r === undefined) return
 
-        // Select all means not just select all this time, but for future as well
-        // TODO: find a more descriptive way
-        state.columns = (r.length === properties.length)? undefined : r
-        showhideColumns()
+        state.columns = r
+        gotoPage(pager.currentPage)
     }
 
     sortBtn.onclick = async () => {
@@ -623,29 +1035,51 @@ export function createTableFromArray(arr: any[], presentation: Partial<TablePres
         applySort()
     }
 
+    randomSortBtn.onclick = () => {
+        state.sortBy = []
+        tu.shuffleArray(data)
+        sortHint.textContent = `Random`
+        gotoPage(0)
+    }
+
     filter.oninput = () => {
         const v = filter.value.toLowerCase()
+        state.filter = v
         applyFilter(v)
-        applyPaging()
     }
-
-    pageText.onclick = async () => {
-        const page = await showInputDialog('Go to Page', 'Enter page number', `${presentation.pageSize || 20}`)
-        if (page) {
-            gotoPage(Number(page) - 1)
-        }
-    }
-    firstBtn.onclick = () => gotoPage(0)
-    prevBtn.onclick = () => gotoPage(currentPage - 1)
-    nextBtn.onclick = () => gotoPage(currentPage + 1)
-    lastBtn.onclick = () => gotoPage(Infinity)
 
     // logic start here
-    constructTable()
-    showhideColumns()
-    applyFilter('')
+    syncRegionExistence()
+    applyFilter(state.filter || '')
     applySort()
     return view
+}
+
+export function createFoldedString(content: string, maxLength: number) {
+    if (content.length <= maxLength) {
+        return createElement(null, 'span', [], content)
+    } else {
+        const c = Math.floor((maxLength - 3) / 2)
+        const leftContent = content.slice(0, c)
+        const rightContent = content.slice(content.length - c)
+        const shortContent = leftContent + `...` + rightContent
+        const span = createElement(null, 'span', [], shortContent)
+        // hover to show full content
+        span.title = content
+        return span
+    }
+}
+
+export function showAll(collection: NodeListOf<HTMLElement>) {
+    collection.forEach((el) => {
+        el.style.display = '';
+    });
+}
+
+export function hideAll(collection: NodeListOf<HTMLElement>) {
+    collection.forEach((el) => {
+        el.style.display = 'none';
+    });
 }
 
 export function rgbValue(obj: {r: number, g: number, b: number}) {
@@ -669,7 +1103,110 @@ export function syncDisplay(element: HTMLElement, visible: boolean) {
     element.style.display = visible ? '' : 'none';
 }
 
+export function syncExistence(element: HTMLElement, shouldExist: boolean) {
+    if (!shouldExist) {
+        element.remove()
+    }
+}
+
 export function syncChildDisplay(parent: HTMLElement, childSelector: string, visible: boolean) {
     const children = parent.querySelectorAll<HTMLElement>(childSelector);
     children.forEach(child => syncDisplay(child, visible));
+}
+
+export function setContent(parent: HTMLElement, ...nodes: (string | Node)[]) {
+    parent.innerHTML = ''
+    parent.append(...nodes)
+}
+
+export class Pager {
+    toolbar: HTMLElement
+    privBtn: HTMLButtonElement
+    nextBtn: HTMLButtonElement
+    lastBtn: HTMLButtonElement
+    firstBtn: HTMLButtonElement
+    pageText: HTMLElement
+    currentPage = 0
+    constructor(private totalItems: number, private pageSize: number, private onPageChange: (pageIndex: number, pageSize: number) => void) {
+        this.toolbar = createElement(null, 'div', ['btn-group'])
+        const btnClass = ['btn', 'btn-secondary']
+        this.firstBtn = createElement(this.toolbar, 'button', btnClass, '<<')
+        this.privBtn = createElement(this.toolbar, 'button', btnClass, '<')
+        this.pageText = createElement(this.toolbar, 'button', ['btn', 'btn-secondary'], '1 / 1')
+        this.nextBtn = createElement(this.toolbar, 'button', btnClass, '>')
+        this.lastBtn = createElement(this.toolbar, 'button', btnClass, '>>')
+        this.firstBtn.onclick = () => this.gotoPage(0)
+        this.privBtn.onclick = () => this.gotoPage(this.currentPage - 1)
+        this.nextBtn.onclick = () => this.gotoPage(this.currentPage + 1)
+        this.lastBtn.onclick = () => this.gotoPage(Infinity)
+        this.pageText.onclick = async () => {
+            const page = await showInputDialog('Go to Page', 'Enter page number', `${this.currentPage + 1}`)
+            if (page) {
+                this.gotoPage(Number(page) - 1)
+            }
+        }
+        // this.gotoPage(this.currentPage)
+        this.updateUI()
+    }
+
+    setPageSize(pageSize: number) {
+        this.pageSize = pageSize
+        this.gotoPage(this.currentPage)
+    }
+
+    setTotalItems(totalItems: number) {
+        this.totalItems = totalItems
+        this.gotoPage(this.currentPage)
+    }
+
+    getPageRange(page: number) {
+        const startIndex = this.pageSize === Infinity ?0 : page * this.pageSize
+        const endIndex = Math.min(startIndex + this.pageSize, this.totalItems)
+        return { startIndex, endIndex }
+    }
+
+    private updateUI() {
+        const totalPages = Math.max(1, Math.ceil(this.totalItems / this.pageSize))
+        this.pageText.textContent = `${this.currentPage + 1} / ${totalPages}`
+        this.privBtn.disabled = this.currentPage <= 0
+        this.firstBtn.disabled = this.currentPage <= 0
+        this.nextBtn.disabled = this.currentPage >= totalPages - 1
+        this.lastBtn.disabled = this.currentPage >= totalPages - 1
+    }
+
+    gotoPage(page: number) {
+        const totalPages = Math.max(1, Math.ceil(this.totalItems / this.pageSize))
+        if (page < 0) page = 0
+        if (page >= totalPages) page = totalPages - 1
+        this.currentPage = page
+        this.updateUI()
+        this.onPageChange(this.currentPage, this.pageSize)
+    }
+
+    getElement() {
+        return this.toolbar
+    }
+}
+
+export function createToggleBar(values: (string|HTMLElement)[], value: number, onNewValue: (v: number) => void) {
+    const div = createElement(null, 'div', ['btn-group'])
+    const buttons: HTMLButtonElement[] = []
+    function updateUI(selectedIndex: number) {
+        for (let i = 0; i < buttons.length; i++) {
+            const selected = i === selectedIndex
+            syncClass(buttons[i], 'btn-primary', selected)
+            syncClass(buttons[i], 'btn-secondary', !selected)
+        }
+    }
+    for (const v of values) {
+        const btn = createButton(div, ['btn'], '', () => {
+            const index = values.indexOf(v)
+            updateUI(index)
+            onNewValue(index)
+        })
+        btn.append(typeof v === 'string'? createElement(null, 'span', [], v): v)
+        buttons.push(btn)
+    }
+    updateUI(value)
+    return div
 }
