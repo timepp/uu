@@ -148,24 +148,24 @@ export function toFileSystemCompatibleName(name: string): string {
     return name
 }
 
-function traverseObjectInternal(obj: any, maxDepth: number, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => number|void, path: string[], seenObjects: WeakSet<object>): number | void {
+function traverseObjectInternal(obj: any, maxDepth: number, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => number|void, path: string[], parents: object[]): number | void {
     if (typeof obj !== 'object' || obj === null) {
         return callback(path, obj, 'leaf');
     }
 
-    if (seenObjects.has(obj)) {
+    if (parents.includes(obj)) {
         return callback(path, obj, 'loop');
     } else {
-        seenObjects.add(obj);
         {
             const ret = callback(path, obj, 'object');
             if (ret === 0) return ret; // stop traversing sub-properties
             if (ret === -1) return ret; // stop all traversing
         }
-
+        
         if (maxDepth >= 0 && path.length >= maxDepth) return;
+        const newParents = [...parents, obj];
         for (const key in obj) {
-            const ret = traverseObjectInternal(obj[key], maxDepth, callback, [...path, key], seenObjects);
+            const ret = traverseObjectInternal(obj[key], maxDepth, callback, [...path, key], newParents);
             if (ret === -1) return ret; // stop all traversing
         }
     }
@@ -178,8 +178,7 @@ function traverseObjectInternal(obj: any, maxDepth: number, callback: (path: str
  * @param callback Return values: void/1 to continue, 0 to stop traversing sub-properties, -1 to stop all traversing.
  */
 export function traverseObject(obj: any, maxDepth: number, callback: (path: string[], value: any, type: 'object'|'leaf'|'loop') => number|void): void {
-    const seenObjects = new WeakSet<object>()
-    traverseObjectInternal(obj, maxDepth, callback, [], seenObjects)
+    traverseObjectInternal(obj, maxDepth, callback, [], [])
 }
 
 // fuzzy find first matching keyword in object (deep)

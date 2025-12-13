@@ -33,7 +33,7 @@ Deno.test('stringify', () => {
     ut.assertEquals(tu.stringify("test"), `"test"`)
     ut.assertEquals(tu.stringify([1, 2, 3]), `[1,2,3]`)
     ut.assertEquals(tu.stringify({}), `{}`)
-    ut.assertEquals(tu.safeStringify({}, 2, Infinity, Infinity, false).str, `{\n}`)
+    ut.assertEquals(tu.safeStringify({}, 2, Infinity, Infinity, false).str, `{}`)
     const obj2 = {
         name: 'test', 
         v: {x: 100, y: {}}
