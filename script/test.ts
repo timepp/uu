@@ -26,13 +26,18 @@ Deno.test('object traverse', () => {
 
     const loopPaths = arr.filter(v => v[2] === 'loop').map(v => v[0])
     ut.assertEquals(loopPaths, [["address", "recursive"]])
+})
 
+Deno.test('stringify replacer', () => {
     const obj2 = {
         name: 'test', 
+        cr: {},
         v: {x: 100, y: {}}
     }
-    obj2.v.y = obj2.v
-    ut.assertEquals(JSON.stringify(obj2, tu.getStringifyReplacer()), `{"name":"test","v":{"x":100,"y":"<<circular ref to v>>"}}`)
+    obj2.v.y = obj2
+    obj2.cr = obj2.v
+    // console.log(JSON.stringify(obj2))
+    ut.assertEquals(tu.stringify(obj2).str, `{"name":"test","v":{"x":100,"y":"<<circular ref to the root object>>"}}`)
 })
 
 Deno.test('data format', () => {

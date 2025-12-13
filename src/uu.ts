@@ -332,11 +332,11 @@ export function setInformationExtractor(extractor: InformationExtractor) {
 
 export function showJsonResult(title: string, content: string | object) {
     const obj = typeof content === 'string' ? JSON.parse(content) : content
-    const replacer = new tu.StringifyReplacer({maxStringLength: 80, maxArraySize:20})
+    const replacer = new tu.StringifyReplacer(80, 20)
     const trimmedText = JSON.stringify(obj, replacer.replace.bind(replacer), 2)
     const r = replacer.getLimitResult()
     const trimmed = r.trimmedArrays + r.trimmedStrings > 0
-    const fullText = trimmed ? JSON.stringify(obj, null, 2) : trimmedText
+    const fullText = trimmed ? tu.stringify(obj, 2).str : trimmedText
 
     const trimForPerformance = fullText.length > 50000
     const text = trimForPerformance ? trimmedText : fullText
@@ -698,7 +698,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const value = item[prop as keyof T]
         if (typeof value === 'object' && value !== null) {
             // return createJsonView(JSON.stringify(value, null, 2))
-            return JSON.stringify(value)
+            return tu.stringify(value).str
         } else {
             return `${value}`
         }

@@ -207,36 +207,91 @@ export class StringifyReplacer {
     limitResult = {
         trimmedStrings: 0,
         trimmedArrays: 0,
+        circularRefs: 0,
     }
     seen = new WeakMap<object, string>()
-    constructor(private limit: {maxStringLength?: number, maxArraySize?:number} = {}) {}
-    replace(key:string, value:any) {
+    stack = [] as object[]
+    constructor(private maxStrLen = Infinity, private maxArrSize = Infinity) {}
+    replace1(key:string, value:any) {
+        console.log('replace key=', key, ' value=', value)
         // circular detection
         if (typeof value === "object" && value !== null) {
             const previousKey = this.seen.get(value)
-            if (previousKey) {
-                return `<<circular ref to ${previousKey}>>`
+            if (previousKey !== undefined) {
+                this.limitResult.circularRefs++
+                console.log(`circular ref detected for key='${key}', previousKey='${previousKey}'`)
+                return previousKey? `<<circular ref to '${previousKey}'>>` : `<<circular ref to the root object>>`
             }
+            console.log(`adding value to map`)
             this.seen.set(value, key)
         }
 
         // string length limit
-        if (typeof value === 'string' && this.limit.maxStringLength && value.length > this.limit.maxStringLength) {
+        if (typeof value === 'string' && value.length > this.maxStrLen) {
             this.limitResult.trimmedStrings++
-            return `${value.slice(0, this.limit.maxStringLength - 12)} …${value.length - this.limit.maxStringLength + 12} more chars…`
+            return `${value.slice(0, this.maxStrLen - 12)} …${value.length - this.maxStrLen + 12} more chars…`
         }
 
         // array size limit
-        if (Array.isArray(value) && this.limit.maxArraySize && value.length > this.limit.maxArraySize) {
+        if (Array.isArray(value) && value.length > this.maxArrSize) {
             this.limitResult.trimmedArrays++
-            return value.slice(0, this.limit.maxArraySize - 1).concat(`…${value.length - this.limit.maxArraySize + 1} more items…`)
+            return value.slice(0, this.maxArrSize - 1).concat(`…${value.length - this.maxArrSize + 1} more items…`)
         }
 
         return value
     }
+    replace(key:string, value:any) {
+        console.log('replace key=', key, ' value=', value, ' stack=', this.stack)
+        if (typeof value === "object" && value !== null) {
+            if (this.stack.indexOf(value) !== -1) {
+                return "[Circular]";
+            }
+            this.stack.push(value);
+            // 用 try/finally 保证 stack 正确出栈
+            try {
+                return value;
+            } finally {
+                this.stack.pop();
+            }
+        }
+        return value;
+    }
     getLimitResult() {
         return this.limitResult
     }
+}
+
+export function stringify(obj: any, space?: number | string) {
+    try {
+        return JSON.stringify(obj, null, space)
+    } catch (e) {
+        // there are circular refs, we handle it below
+    }
+}
+
+export function safeStringify(obj: any, parents: object[], space?: string): string {
+    if (obj === null) return 'null'
+    if (typeof obj === 'number' || typeof obj === 'boolean') return String(obj)
+    if (typeof obj === 'string') return JSON.stringify(obj)
+    
+    // circular ref detection
+    const index = parents.indexOf(obj)
+    if (index !== -1) {
+        return `"<<circular ref to ${index === 0 ? 'the root object' : 'parent level ' + index}>>"`
+    }
+
+    const indent = space?.repeat(parents.length)
+    if (Array.isArray(obj)) {
+        const np = [...parents, obj]
+        const items = obj.map(v => safeStringify(v, np, space))
+        const totalLength = items.reduce((a, b) => a + b.length, 0)
+        if (space && indent && totalLength + items.length * 2 > 60) {
+            const inner = items.map(i => indent + i).join(',\n')
+            return `[\n${inner}\n]`
+        }
+        return `[${items.join(', ')}]`
+    }
+    return ''
 }
 
 export function dataProperties(arr: object[]): string[] {

@@ -1,8 +1,5 @@
-/// <reference types="https://cdn.jsdelivr.net/gh/timepp/uu@v1.0.4/dist/uu.d.ts" />
+import * as uu from '../src/uu.ts'
 
-import * as uu from 'https://cdn.jsdelivr.net/gh/timepp/uu@v1.0.4/dist/uu.js'
-
-const div = uu.createElement(document.body, 'div', [], 'Hello, world!', {color: 'red'})
 const data = {
     name: 'test',
     age: 30,
@@ -17,23 +14,25 @@ const data = {
     }
 }
 const jv = uu.createJsonView(JSON.stringify(data, null, 2))
-// document.body.appendChild(jv)
+const hr = uu.createElement(null, 'hr')
+const wv = uu.createJsonView(uu.stringify(window, 2).str)
+document.body.append(jv, hr, wv)
 
-const arr = Object.entries(window).map(([k, v]) => {
-    return {key: k, value: v, type: typeof v}
-})
+// const arr = Object.entries(window).map(([k, v]) => {
+//     return {key: k, value: v, type: typeof v}
+// })
 
-const e = uu.createTableFromArray(arr, {
-    stateKey: 'windowTable', 
-    rawIndexColumn: '#', 
-    pageSize: 10,
-    onCellClick: (item, prop) => {
-        if (prop === 'value') {
-            const value = item.value
-            const text = JSON.stringify(value, uu.getStringifyReplacer({maxStringLength: 10}), 2)
-            uu.showInDialog(`window.${item.key}`, uu.createJsonView(text))
-        }
-    }
-})
+// const e = uu.visualizeArray(arr, {
+//     stateKey: 'windowTable', 
+//     rawIndexColumn: '#', 
+//     pageSize: 10,
+//     onCellClick: (item, prop) => {
+//         if (prop === 'value') {
+//             const value = item.value
+//             const text = uu.stringify(value, 2).str
+//             uu.showJsonResult('value', text)
+//         }
+//     }
+// })
 
-document.body.appendChild(e)
+// document.body.appendChild(e)

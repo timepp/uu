@@ -1,4 +1,7 @@
 /* this file aim to mimic bootstrap 5.3.0, but with clear code */
+body {
+  padding: 10px;
+}
 
 .me-2 {
   margin-right: 0.5rem;
