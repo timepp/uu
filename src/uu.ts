@@ -332,11 +332,10 @@ export function setInformationExtractor(extractor: InformationExtractor) {
 
 export function showJsonResult(title: string, content: string | object) {
     const obj = typeof content === 'string' ? JSON.parse(content) : content
-    const replacer = new tu.StringifyReplacer(80, 20)
-    const trimmedText = JSON.stringify(obj, replacer.replace.bind(replacer), 2)
-    const r = replacer.getLimitResult()
-    const trimmed = r.trimmedArrays + r.trimmedStrings > 0
-    const fullText = trimmed ? tu.stringify(obj, 2).str : trimmedText
+    const sr = tu.safeStringify(obj, 2, 80, 20)
+    const trimmedText = sr.str
+    const trimmed = sr.trimmedArrays + sr.trimmedStrings > 0
+    const fullText = trimmed ? tu.stringify(obj, 2, false) : trimmedText
 
     const trimForPerformance = fullText.length > 50000
     const text = trimForPerformance ? trimmedText : fullText
@@ -395,7 +394,8 @@ export function showInputDialog(title: string, placeholder: string, initialValue
         input.placeholder = placeholder
         if (initialValue) input.value = initialValue
         if (singleLine) {
-            input.addEventListener('keydown', async (e: KeyboardEvent) => {
+            input.addEventListener('keydown', async (evt: Event) => {
+                const e = evt as KeyboardEvent
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     finish(input.value)
@@ -698,7 +698,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const value = item[prop as keyof T]
         if (typeof value === 'object' && value !== null) {
             // return createJsonView(JSON.stringify(value, null, 2))
-            return tu.stringify(value).str
+            return tu.stringify(value)
         } else {
             return `${value}`
         }

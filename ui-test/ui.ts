@@ -14,25 +14,26 @@ const data = {
     }
 }
 const jv = uu.createJsonView(JSON.stringify(data, null, 2))
+const jv2 = uu.createJsonView(uu.stringify(data, 2, true))
 const hr = uu.createElement(null, 'hr')
-const wv = uu.createJsonView(uu.stringify(window, 2).str)
-document.body.append(jv, hr, wv)
+const wv = uu.createJsonView(uu.stringify(window, 2))
+// document.body.append(jv, hr.cloneNode(), jv2, hr.cloneNode(), wv)
 
-// const arr = Object.entries(window).map(([k, v]) => {
-//     return {key: k, value: v, type: typeof v}
-// })
+const arr = Object.entries(window).map(([k, v]) => {
+    return {key: k, value: v, type: typeof v}
+})
 
-// const e = uu.visualizeArray(arr, {
-//     stateKey: 'windowTable', 
-//     rawIndexColumn: '#', 
-//     pageSize: 10,
-//     onCellClick: (item, prop) => {
-//         if (prop === 'value') {
-//             const value = item.value
-//             const text = uu.stringify(value, 2).str
-//             uu.showJsonResult('value', text)
-//         }
-//     }
-// })
+const e = uu.visualizeArray(arr, {
+    stateKey: 'windowTable', 
+    rawIndexColumn: '#', 
+    pageSize: 10,
+    onCellClick: (item, prop) => {
+        if (prop === 'value') {
+            const value = item.value
+            const text = uu.stringify(value, 2)
+            uu.showJsonResult('value', text)
+        }
+    }
+})
 
-// document.body.appendChild(e)
+document.body.appendChild(e)

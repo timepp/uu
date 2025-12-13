@@ -202,96 +202,89 @@ export function fuzzyFind(obj: object, keyword: string, caseSensitive = true) {
     return path
 }
 
-// used in json.stringify
-export class StringifyReplacer {
-    limitResult = {
+export function stringify(obj: any, space?: number | string, compact = false, maxStrLen = Infinity, maxArrSize = Infinity) {
+    if (maxStrLen === Infinity && maxArrSize === Infinity && compact === false) {
+        // use native JSON.stringify directly whenever possible
+        try {
+            return JSON.stringify(obj, null, space)
+        } catch (e) {
+            // ignore since we will do safe fallback below
+        }
+    }
+    return safeStringify(obj, space, maxStrLen, maxArrSize, compact).str
+}
+
+export function safeStringify(obj: any, space: number | string | undefined, maxStrLen = Infinity, maxArrSize = Infinity, compact = true) {
+    const ssc = createSsContext()
+    const str = safeStringifyInternal(obj, [], typeof space === 'number' ? ' '.repeat(space) : space, compact, maxStrLen, maxArrSize, ssc)
+    return {str,...ssc}
+}
+
+function createSsContext() {
+    return {
+        circularRefs: 0,
         trimmedStrings: 0,
         trimmedArrays: 0,
-        circularRefs: 0,
-    }
-    seen = new WeakMap<object, string>()
-    stack = [] as object[]
-    constructor(private maxStrLen = Infinity, private maxArrSize = Infinity) {}
-    replace1(key:string, value:any) {
-        console.log('replace key=', key, ' value=', value)
-        // circular detection
-        if (typeof value === "object" && value !== null) {
-            const previousKey = this.seen.get(value)
-            if (previousKey !== undefined) {
-                this.limitResult.circularRefs++
-                console.log(`circular ref detected for key='${key}', previousKey='${previousKey}'`)
-                return previousKey? `<<circular ref to '${previousKey}'>>` : `<<circular ref to the root object>>`
-            }
-            console.log(`adding value to map`)
-            this.seen.set(value, key)
-        }
-
-        // string length limit
-        if (typeof value === 'string' && value.length > this.maxStrLen) {
-            this.limitResult.trimmedStrings++
-            return `${value.slice(0, this.maxStrLen - 12)} …${value.length - this.maxStrLen + 12} more chars…`
-        }
-
-        // array size limit
-        if (Array.isArray(value) && value.length > this.maxArrSize) {
-            this.limitResult.trimmedArrays++
-            return value.slice(0, this.maxArrSize - 1).concat(`…${value.length - this.maxArrSize + 1} more items…`)
-        }
-
-        return value
-    }
-    replace(key:string, value:any) {
-        console.log('replace key=', key, ' value=', value, ' stack=', this.stack)
-        if (typeof value === "object" && value !== null) {
-            if (this.stack.indexOf(value) !== -1) {
-                return "[Circular]";
-            }
-            this.stack.push(value);
-            // 用 try/finally 保证 stack 正确出栈
-            try {
-                return value;
-            } finally {
-                this.stack.pop();
-            }
-        }
-        return value;
-    }
-    getLimitResult() {
-        return this.limitResult
     }
 }
-
-export function stringify(obj: any, space?: number | string) {
-    try {
-        return JSON.stringify(obj, null, space)
-    } catch (e) {
-        // there are circular refs, we handle it below
-    }
-}
-
-export function safeStringify(obj: any, parents: object[], space?: string): string {
+type SSContext = ReturnType<typeof createSsContext>
+function safeStringifyInternal(obj: any, parents: object[], space: string | undefined, compact: boolean, maxStrLen: number, maxArrSize: number, ssc: SSContext): string {
     if (obj === null) return 'null'
     if (typeof obj === 'number' || typeof obj === 'boolean') return String(obj)
-    if (typeof obj === 'string') return JSON.stringify(obj)
+    if (typeof obj === 'string') {
+        let v = obj
+        if (obj.length > maxStrLen) {
+            v = obj.slice(0, maxStrLen - 12) + ` …${obj.length - maxStrLen + 12} more chars…`
+            ssc.trimmedStrings++
+        }
+        return JSON.stringify(v)
+    }
     
     // circular ref detection
     const index = parents.indexOf(obj)
     if (index !== -1) {
+        ssc.circularRefs++
         return `"<<circular ref to ${index === 0 ? 'the root object' : 'parent level ' + index}>>"`
     }
 
-    const indent = space?.repeat(parents.length)
-    if (Array.isArray(obj)) {
-        const np = [...parents, obj]
-        const items = obj.map(v => safeStringify(v, np, space))
-        const totalLength = items.reduce((a, b) => a + b.length, 0)
-        if (space && indent && totalLength + items.length * 2 > 60) {
-            const inner = items.map(i => indent + i).join(',\n')
-            return `[\n${inner}\n]`
+    // when space is given, user usually wants pretty printing
+    // we then add additional spaces in few places for better readability
+    const subtleSpacer = space === undefined ? '' : ' '
+
+    function compose(arr: string[], open: string, close: string) {
+        if (arr.length === 0) return `${open}${close}`
+        const shouldCompact = compact && arr.reduce((a, b) => a + b.length, 0) < 60 && arr.every(v => !v.includes('\n'))
+        if (space === undefined || shouldCompact) {
+            return `${open}${arr.join(',' + subtleSpacer)}${close}`
         }
-        return `[${items.join(', ')}]`
+        const indent = space?.repeat(parents.length)
+        const inner = arr.map(v => indent + space + v).join(',\n')
+        return `${open}\n${inner}\n${indent}${close}`
     }
-    return ''
+
+    const np = [...parents, obj]
+    if (Array.isArray(obj)) {
+        let arr = obj
+        if (obj.length > maxArrSize) {
+            ssc.trimmedArrays++
+            arr = obj.slice(0, maxArrSize - 1)
+            arr.push(`…${obj.length - maxArrSize + 1} more items…`)
+        }
+        const items = arr.map(v => safeStringifyInternal(v, np, space, compact, maxStrLen, maxArrSize, ssc))
+        return compose(items, '[', ']')
+    }
+
+    if (typeof obj === 'object') {
+        const np = [...parents, obj]
+        const entries = Object.entries(obj).map(([k, v]) => {
+            const keyStr = JSON.stringify(k)
+            const valueStr = safeStringifyInternal(v, np, space, compact, maxStrLen, maxArrSize, ssc)
+            return `${keyStr}:${subtleSpacer}${valueStr}`
+        })
+        return compose(entries, '{', '}')
+    }
+
+    return `${obj}` // shouldn't reach here
 }
 
 export function dataProperties(arr: object[]): string[] {
