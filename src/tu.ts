@@ -563,3 +563,59 @@ export function shuffleArray<T>(array: T[]) {
         [array[i], array[j]] = [array[j], array[i]];
     }
 }
+
+export function getDataInsights(arr: object[]) {
+    type PropStat = {
+        propName: string
+        uniqueValues: {
+            value: string
+            count: number
+        }[]
+    }
+    const pvm: Record<string, Record<any, number>> = {}
+    function getOrCreate(obj: any, prop: string) {
+        if (!obj[prop]) obj[prop] = {}
+        return obj[prop]
+    }
+    function inc(obj: any, prop: any) {
+        const props = (typeof prop === 'object') ? JSON.stringify(prop) : prop
+        obj[props] = (obj[props] || 0) + 1
+    }
+    for (const item of arr) {
+        for (const prop in item) {
+            const value = item[prop as keyof typeof item]
+            let pp = getOrCreate(pvm, prop)
+            if (Array.isArray(value)) {
+                const arr = value as any[]
+                for (const v of arr) {
+                    inc(pp, v)
+                }
+            } else {
+                inc(pp, value)
+            }
+        }
+    }
+
+    // convert pvm to PropStat[]
+    const stats: PropStat[] = []
+    for (const prop in pvm) {
+        const pp = pvm[prop]
+        const uniqueValues = []
+        for (const value in pp) {
+            uniqueValues.push({value: value, count: pp[value]})
+        }
+        uniqueValues.sort((a, b) => b.count - a.count)
+        stats.push({propName: prop, uniqueValues: uniqueValues})
+    }
+
+    function isGoodStat(stat: PropStat) {
+        if (stat.uniqueValues.length < 2) return false
+        const n = stat.uniqueValues.length
+        const an = stat.uniqueValues.filter(v => v.count > 1).length
+        const m = stat.uniqueValues[0].count
+        if (m <= 10 && an / n < 0.1) return false
+        return true
+    }
+
+    return stats.filter(isGoodStat).sort((a, b) => a.uniqueValues.length - b.uniqueValues.length);
+}
