@@ -433,15 +433,25 @@ export function createInputAction(title: string, actionName: string, valueId: st
     return div
 }
 
-export function createAutofillInput(title: string, placeholder: string, valueId: string, handler?: (value: string) => void, btn?: string) {
+export function createAutofillInput(title: string, placeholder: string, valueId = title, handler?: (value: string) => void, btn?: string) {
     const ig = createElement(null, 'div', ['input-group'])
     const label = createElement(ig, 'label', ['input-group-text'], title, {minWidth: '100px'})
     const input = createElement(ig, 'input', ['form-control'], '', {}, {placeholder})
+    const history = JSON.parse(localStorage.getItem(`input-history-${valueId}`) || '[]') as string[]
+    
+    function updateHistory(newValue: string) {
+        if (!history.includes(newValue)) {
+            history.unshift(newValue)
+            localStorage.setItem(`input-history-${valueId}`, JSON.stringify(history.slice(0, 100)))
+        }
+    }
+
     let button : HTMLButtonElement | null = null
     if (btn) {
         button = createElement(ig, 'button', ['input-group-btn', 'btn', 'btn-primary'], btn)
         button.onclick = () => {
             if (handler) {
+                updateHistory(input.value)
                 handler(input.value)
             }
         }
@@ -451,12 +461,18 @@ export function createAutofillInput(title: string, placeholder: string, valueId:
     label.style.cursor = 'pointer'
     label.onclick = async () => {
         // autofill support
-        const candidates = autofillProvider(valueId)
+        const predefined = autofillProvider(valueId)
+        const candidates = [
+            ...predefined,
+            ...history.map(h => ({value: h, comment: 'from history'})).filter(p => !predefined.find(pp => pp.value === p.value))
+        ]
         if (candidates.length !== 0) {
             const r = await chooseOne(candidates)
             if (r !== undefined) {
                 input.value = r
                 localStorage.setItem(`input-${valueId}`, input.value)
+                // update history
+
             }
         }
         input.focus()
@@ -465,6 +481,7 @@ export function createAutofillInput(title: string, placeholder: string, valueId:
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             if (handler) {
+                updateHistory(input.value)
                 handler(input.value)
             }
         }
@@ -718,6 +735,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const filterHint = createElement(toolbar, 'span', ['input-group-text'], 'Filter')
     const filter = createElement(toolbar, 'input', ['form-control'], '')
     const counts = createElement(toolbar, 'span', ['input-group-text', 'me-2'], '20 / 100')
+    const pagerWrapper = createElement(toolbar, 'div', [])
+    const optionBtn = createElement(toolbar, 'button', ['ms-2', 'btn', 'btn-secondary'], '≡')
     const dataContainer = createElement(view, 'div')
 
     // now paging section, which looks like 4 buttons and an edit: "<< < [8] > >>
@@ -919,7 +938,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const pageSize = cfg.pageSize || Infinity
     const pager = new Pager(data.length, pageSize, (page) => gotoPage(page))
     const pagerElem = pager.getElement()
-    toolbar.appendChild(pagerElem)
+    pagerWrapper.appendChild(pagerElem)
 
     function gotoPage(page: number) {
         // only visible rows falling into the current page are shown, all others are hidden
@@ -989,7 +1008,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         syncExistence(filter, showFilter)
         syncExistence(filterHint, showFilter)
         syncExistence(counts, showFilter)
-        syncExistence(pagerElem, !!cfg.pageSize)
+        syncExistence(pagerWrapper, !!cfg.pageSize)
 
         if (toolbar.lastElementChild) {
             (toolbar.lastElementChild as HTMLElement).classList.remove('me-2')
@@ -1048,6 +1067,14 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         applyFilter(v)
     }
 
+    associateDropdownActions(optionBtn, {
+        'Insights': () => {
+            const info = tu.getDataInsights(arr)
+            showJsonResult('Data Insights', info)
+        },
+        'Select Columns': () => fieldSelect.click(),
+    })
+
     // logic start here
     syncRegionExistence()
     applyFilter(state.filter || '')
@@ -1084,6 +1111,12 @@ export function hideAll(collection: NodeListOf<HTMLElement>) {
 
 export function rgbValue(obj: {r: number, g: number, b: number}) {
     return `rgb(${obj.r}, ${obj.g}, ${obj.b})`;
+}
+
+export function getStringColor(str: string) {
+    const v = tu.simpleHash(str)
+    const h = v % 360
+    return `hsl(${h}, 100%, 90%)`
 }
 
 export function syncClass(element: HTMLElement, className: string, enabled: boolean) {
@@ -1209,4 +1242,88 @@ export function createToggleBar(values: (string|HTMLElement)[], value: number, o
     }
     updateUI(value)
     return div
+}
+
+export function associateDropdownActions(elem: HTMLElement, actions: Record<string, () => void> | {name: string, action: () => void}[]) {
+    type DropdownElement = HTMLElement & { dropdown?: HTMLElement }
+    const e = elem as DropdownElement
+    e.onclick = async (evt) => {
+        evt.stopPropagation()
+
+        function closeDropdown() {
+            if (e.dropdown) {
+                e.dropdown.remove()
+                delete e.dropdown
+                document.removeEventListener('click', closeDropdown)
+            }
+        }
+
+        if (e.dropdown) {
+            closeDropdown()
+            return
+        }
+        document.addEventListener('click', closeDropdown)
+        
+        // Create dropdown menu
+        const dropdown = createElement(document.body, 'div', ['dropdown-menu', 'show'], '', {
+            position: 'absolute',
+            zIndex: '1050'
+        })
+        const rect = e.getBoundingClientRect()
+        
+        // Position dropdown and check for overflow
+        let left = rect.left
+        let top = rect.bottom
+        
+        // Add dropdown to DOM temporarily to get its dimensions
+        document.body.appendChild(dropdown)
+        
+        // Adjust horizontal position if dropdown would overflow right edge
+        const dropdownWidth = dropdown.offsetWidth || 200 // fallback width
+        const viewportWidth = window.innerWidth
+        if (left + dropdownWidth > viewportWidth) {
+            left = rect.right - dropdownWidth
+        }
+        
+        // Adjust vertical position if dropdown would overflow bottom edge
+        const dropdownHeight = dropdown.offsetHeight || 100 // fallback height
+        const viewportHeight = window.innerHeight
+        if (top + dropdownHeight > viewportHeight) {
+            top = rect.top - dropdownHeight
+        }
+        
+        dropdown.style.left = `${left}px`
+        dropdown.style.top = `${top}px`
+        e.dropdown = dropdown
+
+        if (!Array.isArray(actions)) {
+            actions = Object.entries(actions).map(([name, action]) => ({name, action}))
+        }
+
+        for (const {name, action} of actions) {
+            const item = createElement(dropdown, 'a', ['dropdown-item'], name)
+            item.style.cursor = 'pointer'
+            item.onclick = () => {
+                closeDropdown()
+                action()
+            }
+        }
+    }
+}
+
+export function createFoldableArea(title: string, content: HTMLElement, initiallyFolded: boolean = true) {
+    // create a foldable area using bootstrap card
+    const card = createElement(null, 'div', ['card', 'mb-2'])
+    const cardHeader = createElement(card, 'div', ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'], '', {cursor: 'pointer'})
+    const titleElem = createElement(cardHeader, 'span', [], title)
+    const toggleBtn = createElement(cardHeader, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], initiallyFolded ? '+' : '−')
+    const cardBody = createElement(card, 'div', ['card-body'], '', {display: initiallyFolded ? 'none' : ''})
+    cardBody.appendChild(content)
+
+    cardHeader.onclick = () => {
+        const isFolded = cardBody.style.display === 'none'
+        cardBody.style.display = isFolded ? '' : 'none'
+        toggleBtn.textContent = isFolded ? '−' : '+'
+    }
+    return card
 }
