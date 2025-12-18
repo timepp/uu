@@ -401,6 +401,9 @@ export function showInputDialog(title: string, placeholder: string, initialValue
                     finish(input.value)
                 }
             })
+        } else {
+            // show 3 lines
+            (input as HTMLTextAreaElement).rows = 5
         }
         const footer = createElement(dc, 'div', ['d-flex', 'justify-content-end', 'mt-2'])
         const okBtn = createButton(footer, ['btn', 'btn-primary'], 'OK', () => finish(input.value))
