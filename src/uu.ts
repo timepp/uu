@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-window
 // uu: a set of utility functions for modern web UI
 
 import * as tu from './tu.js'
@@ -73,6 +74,20 @@ export function createButton(parent: Element | null, classes: string[] = [], tex
     const button = createElement(parent, 'button', classes, text)
     button.onclick = onclick
     return button
+}
+
+export function createTable(parent: Element|null, columns: string[] = [], classes: string[] = [], styles: Partial<CSSStyleDeclaration> = {}) {
+    const tbl = createElement(parent, 'table', classes, '', styles)
+    const thead = createElement(tbl, 'thead')
+    const tr = createElement(thead, 'tr')
+    const headCells = columns.map(c => createElement(tr, 'th', [], c))
+    const tbody = createElement(tbl, 'tbody')
+    return {
+        tbl,
+        thead,
+        headCells,
+        tbody
+    }
 }
 
 export function forEachTableCell(table: HTMLTableElement, callback: (cell: HTMLTableCellElement, row: number, col: number) => void) {
@@ -214,13 +229,13 @@ export function createLargeJsonView(content: string) {
     return main
 }
 
-export function showDialog(classes: string[] = [], style: Partial<CSSStyleDeclaration> = {}, softDismissable = true, onCreate: (dialog: HTMLDialogElement, finisher: (value?: string) => void) => void) {
+export function showDialog<T>(classes: string[] = [], style: Partial<CSSStyleDeclaration> = {}, softDismissable = true, onCreate: (dialog: HTMLDialogElement, finisher: (value?: T) => void) => void) {
     const dialog = createElement(document.body, 'dialog', classes, '', style)
-    let resolver: ((value?: string) => void)
-    const promise = new Promise<string|undefined>((resolve) => {
+    let resolver: ((value?: T) => void)
+    const promise = new Promise<T|undefined>((resolve) => {
         resolver = resolve
     })
-    const finishFunc = (value?: string) => {
+    const finishFunc = (value?: T) => {
         dialog.close()
         dialog.remove()
         resolver(value)
@@ -245,18 +260,19 @@ export type ButtonAction = () => boolean|void|Promise<boolean|void>
 export function showInDialog(title: string, content: string|HTMLElement, actions: string[] | Record<string, ButtonAction> = ['Close']) {
     const dialog = createElement(document.body, 'dialog', [], '', {
         minWidth: '50vw', 
-        maxWidth: '90vw',
+        // maxWidth: '90vw',
         maxHeight: '90vh',
         padding: '0',
         border: 'none',
-        borderRadius: '8px'
+        borderRadius: '8px',
+        resize: 'both',
     })
     
     const dc = createElement(dialog, 'div', [], '', {
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        maxHeight: '90vh'
+        // maxHeight: '90vh'
     })
     
     // Fixed header
@@ -274,7 +290,7 @@ export function showInDialog(title: string, content: string|HTMLElement, actions
     const contentArea = createElement(dc, 'div', [], '', {
         flex: '1',
         overflow: 'auto',
-        padding: '0 20px'
+        padding: '0 10px'
     })
     
     if (typeof content === 'string') {
@@ -385,30 +401,75 @@ export async function showConfirmationDialog(title: string, text: string) {
     }).then(r => r === 'ok')
 }
 
-export function showInputDialog(title: string, placeholder: string, initialValue?: string, singleLine = true) {
-    return showDialog([], {width: '50vw'}, true, (dialog, finish) => {
+export type InputField = {
+    tip: string | HTMLElement,
+    initialValue?: string,
+    multiLine?: boolean
+}
+export function showInputDialog(title: string, fields: InputField[]) {
+    return showDialog<string[]>([], {width: '50vw'}, false, (dialog, finish) => {
         const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
         const header = createElement(dc, 'div', [])
-        createElement(header, 'h4', [], title)
-        const input = createElement(dc, singleLine ? 'input' : 'textarea', ['form-control'], '', {marginTop: '10px'})
-        input.placeholder = placeholder
-        if (initialValue) input.value = initialValue
-        if (singleLine) {
-            input.addEventListener('keydown', async (evt: Event) => {
+        createElement(header, 'h5', [], title)
+        createElement(dc, 'hr')
+        const gridContainer = createElement(dc, 'div', [], '', {
+            display: 'grid',
+            gridTemplateColumns: 'auto 1fr',
+            gap: '10px',
+            alignItems: 'start'
+        })
+        const inputs: (HTMLInputElement | HTMLTextAreaElement)[] = []
+        for (const field of fields) {
+            // Create tip cell
+            if (typeof field.tip === 'string') {
+                createElement(gridContainer, 'div', [], field.tip, { 
+                    whiteSpace: 'nowrap',
+                    paddingTop: '6px', // Align with input padding
+                    textAlign: 'right'
+                })
+            } else {
+                const tipContainer = createElement(gridContainer, 'div', [], '', { 
+                    whiteSpace: 'nowrap',
+                    textAlign: 'right'
+                })
+                tipContainer.appendChild(field.tip)
+            }
+            
+            // Create input cell
+            const input = createElement(gridContainer, field.multiLine ? 'textarea' : 'input', ['form-control'], '', {})
+            input.value = field.initialValue || ''
+            if (field.multiLine) {
+                (input as HTMLTextAreaElement).rows = 5
+            }
+            inputs.push(input)
+        }
+        const finishWithValue = () => finish(inputs.map(i => i.value))
+
+        if (fields.length === 1 && !fields[0].multiLine) {
+            inputs[0].addEventListener('keydown', async (evt: Event) => {
                 const e = evt as KeyboardEvent
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
-                    finish(input.value)
+                    finishWithValue()
                 }
             })
-        } else {
-            // show 3 lines
-            (input as HTMLTextAreaElement).rows = 5
         }
+
+        createElement(dc, 'hr')
         const footer = createElement(dc, 'div', ['d-flex', 'justify-content-end', 'mt-2'])
-        const okBtn = createButton(footer, ['btn', 'btn-primary'], 'OK', () => finish(input.value))
+        const okBtn = createButton(footer, ['btn', 'btn-primary'], 'OK', () => finishWithValue())
         const cancelBtn = createButton(footer, ['btn', 'btn-secondary', 'ms-2'], 'Cancel', () => finish())
     })
+}
+
+export async function prompt(title: string, tip: string | HTMLElement, initialValue?: string) {
+    const r = await showInputDialog(title, [{ tip, initialValue, multiLine: false }])
+    return r ? r[0] : undefined
+}
+
+export async function promptMultiline(title: string, tip: string | HTMLElement, initialValue?: string) {
+    const r = await showInputDialog(title, [{ tip, initialValue, multiLine: true }])
+    return r ? r[0] : undefined
 }
 
 /**
@@ -499,7 +560,7 @@ export async function chooseOne(data: (string|AnnotatedString)[]) {
     // show a dialog to choose one item from data
     // return the chosen item, or null
     // show comment as tooltip
-    return showDialog([], {}, true, (dialog, finish) => {
+    return showDialog<string>([], {}, true, (dialog, finish) => {
         const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
         const main = createElement(dc, 'div', ['d-flex', 'flex-column'], '', { marginTop: '10px', maxHeight: '60vh' })
         for (const item of data) {
@@ -566,7 +627,7 @@ export async function showSelection(title: string, data: string[], options: Part
             createElement(selectedContent, 'span', ['me-1'], text)
         }
 
-        for (const item of main.children) {
+        for (const item of Array.from(main.children)) {
             const span = item as HTMLSpanElement
             const isItemSelected = selected.includes(item.textContent!)
             span.classList.toggle('selected', isItemSelected)
@@ -602,12 +663,8 @@ export async function showSelection(title: string, data: string[], options: Part
 
     filter.oninput = () => {
         const v = filter.value.toLowerCase()
-        for (const item of main.children) {
-            if (item.textContent?.toLowerCase().includes(v)) {
-                item.classList.remove('d-none')
-            } else {
-                item.classList.add('d-none')
-            }
+        for (const item of Array.from(main.children)) {
+            syncClass(item as HTMLElement, 'd-none', !item.textContent?.toLowerCase().includes(v))
         }
     }
 
@@ -1176,7 +1233,7 @@ export class Pager {
         this.nextBtn.onclick = () => this.gotoPage(this.currentPage + 1)
         this.lastBtn.onclick = () => this.gotoPage(Infinity)
         this.pageText.onclick = async () => {
-            const page = await showInputDialog('Go to Page', 'Enter page number', `${this.currentPage + 1}`)
+            const page = await showPrompt('Go to Page', 'Enter page number', `${this.currentPage + 1}`)
             if (page) {
                 this.gotoPage(Number(page) - 1)
             }
@@ -1251,23 +1308,13 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
     type DropdownElement = HTMLElement & { dropdown?: HTMLElement }
     const e = elem as DropdownElement
     e.onclick = async (evt) => {
-        evt.stopPropagation()
-
-        function closeDropdown() {
-            if (e.dropdown) {
-                e.dropdown.remove()
-                delete e.dropdown
-                document.removeEventListener('click', closeDropdown)
-            }
-        }
-
+        console.log('dropdown button clicked')
         if (e.dropdown) {
-            closeDropdown()
+            // drop down already there, won't create a new one
             return
         }
-        document.addEventListener('click', closeDropdown)
-        
-        // Create dropdown menu
+
+        console.log('create new dropdown')
         const dropdown = createElement(document.body, 'div', ['dropdown-menu', 'show'], '', {
             position: 'absolute',
             zIndex: '1050'
@@ -1307,10 +1354,22 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
             const item = createElement(dropdown, 'a', ['dropdown-item'], name)
             item.style.cursor = 'pointer'
             item.onclick = () => {
-                closeDropdown()
                 action()
             }
         }
+
+        // Delay adding document click listener to avoid closing dropdown immediately
+        // This ensures the current click event completes before registering the listener
+        function closeDropdown() {
+            if (e.dropdown) {
+                e.dropdown.remove()
+                delete e.dropdown
+                document.removeEventListener('click', closeDropdown)
+            }
+        }
+        setTimeout(() => {
+            document.addEventListener('click', closeDropdown)
+        }, 0)
     }
 }
 
