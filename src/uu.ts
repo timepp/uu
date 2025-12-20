@@ -336,6 +336,8 @@ export function showInDialog(title: string, content: string|HTMLElement, actions
     }
 
     dialog.showModal()
+    // trigger reflow
+    dialog.style.height = `${dialog.offsetHeight}px`
     return promise
 }
 
