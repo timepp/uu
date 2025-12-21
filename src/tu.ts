@@ -619,3 +619,15 @@ export function getDataInsights(arr: object[]) {
 
     return stats.filter(isGoodStat).sort((a, b) => a.uniqueValues.length - b.uniqueValues.length);
 }
+
+export function findIndexes(s: string, sub: string): number[] {
+    const indexes: number[] = []
+    let startIndex = 0
+    while (true) {
+        const index = s.indexOf(sub, startIndex)
+        if (index === -1) break
+        indexes.push(index)
+        startIndex = index + sub.length
+    }
+    return indexes
+}
