@@ -921,10 +921,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 const specificClickHandler = cfg.columnProperties?.[prop]?.onCellClick
                 if (specificClickHandler) {
                     div.onclick = () => {
+                        if (window.getSelection()?.toString()) return;
                         specificClickHandler(item, dataIndex)
                     }
                 } else if (cfg.onCellClick) {
                     div.onclick = () => {
+                        if (window.getSelection()?.toString()) return;
                         cfg.onCellClick!(item, prop, dataIndex)
                     }
                 }
@@ -971,10 +973,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             const specificClickHandler = cfg.columnProperties?.[prop]?.onCellClick
             if (specificClickHandler) {
                 td.onclick = () => {
+                    if (window.getSelection()?.toString()) return;
                     specificClickHandler(item, dataIndex)
                 }
             } else if (cfg.onCellClick) {
                 td.onclick = () => {
+                    if (window.getSelection()?.toString()) return;
                     cfg.onCellClick!(item, prop, dataIndex)
                 }
             }
@@ -1061,9 +1065,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         // we directly remove unneeded elements in toolbar
         // rather than hiding them, so that toolbar looks cleaner (e.g. radius of borders)
         
-        const showColumnSelector = cfg.showColumnSelector ?? true//?? (properties.length > 1)
+        const showColumnSelector = cfg.showColumnSelector ?? true// ?? (properties.length > 1)
         const showSortButton = cfg.showSortButton ?? true
-        const showFilter = cfg.showFilter ?? true//(arr.length > 1)
+        const showFilter = cfg.showFilter ?? true// (arr.length > 1)
 
         syncExistence(fieldSelect, showColumnSelector)
         syncExistence(sortBtn, showSortButton)
