@@ -348,34 +348,36 @@ export function setInformationExtractor(extractor: InformationExtractor) {
     informationExtractor = extractor
 }
 
-export function showJsonResult(title: string, content: string | object) {
+export async function showJsonResult(title: string, content: string | object) {
     const obj = typeof content === 'string' ? JSON.parse(content) : content
-    const sr = tu.safeStringify(obj, 2, 80, 20)
-    const trimmedText = sr.str
-    const trimmed = sr.trimmedArrays + sr.trimmedStrings > 0
-    const fullText = trimmed ? tu.stringify(obj, 2, false) : trimmedText
+    // const sr = tu.safeStringify(obj, 2, 80, 20)
+    // const trimmedText = sr.str
+    // const trimmed = sr.trimmedArrays + sr.trimmedStrings > 0
+    // const fullText = trimmed ? tu.stringify(obj, 2, false) : trimmedText
 
-    const trimForPerformance = fullText.length > 50000
-    const text = trimForPerformance ? trimmedText : fullText
-    // trimmed <=> large json
-    const trimmedContentMatcher = /"(?:[^"\\]|\\.)*…[0-9]+ more (chars|items)…"/g
-    const div = createElement(null, 'div')
-    const jsonContainer = createElement(div, 'div', ['overflow-auto'])
+    // const trimForPerformance = fullText.length > 50000
+    // const text = trimForPerformance ? trimmedText : fullText
+    // // trimmed <=> large json
+    // const trimmedContentMatcher = /"(?:[^"\\]|\\.)*…[0-9]+ more (chars|items)…"/g
+    // const div = createElement(null, 'div')
+    // const jsonContainer = createElement(div, 'div', ['overflow-auto'])
 
-    const view = createJsonView(text, [[trimmedContentMatcher, 'red']])
-    if (trimForPerformance) {
-        const alert = createElement(jsonContainer, 'div', ['alert', 'alert-warning'], 'showing trimmed JSON content')
-        alert.onclick = () => {
-            if (jsonContainer.contains(view)) {
-                setContent(jsonContainer, alert, createElement(null, 'pre', ['wrap-text'], fullText))
-                alert.innerText = 'showing full JSON content'
-            } else {
-                setContent(jsonContainer, alert, view)
-                alert.innerText = 'showing trimmed JSON content'
-            }
-        }
-    }
-    jsonContainer.appendChild(view)
+    const fullText = JSON.stringify(obj, null, 2)
+    const div = await createCodeMirrorJsonViewer(obj)
+    // const view = createJsonView(text, [[trimmedContentMatcher, 'red']])
+    // if (trimForPerformance) {
+    //     const alert = createElement(jsonContainer, 'div', ['alert', 'alert-warning'], 'showing trimmed JSON content')
+    //     alert.onclick = () => {
+    //         if (jsonContainer.contains(view)) {
+    //             setContent(jsonContainer, alert, createElement(null, 'pre', ['wrap-text'], fullText))
+    //             alert.innerText = 'showing full JSON content'
+    //         } else {
+    //             setContent(jsonContainer, alert, view)
+    //             alert.innerText = 'showing trimmed JSON content'
+    //         }
+    //     }
+    // }
+    // jsonContainer.appendChild(view)
 
     const actions: Record<string, ButtonAction> = {
         Copy: () => navigator.clipboard.writeText(fullText),
@@ -1059,9 +1061,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         // we directly remove unneeded elements in toolbar
         // rather than hiding them, so that toolbar looks cleaner (e.g. radius of borders)
         
-        const showColumnSelector = cfg.showColumnSelector ?? (properties.length > 1)
+        const showColumnSelector = cfg.showColumnSelector ?? true//?? (properties.length > 1)
         const showSortButton = cfg.showSortButton ?? true
-        const showFilter = cfg.showFilter ?? (arr.length > 1)
+        const showFilter = cfg.showFilter ?? true//(arr.length > 1)
 
         syncExistence(fieldSelect, showColumnSelector)
         syncExistence(sortBtn, showSortButton)
@@ -1235,7 +1237,7 @@ export class Pager {
         this.nextBtn.onclick = () => this.gotoPage(this.currentPage + 1)
         this.lastBtn.onclick = () => this.gotoPage(Infinity)
         this.pageText.onclick = async () => {
-            const page = await showPrompt('Go to Page', 'Enter page number', `${this.currentPage + 1}`)
+            const page = await prompt('Go to Page', 'Enter page number', `${this.currentPage + 1}`)
             if (page) {
                 this.gotoPage(Number(page) - 1)
             }
@@ -1390,4 +1392,73 @@ export function createFoldableArea(title: string, content: HTMLElement, initiall
         toggleBtn.textContent = isFolded ? '−' : '+'
     }
     return card
+}
+
+class CodeMirrorLoader {
+  static modules:any = null;
+
+  static async getModules() {
+    if (!this.modules) {
+      const [
+        { EditorState },
+        { EditorView, lineNumbers },
+        { syntaxHighlighting, defaultHighlightStyle },
+        { json }
+      ] = await Promise.all([
+        import("https://esm.sh/@codemirror/state"),
+        import("https://esm.sh/@codemirror/view"),
+        import("https://esm.sh/@codemirror/language"),
+        import("https://esm.sh/@codemirror/lang-json")
+      ]);
+
+      this.modules = {
+        EditorState,
+        EditorView,
+        lineNumbers,
+        syntaxHighlighting,
+        defaultHighlightStyle,
+        json
+      };
+    }
+    return this.modules;
+  }
+}
+
+// 使用
+export async function createCodeMirrorJsonViewer(obj: object) {
+    /*
+        const startState = EditorState.create({
+      doc: text,
+      extensions: [
+        lineNumbers(),                          // 显示行号
+        syntaxHighlighting(defaultHighlightStyle), // 默认语法高亮样式
+        json(),                                 // JSON 语言支持（解析 + 高亮）
+        EditorState.readOnly.of(true),          // 状态级只读：禁止通过键盘/粘贴等修改内容
+        EditorView.editable.of(false)           // 视图级不可编辑：内容 DOM 不可编辑（更彻底的只读）
+      ]
+    });
+
+    const view = new EditorView({
+      state: startState,
+      parent: div
+    });
+    */
+    const { EditorState, EditorView, lineNumbers, syntaxHighlighting, defaultHighlightStyle, json } = await CodeMirrorLoader.getModules();
+    const div = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px' });
+
+    const startState = EditorState.create({
+      doc: JSON.stringify(obj, null, 2),
+      extensions: [
+        lineNumbers(),                          // 显示行号
+        syntaxHighlighting(defaultHighlightStyle), // 默认语法高亮样式
+        json(),                                 // JSON 语言支持（解析 + 高亮）
+        EditorState.readOnly.of(true),          // 状态级只读：禁止通过键盘/粘贴等修改内容
+        EditorView.editable.of(false)           // 视图级不可编辑：内容 DOM 不可编辑（更彻底的只读）
+      ]
+    });
+    const view = new EditorView({
+      state: startState,
+      parent: div
+    });
+    return div;
 }
