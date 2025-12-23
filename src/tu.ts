@@ -274,7 +274,6 @@ function safeStringifyInternal(obj: any, parents: object[], space: string | unde
     }
 
     if (typeof obj === 'object') {
-        const np = [...parents, obj]
         const entries = Object.entries(obj).map(([k, v]) => {
             const keyStr = JSON.stringify(k)
             const valueStr = safeStringifyInternal(v, np, space, compact, maxStrLen, maxArrSize, ssc)

@@ -44,3 +44,6 @@ npm run incver
 
 1. Run `deno publish --allow-slow-types` to publish the package to the Deno registry
 
+## Todo
+
+[ ] stringify support a callback function to receive the mapping between value and its position in the final string

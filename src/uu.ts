@@ -350,34 +350,8 @@ export function setInformationExtractor(extractor: InformationExtractor) {
 
 export async function showJsonResult(title: string, content: string | object) {
     const obj = typeof content === 'string' ? JSON.parse(content) : content
-    // const sr = tu.safeStringify(obj, 2, 80, 20)
-    // const trimmedText = sr.str
-    // const trimmed = sr.trimmedArrays + sr.trimmedStrings > 0
-    // const fullText = trimmed ? tu.stringify(obj, 2, false) : trimmedText
-
-    // const trimForPerformance = fullText.length > 50000
-    // const text = trimForPerformance ? trimmedText : fullText
-    // // trimmed <=> large json
-    // const trimmedContentMatcher = /"(?:[^"\\]|\\.)*…[0-9]+ more (chars|items)…"/g
-    // const div = createElement(null, 'div')
-    // const jsonContainer = createElement(div, 'div', ['overflow-auto'])
-
     const fullText = JSON.stringify(obj, null, 2)
     const div = await createCodeMirrorJsonViewer(obj)
-    // const view = createJsonView(text, [[trimmedContentMatcher, 'red']])
-    // if (trimForPerformance) {
-    //     const alert = createElement(jsonContainer, 'div', ['alert', 'alert-warning'], 'showing trimmed JSON content')
-    //     alert.onclick = () => {
-    //         if (jsonContainer.contains(view)) {
-    //             setContent(jsonContainer, alert, createElement(null, 'pre', ['wrap-text'], fullText))
-    //             alert.innerText = 'showing full JSON content'
-    //         } else {
-    //             setContent(jsonContainer, alert, view)
-    //             alert.innerText = 'showing trimmed JSON content'
-    //         }
-    //     }
-    // }
-    // jsonContainer.appendChild(view)
 
     const actions: Record<string, ButtonAction> = {
         Copy: () => navigator.clipboard.writeText(fullText),
@@ -1408,12 +1382,12 @@ class CodeMirrorLoader {
         { EditorView, lineNumbers },
         { syntaxHighlighting, defaultHighlightStyle },
         { json }
-      ] = await Promise.all([
+      ] = await callAsyncFunctionWithProgress(() => Promise.all([
         import("https://esm.sh/@codemirror/state"),
         import("https://esm.sh/@codemirror/view"),
         import("https://esm.sh/@codemirror/language"),
         import("https://esm.sh/@codemirror/lang-json")
-      ]);
+      ]));
 
       this.modules = {
         EditorState,
@@ -1428,25 +1402,7 @@ class CodeMirrorLoader {
   }
 }
 
-// 使用
 export async function createCodeMirrorJsonViewer(obj: object) {
-    /*
-        const startState = EditorState.create({
-      doc: text,
-      extensions: [
-        lineNumbers(),                          // 显示行号
-        syntaxHighlighting(defaultHighlightStyle), // 默认语法高亮样式
-        json(),                                 // JSON 语言支持（解析 + 高亮）
-        EditorState.readOnly.of(true),          // 状态级只读：禁止通过键盘/粘贴等修改内容
-        EditorView.editable.of(false)           // 视图级不可编辑：内容 DOM 不可编辑（更彻底的只读）
-      ]
-    });
-
-    const view = new EditorView({
-      state: startState,
-      parent: div
-    });
-    */
     const { EditorState, EditorView, lineNumbers, syntaxHighlighting, defaultHighlightStyle, json } = await CodeMirrorLoader.getModules();
     const div = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px' });
 
@@ -1465,4 +1421,35 @@ export async function createCodeMirrorJsonViewer(obj: object) {
       parent: div
     });
     return div;
+}
+
+class MarkdownLoader {
+    static module: any = null;
+    static async getModule() {
+        if (!this.module) {
+            this.module = await import("https://esm.sh/markdown-it");
+        }
+        return this.module;
+    }
+}
+
+export async function createMarkdownViewer(markdownText: string) {
+    const { default: markdownIt } = await MarkdownLoader.getModule();
+
+    const md = markdownIt({
+        html: true,
+        linkify: true,
+        typographer: true,
+        breaks: true,
+    });
+    const htmlContent = md.render(markdownText)
+    const container = createElement(null, 'div')
+    container.innerHTML = htmlContent
+    // make links open in new tab
+    const links = container.querySelectorAll('a')
+    links.forEach(link => {
+        link.setAttribute('target', '_blank')
+        link.setAttribute('rel', 'noopener noreferrer')
+    })
+    return container
 }
