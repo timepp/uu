@@ -1379,20 +1379,22 @@ class CodeMirrorLoader {
     if (!this.modules) {
       const [
         { EditorState },
-        { EditorView, lineNumbers },
+        { EditorView, lineNumbers, Decoration, hoverTooltip },
         { syntaxHighlighting, defaultHighlightStyle },
         { json }
       ] = await callAsyncFunctionWithProgress(() => Promise.all([
-        import("https://esm.sh/@codemirror/state"),
-        import("https://esm.sh/@codemirror/view"),
-        import("https://esm.sh/@codemirror/language"),
-        import("https://esm.sh/@codemirror/lang-json")
+        import("https://cdn.skypack.dev/@codemirror/state@6"),
+        import("https://cdn.skypack.dev/@codemirror/view@6"),
+        import("https://cdn.skypack.dev/@codemirror/language@6"),
+        import("https://cdn.skypack.dev/@codemirror/lang-json@6")
       ]));
 
       this.modules = {
         EditorState,
         EditorView,
         lineNumbers,
+        Decoration,
+        hoverTooltip,
         syntaxHighlighting,
         defaultHighlightStyle,
         json
@@ -1403,24 +1405,61 @@ class CodeMirrorLoader {
 }
 
 export async function createCodeMirrorJsonViewer(obj: object) {
-    const { EditorState, EditorView, lineNumbers, syntaxHighlighting, defaultHighlightStyle, json } = await CodeMirrorLoader.getModules();
-    const div = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px' });
+    const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json } = await CodeMirrorLoader.getModules();
+    const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px' });
 
-    const startState = EditorState.create({
+    // // 定义一个标记装饰（高亮 + 样式）
+    const commentMark = Decoration.mark({
+      attributes: { class: "cm-highlight" },
+      inclusive: false, // 是否包含边界
+    });
+
+    // // 你的注释数据：{ from, to, text }
+    const comments = [
+      { from: 14, to: 18, text: "这里是“测试文本”，表示我们正在实验功能。" },
+      // 可以加更多
+    ];
+
+    // // 创建 Decoration Set
+    const commentDecorations = Decoration.set(
+      comments.map(c => commentMark.range(c.from, c.to))
+    );
+
+    // // hover tooltip 扩展
+    // const commentTooltip = hoverTooltip((view:any, pos:number) => {
+    //   // 查找 pos 是否落在某个 comment 范围内
+    //   for (const c of comments) {
+    //     if (pos >= c.from && pos <= c.to) {
+    //       return {
+    //         pos: c.from,
+    //         end: c.to,
+    //         above: true,        // 提示框显示在上方（可改成 false 在下方）
+    //         create: () => {
+    //           const dom = document.createElement("div");
+    //           dom.className = "cm-tooltip";
+    //           dom.textContent = c.text;
+    //           return { dom };
+    //         }
+    //       };
+    //     }
+    //   }
+    //   return null; // 没找到返回 null，不显示
+    // });
+
+    const state = EditorState.create({
       doc: JSON.stringify(obj, null, 2),
       extensions: [
         lineNumbers(),                          // 显示行号
         syntaxHighlighting(defaultHighlightStyle), // 默认语法高亮样式
         json(),                                 // JSON 语言支持（解析 + 高亮）
         EditorState.readOnly.of(true),          // 状态级只读：禁止通过键盘/粘贴等修改内容
-        EditorView.editable.of(false)           // 视图级不可编辑：内容 DOM 不可编辑（更彻底的只读）
+        EditorView.editable.of(false),           // 视图级不可编辑：内容 DOM 不可编辑（更彻底的只读）
+        // commentDecorations,
+        // commentTooltip
       ]
     });
-    const view = new EditorView({
-      state: startState,
-      parent: div
-    });
-    return div;
+    const view = new EditorView({ state, parent });
+    return parent;
 }
 
 class MarkdownLoader {

@@ -1,3 +1,6 @@
+// tslint-ignore-file no-explicit-any
+// deno-lint-ignore-file no-explicit-any
+
 // tu: a set of utility functions
 
 /// get time as YYYY-MM-DD HH:mm:ss
@@ -213,9 +216,10 @@ export function stringify(obj: any, space?: number | string, compact = false, ma
     return safeStringify(obj, space, maxStrLen, maxArrSize, compact).str
 }
 
-export function safeStringify(obj: any, space: number | string | undefined, maxStrLen = Infinity, maxArrSize = Infinity, compact = true) {
+export type SafeStringifyCallback = (path: string[], value: any, startPos: number, endPos: number) => void
+export function safeStringify(obj: any, space: number | string | undefined, maxStrLen = Infinity, maxArrSize = Infinity, compact = true, callback?: SafeStringifyCallback) {
     const ssc = createSsContext()
-    const str = safeStringifyInternal(obj, [], typeof space === 'number' ? ' '.repeat(space) : space, compact, maxStrLen, maxArrSize, ssc)
+    const str = safeStringifyInternal(obj, [], [], 0, typeof space === 'number' ? ' '.repeat(space) : space, compact, maxStrLen, maxArrSize, ssc, callback)
     return {str,...ssc}
 }
 
@@ -227,62 +231,107 @@ function createSsContext() {
     }
 }
 type SSContext = ReturnType<typeof createSsContext>
-function safeStringifyInternal(obj: any, parents: object[], space: string | undefined, compact: boolean, maxStrLen: number, maxArrSize: number, ssc: SSContext): string {
-    if (obj === null) return 'null'
-    if (typeof obj === 'number' || typeof obj === 'boolean') return String(obj)
-    if (typeof obj === 'string') {
+function safeStringifyInternal(obj: any, parents: object[], path: string[], pos: number, space: string | undefined, compact: boolean, maxStrLen: number, maxArrSize: number, ssc: SSContext, callback?: SafeStringifyCallback): string {
+    // when space is given, user usually wants pretty printing
+    // we then add additional spaces in few places for better readability
+    // const subtleSpacer = space === undefined ? '' : ' '
+
+    // FIXME: we have to sacrify compact layout here to support callback with position info
+    // The thing is that in order to do compact layout we need to calulate child elements first,
+    // however, we cannot know the positions of each child elements before we collect all of them.
+    // Thus this function is not used now
+    // function compose(arr: string[], open: string, close: string) {
+    //     if (arr.length === 0) return `${open}${close}`
+    //     const shouldCompact = compact && arr.reduce((a, b) => a + b.length, 0) < 60 && arr.every(v => !v.includes('\n'))
+    //     if (space === undefined || shouldCompact) {
+    //         return `${open}${arr.join(',' + subtleSpacer)}${close}`
+    //     }
+    //     const indent = space?.repeat(parents.length)
+    //     const inner = arr.map(v => indent + space + v).join(',\n')
+    //     return `${open}\n${inner}\n${indent}${close}`
+    // }
+
+    let str = ''
+    if (obj === null) {
+        str = 'null'
+    } else if (typeof obj === 'number' || typeof obj === 'boolean') {
+        str = String(obj)
+    } else if (typeof obj === 'string') {
         let v = obj
         if (obj.length > maxStrLen) {
             v = obj.slice(0, maxStrLen - 12) + ` …${obj.length - maxStrLen + 12} more chars…`
             ssc.trimmedStrings++
         }
-        return JSON.stringify(v)
+        str = JSON.stringify(v)
+    } else {
+        // object or array
+        // circular ref detection
+        const index = parents.indexOf(obj)
+        if (index !== -1) {
+            ssc.circularRefs++
+            str = `"<<circular ref to ${index === 0 ? 'the root object' : 'parent level ' + index}>>"`
+        } else {
+            const np = [...parents, obj]
+            const indent = (space??'').repeat(parents.length)
+            const prefix = indent + (space ?? '')
+            if (Array.isArray(obj)) {
+                let arr = obj
+                if (obj.length > maxArrSize) {
+                    ssc.trimmedArrays++
+                    arr = obj.slice(0, maxArrSize - 1)
+                    arr.push(`…${obj.length - maxArrSize + 1} more items…`)
+                }
+                const parts = ['[']
+                let p = pos + 1
+                for (let i = 0; i < arr.length; i++) {
+                    parts.push(`\n` + prefix)
+                    p += 1 + prefix.length
+                    const itemStr = safeStringifyInternal(arr[i], np, [...path, `${i}`], p, space, compact, maxStrLen, maxArrSize, ssc, callback)
+                    parts.push(itemStr)
+                    p += itemStr.length
+                    if (i < arr.length - 1) {
+                        parts.push(',')
+                        p += 1
+                    }
+                }
+                if (arr.length > 0) {
+                    parts.push('\n' + indent)
+                    p += 1 + indent.length
+                }
+                parts.push(']')
+                str = parts.join('')
+            } else if (typeof obj === 'object') {
+                const parts = ['{']
+                let p = pos + 1
+                for (const [key, value] of Object.entries(obj)) {
+                    parts.push(`\n` + prefix)
+                    p += 1 + prefix.length
+                    const keyStr = JSON.stringify(key)
+                    parts.push(keyStr + ': ')
+                    p += keyStr.length + 2
+                    const valueStr = safeStringifyInternal(value, np, [...path, key], p, space, compact, maxStrLen, maxArrSize, ssc, callback)
+                    parts.push(valueStr)
+                    p += valueStr.length
+                    parts.push(',')
+                    p += 1
+                }
+                // we now need to remove the last comma if any property exists
+                if (parts.length > 1) {
+                    parts[parts.length - 1] = '\n' + indent
+                    p += indent.length
+                }
+                parts.push('}')
+                str = parts.join('')
+            } else {
+                str = `${obj}`
+            }
+        }
     }
     
-    // circular ref detection
-    const index = parents.indexOf(obj)
-    if (index !== -1) {
-        ssc.circularRefs++
-        return `"<<circular ref to ${index === 0 ? 'the root object' : 'parent level ' + index}>>"`
+    if (callback) {
+        callback(path, obj, pos, pos + str.length)
     }
-
-    // when space is given, user usually wants pretty printing
-    // we then add additional spaces in few places for better readability
-    const subtleSpacer = space === undefined ? '' : ' '
-
-    function compose(arr: string[], open: string, close: string) {
-        if (arr.length === 0) return `${open}${close}`
-        const shouldCompact = compact && arr.reduce((a, b) => a + b.length, 0) < 60 && arr.every(v => !v.includes('\n'))
-        if (space === undefined || shouldCompact) {
-            return `${open}${arr.join(',' + subtleSpacer)}${close}`
-        }
-        const indent = space?.repeat(parents.length)
-        const inner = arr.map(v => indent + space + v).join(',\n')
-        return `${open}\n${inner}\n${indent}${close}`
-    }
-
-    const np = [...parents, obj]
-    if (Array.isArray(obj)) {
-        let arr = obj
-        if (obj.length > maxArrSize) {
-            ssc.trimmedArrays++
-            arr = obj.slice(0, maxArrSize - 1)
-            arr.push(`…${obj.length - maxArrSize + 1} more items…`)
-        }
-        const items = arr.map(v => safeStringifyInternal(v, np, space, compact, maxStrLen, maxArrSize, ssc))
-        return compose(items, '[', ']')
-    }
-
-    if (typeof obj === 'object') {
-        const entries = Object.entries(obj).map(([k, v]) => {
-            const keyStr = JSON.stringify(k)
-            const valueStr = safeStringifyInternal(v, np, space, compact, maxStrLen, maxArrSize, ssc)
-            return `${keyStr}:${subtleSpacer}${valueStr}`
-        })
-        return compose(entries, '{', '}')
-    }
-
-    return `${obj}` // shouldn't reach here
+    return str
 }
 
 export function dataProperties(arr: object[]): string[] {

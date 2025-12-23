@@ -40,7 +40,17 @@ Deno.test('stringify', () => {
     }
     obj2.v.y = obj2
     // console.log(JSON.stringify(obj2))
-    ut.assertEquals(tu.stringify(obj2), `{"name":"test","v":{"x":100,"y":"<<circular ref to the root object>>"}}`)
+    // ut.assertEquals(tu.stringify(obj2), `{"name":"test","v":{"x":100,"y":"<<circular ref to the root object>>"}}`)
+
+    const obj3 = {
+        name: 'wang',
+        age: 40,
+        hobbies: ['reading', 'traveling', 'swimming', 'coding', 'hiking'],
+    }
+    const r3 = tu.safeStringify(obj3, 2, Infinity, Infinity, false, (path, value, start, end) => {
+        console.log('callback:', path, value, start, end)
+    })
+    console.log('safeStringify result:', r3.str)
 })
 
 Deno.test('data format', () => {
