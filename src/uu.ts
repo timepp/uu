@@ -348,10 +348,25 @@ export function setInformationExtractor(extractor: InformationExtractor) {
     informationExtractor = extractor
 }
 
-export async function showJsonResult(title: string, content: string | object) {
+export type EntityParser = (path: string[], value: any) => EntityRenderer|undefined
+let globalEntityParser: EntityParser | null = null
+export function setGlobalEntityParser(parser: EntityParser) {
+    globalEntityParser = parser
+}
+
+export async function showJsonResult(title: string, content: string | object, parser?: EntityParser) {
     const obj = typeof content === 'string' ? JSON.parse(content) : content
     const fullText = JSON.stringify(obj, null, 2)
-    const div = await createCodeMirrorJsonViewer(obj)
+    const p = (parser || globalEntityParser)? (path: string[], value: any) => {
+        if (parser) {
+            const r = parser(path, value)
+            if (r) return r
+        }
+        if (globalEntityParser) {
+            return globalEntityParser(path, value)
+        }
+    }: undefined
+    const div = await createCodeMirrorJsonViewer(obj, p)
 
     const actions: Record<string, ButtonAction> = {
         Copy: () => navigator.clipboard.writeText(fullText),
@@ -1373,78 +1388,99 @@ export function createFoldableArea(title: string, content: HTMLElement, initiall
 }
 
 class CodeMirrorLoader {
-  static modules:any = null;
+    static modules: any = null;
 
-  static async getModules() {
-    if (!this.modules) {
-      const [
-        { EditorState },
-        { EditorView, lineNumbers, Decoration, hoverTooltip },
-        { syntaxHighlighting, defaultHighlightStyle },
-        { json }
-      ] = await callAsyncFunctionWithProgress(() => Promise.all([
-        import("https://cdn.skypack.dev/@codemirror/state@6"),
-        import("https://cdn.skypack.dev/@codemirror/view@6"),
-        import("https://cdn.skypack.dev/@codemirror/language@6"),
-        import("https://cdn.skypack.dev/@codemirror/lang-json@6")
-      ]));
+    static async getModules() {
+        if (!this.modules) {
 
-      this.modules = {
-        EditorState,
-        EditorView,
-        lineNumbers,
-        Decoration,
-        hoverTooltip,
-        syntaxHighlighting,
-        defaultHighlightStyle,
-        json
-      };
+            // This is to ensure all codemirror modules use the same version of @codemirror/state
+            // Otherwise, there will be conflicts, with errors like 
+            // "Unrecognized extension value in extension set ([object Object]). This sometimes happens because multiple 
+            // instances of @codemirror/state are loaded, breaking instanceof checks."
+            const stateVer = "6.5.3";
+            const deps = `?deps=@codemirror/state@${stateVer}`;
+
+            const [
+                state, view, lang, json
+            ] = await callAsyncFunctionWithProgress(() => Promise.all([
+                import(`https://esm.sh/@codemirror/state@${stateVer}`),
+                import(`https://esm.sh/@codemirror/view${deps}`),
+                import(`https://esm.sh/@codemirror/language${deps}`),
+                import(`https://esm.sh/@codemirror/lang-json${deps}`)
+            ]));
+
+            this.modules = {
+                EditorState: state.EditorState,
+                EditorView: view.EditorView,
+                lineNumbers: view.lineNumbers,
+                Decoration: view.Decoration,
+                hoverTooltip: view.hoverTooltip,
+                syntaxHighlighting: lang.syntaxHighlighting,
+                defaultHighlightStyle: lang.defaultHighlightStyle,
+                json: json.json
+            };
+        }
+        return this.modules;
     }
-    return this.modules;
-  }
 }
 
-export async function createCodeMirrorJsonViewer(obj: object) {
+export type EntityRenderer = {
+    anchorStyle: string,
+    render: () => HTMLElement | Promise<HTMLElement>
+}
+
+export type VisualizeCallback = (path: string[], value: any) => EntityRenderer|undefined
+export async function createCodeMirrorJsonViewer(obj: object, callback?: VisualizeCallback) {
     const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json } = await CodeMirrorLoader.getModules();
     const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px' });
-
-    // // 定义一个标记装饰（高亮 + 样式）
-    const commentMark = Decoration.mark({
-      attributes: { class: "cm-highlight" },
-      inclusive: false, // 是否包含边界
-    });
-
-    // // 你的注释数据：{ from, to, text }
-    const comments = [
-      { from: 14, to: 18, text: "这里是“测试文本”，表示我们正在实验功能。" },
-      // 可以加更多
-    ];
+    const visulizers = [] as {
+        start: number,
+        end: number,
+        marker: any,
+        render: EntityRenderer
+    }[]
+    const doc = callback? tu.safeStringify(obj, 2, Infinity, Infinity, false, (path, value, start, end) => {
+        const renderer = callback(path, value)
+        if (renderer) {
+            visulizers.push({ 
+                start, 
+                end, 
+                marker: Decoration.mark({attributes: { style: renderer.anchorStyle }, inclusive: false }),
+                render: renderer });
+        }
+    }) : JSON.stringify(obj, null, 2);
 
     // // 创建 Decoration Set
     const commentDecorations = Decoration.set(
-      comments.map(c => commentMark.range(c.from, c.to))
+      visulizers.map(v => v.marker.range(v.start, v.end))
     );
 
-    // // hover tooltip 扩展
-    // const commentTooltip = hoverTooltip((view:any, pos:number) => {
-    //   // 查找 pos 是否落在某个 comment 范围内
-    //   for (const c of comments) {
-    //     if (pos >= c.from && pos <= c.to) {
-    //       return {
-    //         pos: c.from,
-    //         end: c.to,
-    //         above: true,        // 提示框显示在上方（可改成 false 在下方）
-    //         create: () => {
-    //           const dom = document.createElement("div");
-    //           dom.className = "cm-tooltip";
-    //           dom.textContent = c.text;
-    //           return { dom };
-    //         }
-    //       };
-    //     }
-    //   }
-    //   return null; // 没找到返回 null，不显示
-    // });
+    // hover tooltip 扩展
+    const commentTooltip = hoverTooltip((view:any, pos:number) => {
+      // 查找 pos 是否落在某个 comment 范围内
+      for (const c of visulizers) {
+        if (pos >= c.start && pos <= c.end) {
+          return {
+            pos: c.start,
+            end: c.end,
+            above: true,        // 提示框显示在上方（可改成 false 在下方）
+            create: () => {
+              const dom = document.createElement("div");
+              const rendered = c.render.render();
+              if (rendered instanceof Promise) {
+                rendered.then(element => {
+                  dom.appendChild(element);
+                });
+              } else {
+                dom.appendChild(rendered);
+              }
+              return { dom };
+            }
+          };
+        }
+      }
+      return null; // 没找到返回 null，不显示
+    });
 
     const state = EditorState.create({
       doc: JSON.stringify(obj, null, 2),
@@ -1454,8 +1490,8 @@ export async function createCodeMirrorJsonViewer(obj: object) {
         json(),                                 // JSON 语言支持（解析 + 高亮）
         EditorState.readOnly.of(true),          // 状态级只读：禁止通过键盘/粘贴等修改内容
         EditorView.editable.of(false),           // 视图级不可编辑：内容 DOM 不可编辑（更彻底的只读）
-        // commentDecorations,
-        // commentTooltip
+        EditorView.decorations.of(commentDecorations), // 应用注释装饰
+        commentTooltip
       ]
     });
     const view = new EditorView({ state, parent });
