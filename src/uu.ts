@@ -76,6 +76,19 @@ export function createButton(parent: Element | null, classes: string[] = [], tex
     return button
 }
 
+export function createCheck(parent: Element | null, classes: string[] = [], labelText: string, checked = false, onChange = (checked: boolean) => {}) {
+    const div = createElement(parent, 'div', ['input-group', 'w-auto', ...classes])
+    const label = createElement(div, 'label', ['input-group-text'])
+    const checkbox = createElement(label, 'input', ['me-2'], '', {}, {type: 'checkbox'})
+    createElement(label, 'span', ['me-2'], ' ', {backgroundColor: '#cccccc', width: '1px', height: '80%'})
+    label.append(labelText)
+
+    checkbox.checked = checked
+    checkbox.onchange = () => onChange(checkbox.checked)
+
+    return { div, checkbox }
+}
+
 export function createTable(parent: Element|null, columns: string[] = [], classes: string[] = [], styles: Partial<CSSStyleDeclaration> = {}) {
     const tbl = createElement(parent, 'table', classes, '', styles)
     const thead = createElement(tbl, 'thead')
