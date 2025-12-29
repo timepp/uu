@@ -4,5 +4,13 @@
   "license": "MIT",
   "exports": {
     ".": "./src/tu.ts"
+  },
+  "compilerOptions": {
+    "lib": [
+      "deno.window",
+      "deno.unstable",
+      "node",
+      "dom"
+    ]
   }
 }

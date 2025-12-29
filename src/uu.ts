@@ -1,8 +1,8 @@
 // deno-lint-ignore-file no-window
 // uu: a set of utility functions for modern web UI
 
-import * as tu from './tu.js'
-export * from './tu.js'
+import * as tu from './tu.ts'
+export * from './tu.ts'
 
 export type AnnotatedString = {
     value: string,
@@ -77,14 +77,36 @@ export function createButton(parent: Element | null, classes: string[] = [], tex
 }
 
 export function createCheck(parent: Element | null, classes: string[] = [], labelText: string, checked = false, onChange = (checked: boolean) => {}) {
+    // 使用 label 替代 button，利用 label 的原生特性实现点击文字切换 checkbox
+    // 使用 d-flex 和 align-items-center 实现垂直居中对齐
+    const btn = createElement(parent, 'label', ['btn', 'd-flex', 'align-items-center', ...classes])
+    
+    const checkbox = createElement(btn, 'input', ['me-2'], '', {}, {type: 'checkbox'})
+    // 消除 checkbox 可能存在的默认 margin 导致的对齐偏差
+    checkbox.style.marginTop = '0'
+    createElement(btn, 'span', [], labelText)
+
+    checkbox.checked = checked
+    checkbox.onchange = () => {
+        onChange(checkbox.checked)
+    }
+
+    return { btn, checkbox }
+}
+
+export function createCheck2(parent: Element | null, classes: string[] = [], labelText: string, accentColor?: string, checked = false, onChange = (checked: boolean) => {}) {
     const div = createElement(parent, 'div', ['input-group', 'w-auto', ...classes])
-    const label = createElement(div, 'label', ['input-group-text'])
+    const label = createElement(div, 'label', ['input-group-text'], '', {userSelect: 'none'})
     const checkbox = createElement(label, 'input', ['me-2'], '', {}, {type: 'checkbox'})
     createElement(label, 'span', ['me-2'], ' ', {backgroundColor: '#cccccc', width: '1px', height: '80%'})
     label.append(labelText)
 
     checkbox.checked = checked
-    checkbox.onchange = () => onChange(checkbox.checked)
+    if (accentColor) label.style.backgroundColor = checked ? accentColor : ''
+    checkbox.onchange = () => {
+        if (accentColor) label.style.backgroundColor = checkbox.checked ? accentColor : ''
+        onChange(checkbox.checked)
+    }
 
     return { div, checkbox }
 }
@@ -995,7 +1017,11 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     function applyFilter(s: string) {
-        data = allData.filter(v => itemFilter(v.item, s))
+        if (s.trim() === '') {
+            data = allData
+        } else {
+            data = allData.filter(v => itemFilter(v.item, s))
+        }
         counts.textContent = `${data.length} / ${arr.length}`
         // currentPage = 0
         pager.setTotalItems(data.length)
@@ -1109,7 +1135,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     filter.oninput = () => {
-        const v = filter.value.toLowerCase()
+        const v = filter.value
         state.filter = v
         applyFilter(v)
     }
