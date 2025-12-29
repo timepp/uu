@@ -1414,12 +1414,13 @@ class CodeMirrorLoader {
             const deps = `?deps=@codemirror/state@${stateVer}`;
 
             const [
-                state, view, lang, json
+                state, view, lang, json, search
             ] = await callAsyncFunctionWithProgress(() => Promise.all([
                 import(`https://esm.sh/@codemirror/state@${stateVer}`),
                 import(`https://esm.sh/@codemirror/view${deps}`),
                 import(`https://esm.sh/@codemirror/language${deps}`),
-                import(`https://esm.sh/@codemirror/lang-json${deps}`)
+                import(`https://esm.sh/@codemirror/lang-json${deps}`),
+                import(`https://esm.sh/@codemirror/search${deps}`)
             ]));
 
             this.modules = {
@@ -1428,9 +1429,13 @@ class CodeMirrorLoader {
                 lineNumbers: view.lineNumbers,
                 Decoration: view.Decoration,
                 hoverTooltip: view.hoverTooltip,
+                keymap: view.keymap,
                 syntaxHighlighting: lang.syntaxHighlighting,
                 defaultHighlightStyle: lang.defaultHighlightStyle,
-                json: json.json
+                json: json.json,
+                search: search.search,
+                searchKeymap: search.searchKeymap,
+                openSearchPanel: search.openSearchPanel
             };
         }
         return this.modules;
@@ -1444,8 +1449,8 @@ export type EntityRenderer = {
 
 export type VisualizeCallback = (path: string[], value: any) => EntityRenderer|undefined
 export async function createCodeMirrorJsonViewer(obj: object, callback?: VisualizeCallback) {
-    const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json } = await CodeMirrorLoader.getModules();
-    const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px' });
+    const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap, openSearchPanel, keymap } = await CodeMirrorLoader.getModules();
+    const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '100%', overflow: 'hidden' });
     const visulizers = [] as {
         start: number,
         end: number,
@@ -1502,12 +1507,18 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
         syntaxHighlighting(defaultHighlightStyle), // 默认语法高亮样式
         json(),                                 // JSON 语言支持（解析 + 高亮）
         EditorState.readOnly.of(true),          // 状态级只读：禁止通过键盘/粘贴等修改内容
-        EditorView.editable.of(false),           // 视图级不可编辑：内容 DOM 不可编辑（更彻底的只读）
         EditorView.decorations.of(commentDecorations), // 应用注释装饰
-        commentTooltip
+        commentTooltip,
+        EditorView.theme({
+            "&": { height: "100%" },
+            ".cm-scroller": { overflow: "auto" }
+        }),
+        search({ top: true }),                  // 搜索功能，搜索框在顶部
+        keymap.of(searchKeymap)               // 搜索相关快捷键
       ]
     });
     const view = new EditorView({ state, parent });
+    
     return parent;
 }
 
