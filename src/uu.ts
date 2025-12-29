@@ -563,30 +563,18 @@ export function createAutofillInput(title: string, placeholder: string, valueId 
 }
 
 export async function chooseOne(data: (string|AnnotatedString)[]) {
-    // show a dialog to choose one item from data
-    // return the chosen item, or null
-    // show comment as tooltip
-    return showDialog<string>([], {}, true, (dialog, finish) => {
-        const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
-        const main = createElement(dc, 'div', ['d-flex', 'flex-column'], '', { marginTop: '10px', maxHeight: '60vh' })
-        for (const item of data) {
-            const value = typeof item === 'string' ? item : item.value
-            const comment = typeof item === 'string' ? '' : item.comment
-            const div = createElement(main, 'div', ['d-flex', 'align-items-center', 'mb-2'], '', { gap: '10px' })
-            const itemDiv = createElement(div, 'div', ['form-control', 'bg-light', 'hover-effect'])
-            itemDiv.style.cursor = 'pointer'
-            // hover via css    
-            const vaultSpan = createElement(itemDiv, 'span', [], value)
-            const commentSpan = createElement(itemDiv, 'span', ['text-muted', 'ms-2'], comment, { fontSize: '0.9em' })
-            div.onclick = () => finish(value)
-        }
-    })
+    const r = await showSelection('Please choose one item', data, {pickAndClose: true, showStatus: false, showToolbar: false})
+    return r ? r[0] : undefined
 }
 
+export type SelectionItem = AnnotatedString | string
 export type SelectOption = {
     singleSelect: boolean
-    preserveOrder: boolean
+    pickAndClose: boolean
     initialSelection: string[]
+    showOrder: boolean
+    showToolbar: boolean
+    showStatus: boolean
 
     // return `newSelection` if the new selection is valid
     // otherwise, return a selection if checker can fix invalid selection
@@ -597,120 +585,109 @@ export type SelectOption = {
     styleModifier: (item: string, elem: HTMLElement) => void
 }
 
-export async function showSelection(title: string, data: string[], options: Partial<SelectOption>) {
-    const dialog = createElement(document.body, 'dialog', [], '', {width: '80vw'})
-    const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
-    const header = createElement(dc, 'div', [])
-    createElement(header, 'h3', [], title)
-    // createElement(dc, 'hr', ['w-100'])
-    const selectedContent = createElement(dc, 'span', ['form-control'])
-    const toolbar = createElement(dc, 'div', ['input-group', 'mb-4', 'mt-2'])
-    const filter = createElement(toolbar, 'input', ['form-control'], '')
-    const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☑')
-    const unSelectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☐')
+export async function showSelection(title: string, options: SelectionItem[], cfg: Partial<SelectOption> = {}) {
+    return showDialog<string[]>([], {width: '80vw'}, true, (dialog, finish) => {
+        // local state
+        let selection = cfg.initialSelection || []
+        const elements = {} as Record<string, HTMLSpanElement>
+        let currentAlert = ''
 
-    if (options.singleSelect) {
-        selectAllBtn.classList.add('d-none')
-        unSelectAllBtn.classList.add('d-none')
-    }
-    // filter text
-    filter.placeholder = "Filter"
-    
-    const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2'], '', {backgroundColor: 'rgb(255, 255, 244)'})
-    createElement(dc, 'hr', ['w-100'])
-    const alert = createElement(dc, 'div', ['alert', 'alert-danger', 'd-none'])
-    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
-    const okBtn = createElement(footer, 'button', ['btn', 'btn-primary', 'me-2'], 'OK')
+        // UI
+        const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
+        const header = createElement(dc, 'div', [])
+        createElement(header, 'h3', [], title)
+        const statusBar = createElement(dc, 'span', ['form-control'])
+        const toolbar = createElement(dc, 'div', ['input-group', 'mb-4', 'mt-2'])
+        const filter = createElement(toolbar, 'input', ['form-control'], '', {}, {placeholder: 'Filter'})
+        const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☑')
+        const unSelectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☐')
+        const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'p-2'])
+        const alert = createElement(dc, 'div', ['alert', 'alert-danger', 'd-none'])
+        const footer = createElement(dc, 'div')
+        createElement(footer, 'hr', ['w-100'])
+        const footerBar = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
+        const okBtn = createElement(footerBar, 'button', ['btn', 'btn-primary', 'me-2'], 'OK')
 
-    let selected = options.initialSelection || []
+        if (cfg.pickAndClose) cfg.singleSelect = true
 
-    function syncSelected() {
-        selectedContent.innerHTML = ''
-        createElement(selectedContent, 'span', ['me-2'], 'Selected: ', {color: 'blue'})
-        for (let i = 0; i < selected.length; i++) {
-            const item = selected[i]
-            const text = options.preserveOrder ? `${i + 1}: ${item}` : item
-            createElement(selectedContent, 'span', ['me-1'], text)
+        syncDisplay(toolbar, cfg.showToolbar ?? true)
+        syncDisplay(statusBar, cfg.showStatus ?? true)
+        syncDisplay(selectAllBtn, !cfg.singleSelect)
+        syncDisplay(unSelectAllBtn, !cfg.singleSelect)
+        syncDisplay(footer, !cfg.pickAndClose)
+        syncDisplay(okBtn, !cfg.pickAndClose)
+
+        function createStatusView() {
+            const div = createElement(null, 'div')
+            createElement(div, 'span', ['me-2'], 'Selected: ', {color: 'blue'})
+            div.append(...selection.map((item, i) => createElement(null, 'span', ['me-1'], cfg.showOrder ? `${i + 1}: ${item}` : item)))
+            return div
         }
 
-        for (const item of Array.from(main.children)) {
-            const span = item as HTMLSpanElement
-            const isItemSelected = selected.includes(item.textContent!)
-            span.classList.toggle('selected', isItemSelected)
-            span.style.backgroundColor = isItemSelected ? 'rgba(0, 123, 255, 0.5)' : 'rgb(244, 244, 244)'
-        }
-    }
+        function updateUI() {
+            statusBar.replaceChildren(createStatusView())
 
-    for (const item of data) {
-        const span = createElement(main, 'span', ['rounded-1', 'p-2', 'text-center', 'd-inline-block'], item, {minWidth: '100px'})
-        span.style.cursor = "pointer"
-        span.onclick = () => {
-            const oldSelection = [...selected]
-            const newSelection = options.singleSelect ? [item] : (selected.includes(item) ? selected.filter(i => i !== item) : [...selected, item])
-            const r = options.checker?.(oldSelection, newSelection)
+            for (const [value, span] of Object.entries(elements)) {
+                const isItemSelected = selection.includes(value)
+                span.classList.toggle('selected', isItemSelected)
+                span.style.backgroundColor = isItemSelected ? 'rgba(0, 123, 255, 0.5)' : 'rgb(244, 244, 244)'
+            }
+
+            alert.textContent = currentAlert
+            syncDisplay(alert, currentAlert !== '')
+            okBtn.disabled = currentAlert !== ''
+        }
+
+        function onSelectionChange(oldSelection: string[], newSelection: string[]) {
+            const r = cfg.checker?.(oldSelection, newSelection)
             if (typeof r === 'string') {
                 // invalid state
-                alert.textContent = r
-                alert.classList.remove('d-none')
-                okBtn.disabled = true
-                selected = newSelection
+                currentAlert = r
+                selection = newSelection
             } else {
                 // fixed state
-                selected = r || newSelection
-                alert.classList.add('d-none')
-                okBtn.disabled = false
+                currentAlert = ''
+                selection = r || newSelection
+                if (cfg.pickAndClose && selection.length > 0) {
+                    finish(selection)
+                    return
+                }
             }
-            syncSelected()
+            updateUI()
         }
-        if (options.styleModifier) {
-            options.styleModifier(item, span)
-        }
-    }
 
-    filter.oninput = () => {
-        const v = filter.value.toLowerCase()
-        for (const item of Array.from(main.children)) {
-            syncClass(item as HTMLElement, 'd-none', !item.textContent?.toLowerCase().includes(v))
+        for (const d of options.map(o => typeof o === 'string' ? { value: o } : o)) {
+            const div = createElement(main, 'div', ['rounded', 'hover-effect', 'text-center', 'p-2'], '', { cursor: 'pointer', minWidth: '100px' })
+            createElement(div, 'span', [], d.value)
+            if (d.comment) {
+                createElement(div, 'span', [], '', { border: '1px solid #cccccc', margin: '0 5px', width: '1px', height: '80%' })
+                createElement(div, 'span', ['text-muted'], d.comment)
+            }
+            elements[d.value] = div
+            cfg.styleModifier?.(d.value, div)
+            div.onclick = () => {
+                const newSelection = cfg.singleSelect ? [d.value] : (selection.includes(d.value) ? selection.filter(v => v !== d.value) : [...selection, d.value])
+                onSelectionChange(selection, newSelection)
+            }
         }
-    }
 
-    let resolver: ((value: string[]|undefined) => void)
-    const promise = new Promise<string[]|undefined>((resolve, reject) => {
-        resolver = resolve
+        filter.oninput = () => {
+            const v = filter.value.toLowerCase()
+            // for (const item of Array.from(main.children)) {
+            //     syncDisplay(item as HTMLElement, item.textContent?.toLowerCase().includes(v))
+            // }
+            for (const [value, elem] of Object.entries(elements)) {
+                console.log(value, v, value.toLowerCase().includes(v), elem)
+                syncDisplay(elem as HTMLElement, value.toLowerCase().includes(v))
+            }
+        }
+
+        selectAllBtn.onclick = () => onSelectionChange(selection, Object.keys(elements))
+        unSelectAllBtn.onclick = () => onSelectionChange(selection, [])
+        okBtn.onclick = () => finish(selection)
+
+        updateUI()
     })
-
-    selectAllBtn.onclick = () => {
-        selected = options.preserveOrder ? data : [...data]
-        alert.classList.add('d-none')
-        okBtn.disabled = false
-        syncSelected()
-    }
-
-    unSelectAllBtn.onclick = () => {
-        selected = []
-        alert.classList.add('d-none')
-        okBtn.disabled = false
-        syncSelected()
-    }
-
-    okBtn.onclick = () => {
-        dialog.close()
-        dialog.remove()
-        resolver(selected)
-    }
-
-    // handle esc key to close the dialog
-    dialog.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            dialog.close()
-            dialog.remove()
-            resolver(undefined)
-        }
-    })
-
-    syncSelected()
-    dialog.showModal()
-    return promise
 }
 
 export type ColumnProperty = {
@@ -1088,7 +1065,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     fieldSelect.onclick = async () => {
         const r = await showSelection('Select Fields', properties, {
             initialSelection: state.columns??properties, 
-            preserveOrder: true,
+            showOrder: true,
             styleModifier: (item, elem) => {
                 if (item === cfg.rawIndexColumn) {
                     elem.style.fontWeight = 'bold'
@@ -1115,7 +1092,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             }
             return newSelection
        }
-        const r = await showSelection('Sort By', allOptions, {preserveOrder: true, initialSelection: sortOptions, checker})
+        const r = await showSelection('Sort By', allOptions, {showOrder: true, initialSelection: sortOptions, checker})
         if (r === undefined) return
         state.sortBy = r.map(s => {
             const [column, order] = s.split(' ')
