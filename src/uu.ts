@@ -372,7 +372,7 @@ export function showInDialog(title: string, content: string|HTMLElement, actions
 
     dialog.showModal()
     // trigger reflow
-    dialog.style.height = `${dialog.offsetHeight}px`
+    dialog.style.height = `${dialog.offsetHeight + 1}px`
     return promise
 }
 
@@ -1141,9 +1141,10 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     associateDropdownActions(optionBtn, {
-        'Insights': () => {
+        'Insights': async () => {
             const info = tu.getDataInsights(arr)
-            showJsonResult('Data Insights', info)
+            console.log('data insights', info)
+            showInDialog('Data Insights', await renderDataInsights(info))
         },
         'Select Columns': () => fieldSelect.click(),
     })
@@ -1186,10 +1187,10 @@ export function rgbValue(obj: {r: number, g: number, b: number}) {
     return `rgb(${obj.r}, ${obj.g}, ${obj.b})`;
 }
 
-export function getStringColor(str: string) {
+export function getStringColor(str: string, s = 100, l = 90) {
     const v = tu.simpleHash(str)
     const h = v % 360
-    return `hsl(${h}, 100%, 90%)`
+    return `hsl(${h}, ${s}%, ${l}%)`
 }
 
 export function syncClass(element: HTMLElement, className: string, enabled: boolean) {
@@ -1554,4 +1555,61 @@ export async function createMarkdownViewer(markdownText: string) {
         link.setAttribute('rel', 'noopener noreferrer')
     })
     return container
+}
+
+let chartJsModule: any = null;
+export async function createChart(parent: HTMLElement, config: any) {
+    if (!chartJsModule) {
+        chartJsModule = await callAsyncFunctionWithProgress(() => import("https://esm.sh/chart.js/auto"), 'Loading Chart.js...');
+    }
+    const chartWrapper = createElement(parent, 'div', [], '', {
+        // position: 'relative',
+        height: '300px',
+        width: '300px'
+    })
+    const div = createElement(chartWrapper, 'canvas')
+    const Chart = chartJsModule.default;
+    const chart = new Chart(div.getContext('2d'), config);
+    return { canvas: div, chart };
+}
+
+export async function renderDataInsights(info: tu.DataPropStat[]) {
+    const div = createElement(null, 'div', ['d-flex', 'flex-wrap', 'gap-2'])
+    // 给整个容器一个最小宽度，防止太窄
+    // div.style.width = '100%'
+
+    for (const stat of info) {
+        // filter out data that are not suitable for charting
+        if (stat.uniqueValues.length === 0 || stat.uniqueValues.length > 20) continue
+        if (stat.uniqueValues.some(uv => `${uv.value}`.length > 20)) continue
+
+        console.log(`creating chart for ${stat.propName}`, stat)
+
+        // 创建一个包装容器，并显式指定高度！
+        // Chart.js 需要 relative 定位和确定的高度才能在响应式布局中正常工作
+        const card = createElement(div, 'div', ['p-2', 'border', 'border-light-subtle', 'rounded'])
+
+        // 标题
+        createElement(card, 'h6', ['text-center', 'mb-2'], `Group by "${stat.propName}"`)
+
+        // 注意：这里我们要把 chartWrapper 传给 createChart，而不是外层的 div
+        // 并且我们要等待它创建完成（虽然对于布局来说，wrapper 的 style 才是关键）
+        await createChart(card, {
+            type: 'doughnut',
+            options: {
+                responsive: true,
+                maintainAspectRatio: false, // 让图表填满我们设定的 300px 高度
+            },
+            data: {
+                labels: stat.uniqueValues.map(uv => uv.value||'(empty)'),
+                datasets: [{
+                    // label: `Distribution of "${stat.propName}"`,
+                    data: stat.uniqueValues.map(uv => uv.count),
+                    backgroundColor: stat.uniqueValues.map(uv => getStringColor(`${uv.value}`, 100, 80)),
+                }]
+            }
+        })
+    }
+    
+    return div
 }

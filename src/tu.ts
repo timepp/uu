@@ -612,14 +612,14 @@ export function shuffleArray<T>(array: T[]) {
     }
 }
 
+export type DataPropStat = {
+    propName: string
+    uniqueValues: {
+        value: string
+        count: number
+    }[]
+}
 export function getDataInsights(arr: object[]) {
-    type PropStat = {
-        propName: string
-        uniqueValues: {
-            value: string
-            count: number
-        }[]
-    }
     const pvm: Record<string, Record<any, number>> = {}
     function getOrCreate(obj: any, prop: string) {
         if (!obj[prop]) obj[prop] = {}
@@ -645,7 +645,7 @@ export function getDataInsights(arr: object[]) {
     }
 
     // convert pvm to PropStat[]
-    const stats: PropStat[] = []
+    const stats: DataPropStat[] = []
     for (const prop in pvm) {
         const pp = pvm[prop]
         const uniqueValues = []
@@ -656,7 +656,7 @@ export function getDataInsights(arr: object[]) {
         stats.push({propName: prop, uniqueValues: uniqueValues})
     }
 
-    function isGoodStat(stat: PropStat) {
+    function isGoodStat(stat: DataPropStat) {
         if (stat.uniqueValues.length < 2) return false
         const n = stat.uniqueValues.length
         const an = stat.uniqueValues.filter(v => v.count > 1).length
