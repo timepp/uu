@@ -114,14 +114,12 @@ export function unIndentTextWithSpaces(text: string, spaces: number): string {
 }
 
 export function simpleHash(s: string): number {
-    let hash = 0;
-    if (s.length === 0) return hash;
+    let hash = 2166136261;
     for (let i = 0; i < s.length; i++) {
-        hash = (hash << 5) - hash;
-        hash = hash + s.charCodeAt(i);
-        hash = hash & hash;
+        hash ^= s.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
     }
-    return hash;
+    return hash >>> 0;
 }
 
 /** Hash a string using the Web Crypto API
