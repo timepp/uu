@@ -838,7 +838,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         ...allProps.filter(p => !presentationColumns.includes(p))
     ].filter(v => !!v) as string[]
     
-    const state = tu.createState(cfg, ['columns', 'sortBy', 'filter'], cfg.stateKey)
+    const state = tu.createState(cfg, ['columns', 'sortBy', 'filter', 'pageSize'], cfg.stateKey)
     filter.value = state.filter || ''
 
     function tableRenderer(startIndex: number, endIndex: number) {
@@ -1004,8 +1004,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     // data is filtered view of arr
     const allData = arr.map((item, index) => ({item, index}))
     let data = allData
-    const pageSize = cfg.pageSize || Infinity
-    const pager = new Pager(data.length, pageSize, (page) => gotoPage(page))
+    const pager = new Pager(data.length, state.pageSize || Infinity, (page) => gotoPage(page))
     const pagerElem = pager.getElement()
     pagerWrapper.appendChild(pagerElem)
 
@@ -1081,7 +1080,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         syncExistence(filter, showFilter)
         syncExistence(filterHint, showFilter)
         syncExistence(counts, showFilter)
-        syncExistence(pagerWrapper, !!cfg.pageSize)
+        syncExistence(pagerWrapper, !!state.pageSize)
 
         if (toolbar.lastElementChild) {
             (toolbar.lastElementChild as HTMLElement).classList.remove('me-2')
@@ -1147,6 +1146,17 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             showInDialog('Data Insights', await renderDataInsights(info))
         },
         'Select Columns': () => fieldSelect.click(),
+        'Change Page Size': async () => {
+            const v = await prompt('Page Size', 'Enter number of items per page (enter 0 or negative number to disable paging)', `${state.pageSize || cfg.pageSize || 20}`)
+            if (v) {
+                const n = parseInt(v)
+                if (!isNaN(n)) {
+                    state.pageSize = n > 0 ? n : undefined
+                    pager.setPageSize(state.pageSize || Infinity)
+                    gotoPage(0)
+                }
+            }
+        }
     })
 
     // logic start here
