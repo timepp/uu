@@ -264,8 +264,16 @@ export function createLargeJsonView(content: string) {
     return main
 }
 
-export function showDialog<T>(classes: string[] = [], style: Partial<CSSStyleDeclaration> = {}, softDismissable = true, onCreate: (dialog: HTMLDialogElement, finisher: (value?: T) => void) => void) {
-    const dialog = createElement(document.body, 'dialog', classes, '', style)
+export function showDialog<T>(title: string, classes: string[] = [], style: Partial<CSSStyleDeclaration> = {}, softDismissable = true, onCreate: (dialog: HTMLDialogElement, finisher: (value?: T) => void) => void) {
+    const dialog = createElement(document.body, 'dialog', classes, '', {
+        padding: '5px',
+        resize: 'both',
+        ...style})
+    // create a top bar with title and a close button to the right
+    const header = createElement(dialog, 'div', ['d-flex', 'justify-content-between', 'align-items-center', 'pb-2', 'border-bottom', 'mb-2', 'mt-1', 'pe-2'])
+    const titleElem = createElement(header, 'h4', ['m-0', 'ms-2'], title)
+    const closeButton = createElement(header, 'button', ['btn', 'btn-close'])
+
     let resolver: ((value?: T) => void)
     const promise = new Promise<T|undefined>((resolve) => {
         resolver = resolve
@@ -279,101 +287,74 @@ export function showDialog<T>(classes: string[] = [], style: Partial<CSSStyleDec
         dialog.addEventListener('cancel', () => {
             finishFunc()
         })
-        dialog.addEventListener('click', (e) => {
+        dialog.addEventListener('mousedown', (e) => {
             if (e.target === dialog) {
-                finishFunc()
+                const rect = dialog.getBoundingClientRect()
+                const me = e as MouseEvent
+                if (me.clientX < rect.left || me.clientX > rect.right || me.clientY < rect.top || me.clientY > rect.bottom) {
+                    finishFunc()
+                }
             }
         })
     }
-    onCreate(dialog, finishFunc)
+    closeButton.onclick = () => finishFunc()
     dialog.showModal()
+    onCreate(dialog, finishFunc)
     return promise
 }
 
 // If the handler returns true, the dialog will be closed
 export type ButtonAction = () => boolean|void|Promise<boolean|void>
 export function showInDialog(title: string, content: string|HTMLElement, actions: string[] | Record<string, ButtonAction> = ['Close']) {
-    const dialog = createElement(document.body, 'dialog', [], '', {
-        minWidth: '50vw', 
-        // maxWidth: '90vw',
-        maxHeight: '90vh',
-        padding: '0',
-        border: 'none',
-        borderRadius: '8px',
-        resize: 'both',
-    })
-    
-    const dc = createElement(dialog, 'div', [], '', {
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        // maxHeight: '90vh'
-    })
-    
-    // Fixed header
-    const header = createElement(dc, 'div', [], '', {
-        // padding: '20px 20px 0 20px',
-        // flexShrink: '0'
-    })
-    header.style.textAlign = "center"
-    if (title) {
-        createElement(header, 'h4', ['mt-3'], title)
+    return showDialog<string>(title, [], {}, false, (dialog, finish) => {
+        const dc = createElement(dialog, 'div', [], '', {
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+            // maxHeight: '90vh'
+        })
+        // Scrollable content area
+        const contentArea = createElement(dc, 'div', [], '', {
+            flex: '1',
+            overflow: 'auto',
+            padding: '0 10px'
+        })
+
+        if (typeof content === 'string') {
+            contentArea.textContent = content
+        } else {
+            contentArea.appendChild(content)
+        }
+
+        // Fixed footer
         createElement(dc, 'hr')
-    }
+        const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'], '', {
+            padding: '0 20px 20px 20px',
+            flexShrink: '0'
+        })
 
-    // Scrollable content area
-    const contentArea = createElement(dc, 'div', [], '', {
-        flex: '1',
-        overflow: 'auto',
-        padding: '0 10px'
-    })
-    
-    if (typeof content === 'string') {
-        contentArea.textContent = content
-    } else {
-        contentArea.appendChild(content)
-    }
-
-    // Fixed footer
-    createElement(dc, 'hr')
-    const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'], '', {
-        padding: '0 20px 20px 20px',
-        flexShrink: '0'
-    })
-
-    let resolver: ((value: string) => void)
-    const promise = new Promise<string>((resolve) => {
-        resolver = resolve
-    })
-    const finishWith = (action: string) => {
-        dialog.close()
-        dialog.remove()
-        resolver(action)
-    }
-
-    if (typeof actions === 'object' && !Array.isArray(actions)) {
-        for (const [btnText, handler] of Object.entries(actions)) {
-            const button = createElement(footer, 'button', ['btn', 'btn-primary', 'ms-2', 'me-2'], btnText)
-            button.onclick = async () => {
-                const shouldClose = await handler()
-                if (shouldClose) {
-                    finishWith(btnText)
+        if (typeof actions === 'object' && !Array.isArray(actions)) {
+            for (const [btnText, handler] of Object.entries(actions)) {
+                const button = createElement(footer, 'button', ['btn', 'btn-primary', 'ms-2', 'me-2'], btnText)
+                button.onclick = async () => {
+                    const shouldClose = await handler()
+                    if (shouldClose) {
+                        finish(btnText)
+                    }
+                }
+            }
+        } else {
+            for (const btnText of actions) {
+                const button = createElement(footer, 'button', ['btn', 'btn-primary', 'ms-2', 'me-2'], btnText)
+                button.onclick = () => {
+                    finish(btnText)
                 }
             }
         }
-    } else {
-        for (const btnText of actions) {
-            const button = createElement(footer, 'button', ['btn', 'btn-primary', 'ms-2', 'me-2'], btnText)
-            button.onclick = () => {
-                finishWith(btnText)
-            }
-        }
-    }
 
-    dialog.showModal()
-    // trigger reflow
-    dialog.style.height = `${dialog.offsetHeight + 1}px`
-    return promise
+        // reflow
+        dialog.style.height = `${dialog.offsetHeight + 1}px`
+    })
 }
 
 // information extractor is used to construct a information pane based on the object data
@@ -418,10 +399,8 @@ export async function showJsonResult(title: string, content: string | object, pa
 }
 
 export async function showConfirmationDialog(title: string, text: string) {
-    return showDialog([], { width: '400px' }, true, (dialog, finish) => {
+    return showDialog(title, [], { width: '400px' }, true, (dialog, finish) => {
         const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
-        const header = createElement(dc, 'div', [])
-        createElement(header, 'h4', [], title)
         const main = createElement(dc, 'div', [], text, { marginTop: '10px' })
         const footer = createElement(dc, 'div', ['d-flex', 'justify-content-end', 'mt-2'])
         const okBtn = createButton(footer, ['btn', 'btn-primary'], 'OK', () => finish('ok'))
@@ -435,11 +414,8 @@ export type InputField = {
     multiLine?: boolean
 }
 export function showInputDialog(title: string, fields: InputField[]) {
-    return showDialog<string[]>([], {width: '50vw'}, false, (dialog, finish) => {
+    return showDialog<string[]>(title, [], {width: '50vw'}, false, (dialog, finish) => {
         const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
-        const header = createElement(dc, 'div', [])
-        createElement(header, 'h5', [], title)
-        createElement(dc, 'hr')
         const gridContainer = createElement(dc, 'div', [], '', {
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
@@ -608,7 +584,7 @@ export type SelectOption = {
 }
 
 export async function showSelection(title: string, options: SelectionItem[], cfg: Partial<SelectOption> = {}) {
-    return showDialog<string[]>([], {width: '80vw'}, true, (dialog, finish) => {
+    return showDialog<string[]>(title, [], {width: '80vw'}, true, (dialog, finish) => {
         // local state
         let selection = cfg.initialSelection || []
         const elements = {} as Record<string, HTMLSpanElement>
@@ -616,8 +592,6 @@ export async function showSelection(title: string, options: SelectionItem[], cfg
 
         // UI
         const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
-        const header = createElement(dc, 'div', [])
-        createElement(header, 'h3', [], title)
         const statusBar = createElement(dc, 'span', ['form-control'])
         const toolbar = createElement(dc, 'div', ['input-group', 'mb-4', 'mt-2'])
         const filter = createElement(toolbar, 'input', ['form-control'], '', {}, {placeholder: 'Filter'})
@@ -1568,14 +1542,15 @@ export async function createMarkdownViewer(markdownText: string) {
 }
 
 let chartJsModule: any = null;
-export async function createChart(parent: HTMLElement, config: any) {
+export async function createChart(parent: HTMLElement, width: string, height: string, config: any) {
     if (!chartJsModule) {
         chartJsModule = await callAsyncFunctionWithProgress(() => import("https://esm.sh/chart.js/auto"), 'Loading Chart.js...');
     }
     const chartWrapper = createElement(parent, 'div', [], '', {
         // position: 'relative',
-        height: '300px',
-        width: '300px'
+        height: `${height}`,
+        width: `${width}`,
+        maxWidth: '100%',
     })
     const div = createElement(chartWrapper, 'canvas')
     const Chart = chartJsModule.default;
@@ -1583,39 +1558,81 @@ export async function createChart(parent: HTMLElement, config: any) {
     return { canvas: div, chart };
 }
 
+export type DataType = 'number' | 'boolean' | 'date' | 'colorName' | 'general'
+export function guessDataType(data: string | string[]) : DataType {
+    // guess data type wrapped in strings
+    if (typeof data === 'string') {
+        // number
+        if (!isNaN(Number(data))) return 'number'
+        // boolean
+        const lower = data.toLowerCase()
+        if (lower === 'true' || lower === 'false') return 'boolean'
+        // color name
+        const colorNames = ['red', 'green', 'blue', 'yellow', 'black', 'white', 'gray', 'grey', 'orange', 'purple', 'pink', 'brown', 'cyan', 'magenta', 'lime', 'teal', 'navy', 'maroon', 'olive', 'silver', 'gold']
+        if (colorNames.includes(lower)) return 'colorName'
+        // date
+        const date = new Date(data)
+        if (!isNaN(date.getTime())) return 'date'
+        return 'general'
+    } else {
+        const types = data.map(guessDataType)
+        const stat = tu.groupBy(types, t => t)
+        if (stat[0][1].length / data.length >= 0.8) {
+            return stat[0][0] as 'number' | 'boolean' | 'date' | 'general'
+        }
+        return 'general'
+    }
+}
+
 export async function renderDataInsights(info: tu.DataPropStat[]) {
     const div = createElement(null, 'div', ['d-flex', 'flex-wrap', 'gap-2'])
-    // 给整个容器一个最小宽度，防止太窄
-    // div.style.width = '100%'
 
     for (const stat of info) {
         // filter out data that are not suitable for charting
-        if (stat.uniqueValues.length === 0 || stat.uniqueValues.length > 20) continue
+        if (stat.uniqueValues.length === 0 || stat.uniqueValues.length > 100) continue
         if (stat.uniqueValues.some(uv => `${uv.value}`.length > 20)) continue
+        const dataType = guessDataType(stat.uniqueValues.map(uv => uv.value || ''))
 
         console.log(`creating chart for ${stat.propName}`, stat)
 
-        // 创建一个包装容器，并显式指定高度！
-        // Chart.js 需要 relative 定位和确定的高度才能在响应式布局中正常工作
-        const card = createElement(div, 'div', ['p-2', 'border', 'border-light-subtle', 'rounded'])
-
-        // 标题
+        const card = createElement(div, 'div', ['p-2', 'border', 'border-light-subtle', 'rounded'], '', {maxWidth: '100%'})
         createElement(card, 'h6', ['text-center', 'mb-2'], `Group by "${stat.propName}"`)
-
-        // 注意：这里我们要把 chartWrapper 传给 createChart，而不是外层的 div
-        // 并且我们要等待它创建完成（虽然对于布局来说，wrapper 的 style 才是关键）
-        await createChart(card, {
-            type: 'doughnut',
+        let chartType = 'doughnut'
+        let width = '300px'
+        let height = '300px'
+        let values = stat.uniqueValues
+        if (values.length > 6) {
+            chartType = 'bar'
+            const w = stat.uniqueValues.length * 60
+            width = `${w}px`
+            // if (w > 1000) {
+            //     width = '100%'
+            //     card.style.width = '100%'
+            // }
+            if (dataType === 'number') {
+                // sort by value
+                values = values.sort((a, b) => Number(a.value) - Number(b.value))
+            } else if (dataType === 'date') {
+                // sort by date
+                values = values.sort((a, b) => {
+                    const da = new Date(a.value || '')
+                    const db = new Date(b.value || '')
+                    return da.getTime() - db.getTime()
+                })
+            }
+        }
+        await createChart(card, width, height, {
+            type: chartType,
             options: {
                 responsive: true,
-                maintainAspectRatio: false, // 让图表填满我们设定的 300px 高度
+                maintainAspectRatio: false,
             },
             data: {
-                labels: stat.uniqueValues.map(uv => uv.value||'(empty)'),
+                labels: values.map(uv => uv.value||'(empty)'),
                 datasets: [{
-                    // label: `Distribution of "${stat.propName}"`,
-                    data: stat.uniqueValues.map(uv => uv.count),
-                    backgroundColor: stat.uniqueValues.map(uv => getStringColor(`${uv.value}`, 100, 80)),
+                    label: stat.propName,
+                    data: values.map(uv => uv.count),
+                    backgroundColor: dataType === 'colorName' ? values.map(v => v.value) : values.map(uv => getStringColor(`${uv.value}`, 100, 80)),
                 }]
             }
         })

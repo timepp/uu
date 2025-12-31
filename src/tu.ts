@@ -677,3 +677,9 @@ export function findIndexes(s: string, sub: string): number[] {
     }
     return indexes
 }
+
+export function groupBy<T>(arr: T[], keyFunc: (item: T) => string): [string, T[]][] {
+    const groupMap = Object.groupBy(arr, keyFunc) as Record<string, T[]>
+    // sort occurrences by counts descending
+    return Object.entries(groupMap).sort((a, b) => b[1].length - a[1].length)
+}
