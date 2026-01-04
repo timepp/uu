@@ -267,6 +267,8 @@ export function createLargeJsonView(content: string) {
 export function showDialog<T>(title: string, classes: string[] = [], style: Partial<CSSStyleDeclaration> = {}, softDismissable = true, onCreate: (dialog: HTMLDialogElement, finisher: (value?: T) => void) => void) {
     const dialog = createElement(document.body, 'dialog', classes, '', {
         padding: '5px',
+        display: 'flex',
+        flexDirection: 'column',
         resize: 'both',
         ...style})
     // create a top bar with title and a close button to the right
@@ -283,10 +285,10 @@ export function showDialog<T>(title: string, classes: string[] = [], style: Part
         dialog.remove()
         resolver(value)
     }
+    dialog.addEventListener('cancel', () => {
+        finishFunc()
+    })
     if (softDismissable) {
-        dialog.addEventListener('cancel', () => {
-            finishFunc()
-        })
         dialog.addEventListener('mousedown', (e) => {
             if (e.target === dialog) {
                 const rect = dialog.getBoundingClientRect()
@@ -310,8 +312,10 @@ export function showInDialog(title: string, content: string|HTMLElement, actions
         const dc = createElement(dialog, 'div', [], '', {
             display: 'flex',
             flexDirection: 'column',
-            height: '100%',
-            // maxHeight: '90vh'
+            // height: '100%',
+            // maxHeight: '60vh'
+            flex: '1',
+            minHeight: '0'
         })
         // Scrollable content area
         const contentArea = createElement(dc, 'div', [], '', {
@@ -581,10 +585,13 @@ export type SelectOption = {
 
     // used to apply custom styles to individual items
     styleModifier: (item: string, elem: HTMLElement) => void
+
+    // dialog styles
+    dlgStyle: Partial<CSSStyleDeclaration>
 }
 
 export async function showSelection(title: string, options: SelectionItem[], cfg: Partial<SelectOption> = {}) {
-    return showDialog<string[]>(title, [], {width: '80vw'}, true, (dialog, finish) => {
+    return showDialog<string[]>(title, [], {width: '80vw', ...cfg.dlgStyle}, true, (dialog, finish) => {
         // local state
         let selection = cfg.initialSelection || []
         const elements = {} as Record<string, HTMLSpanElement>
@@ -623,10 +630,12 @@ export async function showSelection(title: string, options: SelectionItem[], cfg
         function updateUI() {
             statusBar.replaceChildren(createStatusView())
 
-            for (const [value, span] of Object.entries(elements)) {
+            for (const [value, div] of Object.entries(elements)) {
                 const isItemSelected = selection.includes(value)
-                span.classList.toggle('selected', isItemSelected)
-                span.style.backgroundColor = isItemSelected ? 'rgba(0, 123, 255, 0.5)' : 'rgb(244, 244, 244)'
+                div.classList.toggle('selected', isItemSelected)
+                //div.style.backgroundColor = isItemSelected ? 'rgba(0, 123, 255, 0.5)' : 'rgb(244, 244, 244)'
+                div.style.border = '2px solid'
+                div.style.borderColor = isItemSelected ? '#0d6efd' : '#cccccc'
             }
 
             alert.textContent = currentAlert
@@ -1371,21 +1380,24 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
     }
 }
 
-export function createFoldableArea(title: string, content: HTMLElement, initiallyFolded: boolean = true) {
+export function createFoldableArea(parent: Element | null, title: string, content?: HTMLElement, initiallyFolded = true) {
     // create a foldable area using bootstrap card
-    const card = createElement(null, 'div', ['card', 'mb-2'])
-    const cardHeader = createElement(card, 'div', ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'], '', {cursor: 'pointer'})
-    const titleElem = createElement(cardHeader, 'span', [], title)
-    const toggleBtn = createElement(cardHeader, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], initiallyFolded ? '+' : '−')
-    const cardBody = createElement(card, 'div', ['card-body'], '', {display: initiallyFolded ? 'none' : ''})
-    cardBody.appendChild(content)
+    const div = createElement(parent, 'div', ['card', 'mb-2'])
+    const header = createElement(div, 'div', ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'], '', {cursor: 'pointer'})
+    const titleElem = createElement(header, 'span', [], title)
+    const toggleBtn = createElement(header, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], initiallyFolded ? '+' : '−')
+    const body = createElement(div, 'div', ['card-body'], '', {display: initiallyFolded ? 'none' : ''})
 
-    cardHeader.onclick = () => {
-        const isFolded = cardBody.style.display === 'none'
-        cardBody.style.display = isFolded ? '' : 'none'
+    if (content) {
+        body.appendChild(content)
+    }
+
+    header.onclick = () => {
+        const isFolded = body.style.display === 'none'
+        body.style.display = isFolded ? '' : 'none'
         toggleBtn.textContent = isFolded ? '−' : '+'
     }
-    return card
+    return { div, body }
 }
 
 class CodeMirrorLoader {
