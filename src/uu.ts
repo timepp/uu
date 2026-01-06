@@ -56,7 +56,7 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
     attributes: Partial<Record<keyof HTMLElementTagNameMap[K], any>> = {}
 ) {
     const e = document.createElement(tagName)
-    e.classList.add(...classes.filter(c => c))
+    if (classes.length > 0) e.classList.add(...classes.filter(c => c))
     if (parent) parent.appendChild(e)
     if (text) e.textContent = text
     for (const [key, value] of Object.entries(style)) {
@@ -264,13 +264,38 @@ export function createLargeJsonView(content: string) {
     return main
 }
 
-export function showDialog<T>(title: string, classes: string[] = [], style: Partial<CSSStyleDeclaration> = {}, softDismissable = true, onCreate: (dialog: HTMLDialogElement, finisher: (value?: T) => void) => void) {
-    const dialog = createElement(document.body, 'dialog', classes, '', {
+// If the handler returns true, the dialog will be closed
+export type ButtonAction = () => boolean|void|Promise<boolean|void>
+
+export interface DialogOptions<T> {
+    classes?: string[]
+    style?: Partial<CSSStyleDeclaration>
+    softDismissable?: boolean // default: true
+    actions?: string[] | Record<string, ButtonAction>
+}
+
+export type DialogElements = {
+    dialog: HTMLDialogElement,
+    header: HTMLDivElement,
+    closeButton: HTMLButtonElement,
+    contentArea: HTMLDivElement,
+    footer: HTMLDivElement,
+    buttons: Record<string, HTMLButtonElement>
+}
+
+export function showDialog<T>(
+    title: string, 
+    content: string | HTMLElement | undefined = undefined, 
+    options: DialogOptions<T> = {},
+    onCreate?: (elements: DialogElements, finisher: (value?: T) => void) => void
+) {
+    const dialog = createElement(document.body, 'dialog', options.classes || [], '', {
         padding: '5px',
         display: 'flex',
         flexDirection: 'column',
         resize: 'both',
-        ...style})
+        ...(options.style || {})
+    })
     // create a top bar with title and a close button to the right
     const header = createElement(dialog, 'div', ['d-flex', 'justify-content-between', 'align-items-center', 'pb-2', 'border-bottom', 'mb-2', 'mt-1', 'pe-2'])
     const titleElem = createElement(header, 'h4', ['m-0', 'ms-2'], title)
@@ -288,7 +313,7 @@ export function showDialog<T>(title: string, classes: string[] = [], style: Part
     dialog.addEventListener('cancel', () => {
         finishFunc()
     })
-    if (softDismissable) {
+    if (options.softDismissable ?? true) {
         dialog.addEventListener('mousedown', (e) => {
             if (e.target === dialog) {
                 const rect = dialog.getBoundingClientRect()
@@ -300,64 +325,78 @@ export function showDialog<T>(title: string, classes: string[] = [], style: Part
         })
     }
     closeButton.onclick = () => finishFunc()
-    dialog.showModal()
-    onCreate(dialog, finishFunc)
-    return promise
-}
 
-// If the handler returns true, the dialog will be closed
-export type ButtonAction = () => boolean|void|Promise<boolean|void>
-export function showInDialog(title: string, content: string|HTMLElement, actions: string[] | Record<string, ButtonAction> = ['Close']) {
-    return showDialog<string>(title, [], {}, false, (dialog, finish) => {
-        const dc = createElement(dialog, 'div', [], '', {
-            display: 'flex',
-            flexDirection: 'column',
-            // height: '100%',
-            // maxHeight: '60vh'
-            flex: '1',
-            minHeight: '0'
-        })
-        // Scrollable content area
-        const contentArea = createElement(dc, 'div', [], '', {
-            flex: '1',
-            overflow: 'auto',
-            padding: '0 10px'
-        })
-
+    const { actions } = options
+    const buttons: Record<string, HTMLButtonElement> = {}
+    const dc = createElement(dialog, 'div', [], '', {
+        display: 'flex',
+        flexDirection: 'column',
+        flex: '1',
+        minHeight: '0'
+    })
+    const contentArea = createElement(dc, 'div', [], '', {
+        flex: '1',
+        overflow: 'auto',
+        padding: '0 10px'
+    }, {
+        tabIndex: -1,
+        autofocus: true
+    })
+    if (content) {
         if (typeof content === 'string') {
             contentArea.textContent = content
-        } else {
+        } else if (content instanceof HTMLElement) {
             contentArea.appendChild(content)
         }
+    }
 
-        // Fixed footer
-        createElement(dc, 'hr')
-        const footer = createElement(dc, 'div', ['d-flex', 'justify-content-center'], '', {
-            padding: '0 20px 20px 20px',
+    const footer = createElement(dc, 'div', ['mt-2', 'mb-2'])
+    
+    if (actions) { // Only add footer if actions exist
+        createElement(footer, 'hr')
+        const footerToolbar = createElement(footer, 'div', ['d-flex', 'justify-content-center', 'gap-2'], '', {
             flexShrink: '0'
         })
 
-        if (typeof actions === 'object' && !Array.isArray(actions)) {
-            for (const [btnText, handler] of Object.entries(actions)) {
-                const button = createElement(footer, 'button', ['btn', 'btn-primary', 'ms-2', 'me-2'], btnText)
+        const acts = actions
+        if (Array.isArray(acts)) {
+            for (const btnText of acts) {
+                const button = createElement(footerToolbar, 'button', ['btn', 'btn-primary'], btnText)
+                button.onclick = () => {
+                    finishFunc(btnText as any)
+                }
+                buttons[btnText] = button
+            }
+        } else {
+            for (const [btnText, handler] of Object.entries(acts)) {
+                const button = createElement(footerToolbar, 'button', ['btn', 'btn-primary'], btnText)
                 button.onclick = async () => {
                     const shouldClose = await handler()
                     if (shouldClose) {
-                        finish(btnText)
+                        finishFunc(btnText as any)
                     }
                 }
-            }
-        } else {
-            for (const btnText of actions) {
-                const button = createElement(footer, 'button', ['btn', 'btn-primary', 'ms-2', 'me-2'], btnText)
-                button.onclick = () => {
-                    finish(btnText)
-                }
+                buttons[btnText] = button
             }
         }
+    }
 
-        // reflow
+    if (onCreate) {
+        onCreate({ dialog, header, closeButton, contentArea, footer, buttons }, finishFunc)
+    }
+    dialog.showModal()
+
+    // reflow
+    if (content || actions) {
         dialog.style.height = `${dialog.offsetHeight + 1}px`
+    }
+    return promise
+}
+
+export function showInDialog(title: string, content: string|HTMLElement, actions: string[] | Record<string, ButtonAction> = ['Close']) {
+    return showDialog<string>(title, content, {
+        actions,
+        softDismissable: false
     })
 }
 
@@ -403,13 +442,12 @@ export async function showJsonResult(title: string, content: string | object, pa
 }
 
 export async function showConfirmationDialog(title: string, text: string) {
-    return showDialog(title, [], { width: '400px' }, true, (dialog, finish) => {
-        const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
-        const main = createElement(dc, 'div', [], text, { marginTop: '10px' })
-        const footer = createElement(dc, 'div', ['d-flex', 'justify-content-end', 'mt-2'])
-        const okBtn = createButton(footer, ['btn', 'btn-primary'], 'OK', () => finish('ok'))
-        const cancelBtn = createButton(footer, ['btn', 'btn-secondary', 'ms-2'], 'Cancel', () => finish())
-    }).then(r => r === 'ok')
+    const r = await showDialog(title, text, {
+        style: { width: '400px' },
+        softDismissable: false,
+        actions: ['OK', 'Cancel']
+    })
+    return r === 'OK'
 }
 
 export type InputField = {
@@ -418,8 +456,13 @@ export type InputField = {
     multiLine?: boolean
 }
 export function showInputDialog(title: string, fields: InputField[]) {
-    return showDialog<string[]>(title, [], {width: '50vw'}, false, (dialog, finish) => {
-        const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
+    return showDialog<string[]>(title, undefined, {
+        classes: [],
+        style: {width: '50vw'},
+        actions: ['OK', 'Cancel'],
+        softDismissable: false
+    }, (elements, finish) => {
+        const dc = createElement(elements.contentArea, 'div', ['d-flex', 'flex-column'])
         const gridContainer = createElement(dc, 'div', [], '', {
             display: 'grid',
             gridTemplateColumns: 'auto 1fr',
@@ -463,10 +506,8 @@ export function showInputDialog(title: string, fields: InputField[]) {
             })
         }
 
-        createElement(dc, 'hr')
-        const footer = createElement(dc, 'div', ['d-flex', 'justify-content-end', 'mt-2'])
-        const okBtn = createButton(footer, ['btn', 'btn-primary'], 'OK', () => finishWithValue())
-        const cancelBtn = createButton(footer, ['btn', 'btn-secondary', 'ms-2'], 'Cancel', () => finish())
+        elements.buttons['OK'].onclick = () => finishWithValue()
+        elements.buttons['Cancel'].onclick = () => finish()
     })
 }
 
@@ -590,15 +631,20 @@ export type SelectOption = {
     dlgStyle: Partial<CSSStyleDeclaration>
 }
 
-export async function showSelection(title: string, options: SelectionItem[], cfg: Partial<SelectOption> = {}) {
-    return showDialog<string[]>(title, [], {width: '80vw', ...cfg.dlgStyle}, true, (dialog, finish) => {
+export function showSelection(title: string, options: SelectionItem[], cfg: Partial<SelectOption> = {}) {
+    return showDialog<string[]>(title, undefined, {
+        classes: [], 
+        style: {width: '80vw', ...cfg.dlgStyle}, 
+        actions: ['OK', 'Cancel'],
+        softDismissable: true
+    }, (de, finish) => {
         // local state
         let selection = cfg.initialSelection || []
         const elements = {} as Record<string, HTMLSpanElement>
         let currentAlert = ''
 
         // UI
-        const dc = createElement(dialog, 'div', ['d-flex', 'flex-column'])
+        const dc = createElement(de.contentArea, 'div', ['d-flex', 'flex-column'])
         const statusBar = createElement(dc, 'span', ['form-control'])
         const toolbar = createElement(dc, 'div', ['input-group', 'mb-4', 'mt-2'])
         const filter = createElement(toolbar, 'input', ['form-control'], '', {}, {placeholder: 'Filter'})
@@ -606,10 +652,6 @@ export async function showSelection(title: string, options: SelectionItem[], cfg
         const unSelectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☐')
         const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'p-2'])
         const alert = createElement(dc, 'div', ['alert', 'alert-danger', 'd-none'])
-        const footer = createElement(dc, 'div')
-        createElement(footer, 'hr', ['w-100'])
-        const footerBar = createElement(dc, 'div', ['d-flex', 'justify-content-center'])
-        const okBtn = createElement(footerBar, 'button', ['btn', 'btn-primary', 'me-2'], 'OK')
 
         if (cfg.pickAndClose) cfg.singleSelect = true
 
@@ -617,11 +659,10 @@ export async function showSelection(title: string, options: SelectionItem[], cfg
         syncDisplay(statusBar, cfg.showStatus ?? true)
         syncDisplay(selectAllBtn, !cfg.singleSelect)
         syncDisplay(unSelectAllBtn, !cfg.singleSelect)
-        syncDisplay(footer, !cfg.pickAndClose)
-        syncDisplay(okBtn, !cfg.pickAndClose)
+        syncDisplay(de.footer, !cfg.pickAndClose)
 
         function createStatusView() {
-            const div = createElement(null, 'div')
+            const div = createElement(null, 'div', ['d-flex'], '', { whiteSpace: 'nowrap', overflow: 'auto', textOverflow: 'ellipsis' })
             createElement(div, 'span', ['me-2'], 'Selected: ', {color: 'blue'})
             div.append(...selection.map((item, i) => createElement(null, 'span', ['me-1'], cfg.showOrder ? `${i + 1}: ${item}` : item)))
             return div
@@ -640,7 +681,6 @@ export async function showSelection(title: string, options: SelectionItem[], cfg
 
             alert.textContent = currentAlert
             syncDisplay(alert, currentAlert !== '')
-            okBtn.disabled = currentAlert !== ''
         }
 
         function onSelectionChange(oldSelection: string[], newSelection: string[]) {
@@ -689,7 +729,8 @@ export async function showSelection(title: string, options: SelectionItem[], cfg
 
         selectAllBtn.onclick = () => onSelectionChange(selection, Object.keys(elements))
         unSelectAllBtn.onclick = () => onSelectionChange(selection, [])
-        okBtn.onclick = () => finish(selection)
+        de.buttons['OK'].onclick = () => finish(selection)
+        de.buttons['Cancel'].onclick = () => finish()
 
         updateUI()
     })
@@ -759,15 +800,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
     const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
-    const generalColumnFormatter = (item: T, prop: string) => {
-        const value = item[prop as keyof T]
-        if (typeof value === 'object' && value !== null) {
-            // return createJsonView(JSON.stringify(value, null, 2))
-            return tu.stringify(value)
-        } else {
-            return `${value}`
-        }
-    }
     const itemFilter = cfg.itemFilter || ((item: T, filter: string) => {
         return tu.fuzzyFind(item, filter) !== null
     })
@@ -793,7 +825,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     if (cfg.flattenNestedObjects) {
         const props = new Set<string>()
         tu.traverseObject(arr, -1, (p, v, t) => {
-            if (t === 'leaf') props.add(p.slice(1).join('.'))
+            const path = p.slice(1).join('.')
+            if (path && v instanceof Array) {
+                props.add(path)
+                return 0
+            }
+            if (t === 'leaf') props.add(path)
         })
         allProps = [...props]
     }
@@ -808,7 +845,17 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 }
                 v = v[part]
             }
+            console.log('fetching', prop, 'got', v)
             return v
+        }
+    }
+    const generalColumnFormatter = (item: T, prop: string) => {
+        const value = valueFetcher(item, prop)
+        if (typeof value === 'object' && value !== null) {
+            // return createJsonView(JSON.stringify(value, null, 2))
+            return tu.stringify(value)
+        } else {
+            return `${value}`
         }
     }
 
@@ -890,9 +937,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                     div.style.cursor = 'pointer'
                 }
                 div.style.wordBreak = 'break-all'
-                const v = valueFetcher(item, prop)
                 const specificFormater = cfg.columnProperties?.[prop]?.formater
-                const swrapper = specificFormater ? (item: T, prop: string) => specificFormater(item[prop as keyof T], item) : null
+                const swrapper = specificFormater ? (item: T, prop: string) => specificFormater(valueFetcher(item, prop), item) : null
                 const formater = swrapper || cfg.columnFormater || generalColumnFormatter
                 const formattedValue = (prop === cfg.rawIndexColumn) ? `${dataIndex + 1}` : formater(item, prop)
                 if (typeof formattedValue === 'string') {
@@ -942,9 +988,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 td.style.cursor = 'pointer'
             }
             td.style.wordBreak = 'break-all'
-            const v = valueFetcher(item, prop)
             const specificFormater = cfg.columnProperties?.[prop]?.formater
-            const swrapper = specificFormater ? (item: T, prop: string) => specificFormater(item[prop as keyof T], item) : null
+            const swrapper = specificFormater ? (item: T, prop: string) => specificFormater(valueFetcher(item, prop), item) : null
             const formater = swrapper || cfg.columnFormater || generalColumnFormatter
             const formattedValue = (prop === cfg.rawIndexColumn) ? `${dataIndex + 1}` : formater(item, prop)
             if (typeof formattedValue === 'string') {
@@ -1322,18 +1367,24 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
         }
 
         console.log('create new dropdown')
-        const dropdown = createElement(document.body, 'div', ['dropdown-menu', 'show'], '', {
-            position: 'absolute',
+        
+        // Check if the element is inside a dialog
+        const dialog = e.closest('dialog')
+        const container = dialog || document.body
+        
+        const dropdown = createElement(container, 'div', ['dropdown-menu', 'show'], '', {
+            position: 'fixed',
             zIndex: '1050'
         })
         const rect = e.getBoundingClientRect()
         
         // Position dropdown and check for overflow
+        // If inside dialog, we need to adjust coordinates relative to the dialog
         let left = rect.left
         let top = rect.bottom
         
         // Add dropdown to DOM temporarily to get its dimensions
-        document.body.appendChild(dropdown)
+        container.appendChild(dropdown)
         
         // Adjust horizontal position if dropdown would overflow right edge
         const dropdownWidth = dropdown.offsetWidth || 200 // fallback width
@@ -1526,7 +1577,7 @@ class MarkdownLoader {
     static module: any = null;
     static async getModule() {
         if (!this.module) {
-            this.module = await import("https://esm.sh/markdown-it");
+            this.module = await callAsyncFunctionWithProgress(() => import("https://esm.sh/markdown-it"), 'Loading Markdown-It module...');
         }
         return this.module;
     }
