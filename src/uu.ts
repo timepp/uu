@@ -47,18 +47,28 @@ export function derivedCurrentUrl(paramsToAdd: Record<string, string>, paramsToR
     return derivedUrl(window.location.href, paramsToAdd, paramsToRemove)
 }
 
+export function fa(...classNames: string[]) {
+    return createElement(null, 'i', ['fa', ...classNames])
+}
+
 export function createElement<K extends keyof HTMLElementTagNameMap>(
     parent: Element | null, 
     tagName: K, 
     classes: string[] = [], 
-    text?: string, 
+    child?: string|HTMLElement, 
     style: Partial<CSSStyleDeclaration> = {},
     attributes: Partial<Record<keyof HTMLElementTagNameMap[K], any>> = {}
 ) {
     const e = document.createElement(tagName)
     if (classes.length > 0) e.classList.add(...classes.filter(c => c))
     if (parent) parent.appendChild(e)
-    if (text) e.textContent = text
+    if (child) {
+        if (typeof child === 'string') {
+            e.textContent = child
+        } else {
+            e.appendChild(child)
+        }
+    }
     for (const [key, value] of Object.entries(style)) {
         if (value !== undefined) {
             e.style[key as any] = value as string
@@ -70,8 +80,8 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
     return e
 }
 
-export function createButton(parent: Element | null, classes: string[] = [], text: string, onclick = () => {}) {
-    const button = createElement(parent, 'button', classes, text)
+export function createButton(parent: Element | null, classes: string[] = [], child: string|HTMLElement, onclick = () => {}) {
+    const button = createElement(parent, 'button', classes, child)
     button.onclick = onclick
     return button
 }
@@ -521,14 +531,12 @@ export async function promptMultiline(title: string, tip: string | HTMLElement, 
     return r ? r[0] : undefined
 }
 
+export function createGeneralInputOuput(parent: Element|null, ) {
+    
+}
+
 /**
  * Given an user provided handler: create input controls, handle user interactions, and show result area.
- * @param title 
- * @param actionName 
- * @param valueId 
- * @param handler 
- * @param value 
- * @returns 
  */
 export function createInputAction(title: string, actionName: string, valueId: string, handler: (value: string) => Promise<HTMLElement>, value?: string) {
     const div = createElement(null, 'div', ['border', 'border-light-subtle', 'rounded'])
@@ -797,6 +805,9 @@ export type VisualizeConfig<T extends object> = {
 }
 
 export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}) {
+    if (arr.length === 0) {
+        return createElement(null, 'div', ['alert', 'alert-info'], 'No data to display: empty array.')
+    }
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
     const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
@@ -808,15 +819,15 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     // overall dom
     const view = createElement(null, 'div')
     const toolbar = createElement(view, 'div', ['input-group', 'mb-1'])
-    const fieldSelect = createElement(toolbar, 'button', ['btn', 'btn-secondary', 'me-2'], 'Columns')
-    const sortBtn = createElement(toolbar, 'button', ['btn', 'btn-secondary'], 'Sort')
+    const fieldSelect = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary', 'me-2'], fa('fa-columns'))
+    const sortBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-sort'))
     const sortHint = createElement(toolbar, 'span', ['input-group-text'])
-    const randomSortBtn = createButton(toolbar, ['btn', 'btn-secondary', 'me-2'], '⧉')
-    const filterHint = createElement(toolbar, 'span', ['input-group-text'], 'Filter')
+    const randomSortBtn = createButton(toolbar, ['btn', 'btn-outline-secondary', 'me-2'], fa('fa-random'))
+    const filterHint = createElement(toolbar, 'span', ['input-group-text'], fa('fa-filter'))
     const filter = createElement(toolbar, 'input', ['form-control'], '')
     const counts = createElement(toolbar, 'span', ['input-group-text', 'me-2'], '20 / 100')
     const pagerWrapper = createElement(toolbar, 'div', [])
-    const optionBtn = createElement(toolbar, 'button', ['ms-2', 'btn', 'btn-secondary'], '≡')
+    const optionBtn = createElement(toolbar, 'button', ['ms-2', 'btn', 'btn-outline-secondary'], fa('fa-bars'))
     const dataContainer = createElement(view, 'div')
 
     // now paging section, which looks like 4 buttons and an edit: "<< < [8] > >>
@@ -1333,6 +1344,14 @@ export class Pager {
     }
 }
 
+export function createButtonGroup(parent: Element | null, buttons: Record<string, () => void>) {
+    const div = createElement(parent, 'div', ['btn-group'])
+    for (const [name, action] of Object.entries(buttons)) {
+        createButton(div, ['btn', 'btn-outline-secondary'], name, action)
+    }
+    return div
+}
+
 export function createToggleBar(values: (string|HTMLElement)[], value: number, onNewValue: (v: number) => void) {
     const div = createElement(null, 'div', ['btn-group'])
     const buttons: HTMLButtonElement[] = []
@@ -1436,18 +1455,19 @@ export function createFoldableArea(parent: Element | null, title: string, conten
     const div = createElement(parent, 'div', ['card', 'mb-2'])
     const header = createElement(div, 'div', ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'], '', {cursor: 'pointer'})
     const titleElem = createElement(header, 'span', [], title)
-    const toggleBtn = createElement(header, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], initiallyFolded ? '+' : '−')
-    const body = createElement(div, 'div', ['card-body'], '', {display: initiallyFolded ? 'none' : ''})
-
+    const toggleBtn = createElement(header, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'])
+    const body = createElement(div, 'div', ['card-body'])
     if (content) {
         body.appendChild(content)
     }
 
-    header.onclick = () => {
-        const isFolded = body.style.display === 'none'
-        body.style.display = isFolded ? '' : 'none'
-        toggleBtn.textContent = isFolded ? '−' : '+'
-    }
+    const state = tu.createObservableState({ folded: initiallyFolded }, s => {
+        toggleBtn.replaceChildren(s.folded ? fa('fa-chevron-down') : fa('fa-chevron-up'))
+        body.style.display = s.folded ? 'none' : ''
+        div.style.borderColor = s.folded ? '#ccc' : '#007bff'
+    })
+
+    header.onclick = () => state.folded = !state.folded
     return { div, body }
 }
 
@@ -1621,12 +1641,14 @@ export async function createChart(parent: HTMLElement, width: string, height: st
     return { canvas: div, chart };
 }
 
-export type DataType = 'number' | 'boolean' | 'date' | 'colorName' | 'general'
+export type DataType = 'integer' | 'float' | 'boolean' | 'date' | 'colorName' | 'general'
 export function guessDataType(data: string | string[]) : DataType {
     // guess data type wrapped in strings
     if (typeof data === 'string') {
         // number
-        if (!isNaN(Number(data))) return 'number'
+        if (!isNaN(Number(data))) {
+            return data.includes('.') ? 'float' : 'integer'
+        }
         // boolean
         const lower = data.toLowerCase()
         if (lower === 'true' || lower === 'false') return 'boolean'
@@ -1641,7 +1663,7 @@ export function guessDataType(data: string | string[]) : DataType {
         const types = data.map(guessDataType)
         const stat = tu.groupBy(types, t => t)
         if (stat[0][1].length / data.length >= 0.8) {
-            return stat[0][0] as 'number' | 'boolean' | 'date' | 'general'
+            return stat[0][0] as 'integer' | 'float' | 'boolean' | 'date' | 'general'
         }
         return 'general'
     }
@@ -1672,7 +1694,7 @@ export async function renderDataInsights(info: tu.DataPropStat[]) {
             //     width = '100%'
             //     card.style.width = '100%'
             // }
-            if (dataType === 'number') {
+            if (dataType === 'integer') {
                 // sort by value
                 values = values.sort((a, b) => Number(a.value) - Number(b.value))
             } else if (dataType === 'date') {

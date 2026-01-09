@@ -355,6 +355,26 @@ export function safeExecute<T>(fn: () => T, defaultValue: T | ((e: unknown) => T
     }
 }
 
+export function createObservableState<T extends object>(initialState: T, onChange: (s: T) => void): T {
+    const proxy = new Proxy(initialState, {
+        set(target, prop: string | symbol, value: any) {
+            if (typeof prop === 'string' && prop in target) {
+                if ((target as any)[prop] !== value) {
+                    (target as any)[prop] = value;
+                    onChange(proxy);
+                }
+            } else {
+                // 允许新增属性（可选）
+                (target as any)[prop] = value;
+                onChange(proxy);
+            }
+            return true;
+        }
+    });
+    onChange(proxy)
+    return proxy;
+}
+
 export function createState<T extends object>(object: T, properties: (keyof T)[], stateKey?: string): Pick<T, typeof properties[number]> {
     // 内部存储的状态对象
     const internalState: Partial<T> = {};
