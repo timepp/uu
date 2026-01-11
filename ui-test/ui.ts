@@ -1,23 +1,13 @@
 import * as uu from '../src/uu.ts'
 
-const data = {
-    name: 'test',
-    age: 30,
-    isMale: true,
-    isStudent: false,
-    hobbies: ['reading', 'gaming'],
-    comments: "I like the book \"the 3 body problem\" very much!",
-    address: {
-        city: 'New York',
-        zip: null,
-        r1: {r2: "r4"}
-    }
-}
-const jv = uu.createJsonView(JSON.stringify(data, null, 2))
-const jv2 = uu.createJsonView(uu.stringify(data, 2, true))
-const hr = uu.createElement(null, 'hr')
-const wv = uu.createJsonView(uu.stringify(window, 2))
-// document.body.append(jv, hr.cloneNode(), jv2, hr.cloneNode(), wv)
+const ig = uu.createDataArea(document.body, [
+    // { name: 'Filter', valueId: 'filter' },
+    // { name: 'File', onClick: (params) => {}},
+    { name: 'Sort By', valueId: 'sortBy' },
+    { name: 'Apply', onClick: (params) => {
+        return uu.createCodeMirrorJsonViewer(params)
+    }}
+])
 
 const arr = Object.entries(window).map(([k, v]) => {
     return {key: k, value: v, type: typeof v}

@@ -47,8 +47,29 @@ export function derivedCurrentUrl(paramsToAdd: Record<string, string>, paramsToR
     return derivedUrl(window.location.href, paramsToAdd, paramsToRemove)
 }
 
+let _isFaAvailable: boolean | undefined
+export function isFontAwesomeAvailable() {
+    if (_isFaAvailable === undefined) {
+        const span = document.createElement('i')
+        span.className = 'fa'
+        span.style.display = 'none'
+        document.body.appendChild(span)
+        const fontFamily = getComputedStyle(span).fontFamily
+        _isFaAvailable = fontFamily.includes('Awesome')
+        span.remove()
+    }
+    return _isFaAvailable
+}
+
 export function fa(...classNames: string[]) {
-    return createElement(null, 'i', ['fa', ...classNames])
+    if (isFontAwesomeAvailable()) {
+        return createElement(null, 'i', ['fa', ...classNames])
+    }
+    const text = classNames[0].replace('fa-', '')
+    const cvt: Record<string, string> = {
+        'bars': '☰',
+    }
+    return createElement(null, 'span', [], cvt[text] || text)
 }
 
 export function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -531,8 +552,38 @@ export async function promptMultiline(title: string, tip: string | HTMLElement, 
     return r ? r[0] : undefined
 }
 
-export function createGeneralInputOuput(parent: Element|null, ) {
-    
+export type InputElement = string | {
+    name: string
+    valueId?: string // For input type
+    onClick?: (params: Record<string, string>) => HTMLElement | Promise<HTMLElement> | void
+}
+export function createDataArea(parent: Element|null, params: InputElement[]) {
+    const div = createElement(parent, 'div', ['border', 'border-light-subtle', 'mb-2'])
+    const inputArea = createElement(div, 'div', ['p-1', 'd-flex', 'gap-2', 'overflow-auto'])
+    const resultArea = createElement(div, 'div', ['mt-2', 'p-1'])
+    const regulatedParams = params.map(p => (typeof p === 'string')? { name: p } : p)
+    const inputs = {} as Record<string, HTMLInputElement>
+    for (const p of regulatedParams) {
+        if (p.onClick) {
+            // button
+            const btn = createButton(inputArea, ['btn', 'btn-primary'], p.name, async () => {
+                const r = await p.onClick!(Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, v.value])))
+                if (r) {
+                    setContent(resultArea, r)
+                }
+            })
+            btn.style.whiteSpace = 'nowrap'
+        } else {
+            // input
+            const {ig, input} = createAutofillInput(p.name, '', p.valueId || p.name)
+            // make input group grow to fill available space
+            ig.classList.add('flex-grow-1')
+            ig.style.minWidth = '200px'
+            inputArea.appendChild(ig)
+            inputs[p.valueId || p.name] = input
+        }
+    }
+    return div
 }
 
 /**
