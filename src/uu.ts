@@ -564,7 +564,7 @@ export function createDataArea(parent: Element|null, foldable: boolean, params: 
     const regulatedParams = params.map(p => (typeof p === 'string')? { name: p } : p)
     const inputs = {} as Record<string, HTMLInputElement>
 
-    const state = tu.createObservableState({showResult: true}, s => {
+    const state = tu.createObservableState(null, {showResult: true}, s => {
         resultArea.style.display = s.showResult ? '' : 'none'
     })
 
@@ -883,16 +883,17 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const renderStyle = cfg.renderStyle || 'table'
     
     // overall dom
-    const view = createElement(null, 'div')
-    const toolbar = createElement(view, 'div', ['input-group', 'mb-1'])
-    const fieldSelect = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary', 'me-2'], fa('fa-columns'))
-    const sortBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-sort'))
-    const sortHint = createElement(toolbar, 'span', ['input-group-text'])
-    const randomSortBtn = createButton(toolbar, ['btn', 'btn-outline-secondary', 'me-2'], fa('fa-random'))
-    const filterHint = createElement(toolbar, 'span', ['input-group-text'], fa('fa-filter'))
-    const filter = createElement(toolbar, 'input', ['form-control'], '')
-    const counts = createElement(toolbar, 'span', ['input-group-text', 'me-2'], '20 / 100')
-    const pagerWrapper = createElement(toolbar, 'div', [])
+    const view = createElement(null, 'div', ['border', 'p-2'])
+    const toolbar = createElement(view, 'div', ['d-flex', 'gap-2', 'mb-2'])
+    const igSort = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
+    const sortBtn = createElement(igSort, 'button', ['btn', 'btn-outline-secondary'], fa('fa-sort'))
+    const sortHint = createElement(igSort, 'span', ['input-group-text'])
+    const randomSortBtn = createButton(igSort, ['btn', 'btn-outline-secondary', 'me-2'], fa('fa-random'))
+    const igFiler = createElement(toolbar, 'div', ['input-group', 'flex-grow-1'])
+    const filterHint = createElement(igFiler, 'span', ['input-group-text'], fa('fa-filter'))
+    const filter = createElement(igFiler, 'input', ['form-control'], '')
+    const counts = createElement(igFiler, 'span', ['input-group-text', 'me-2'], '20 / 100')
+    const pagerPlaceholder = createElement(toolbar, 'div', [])
     const optionBtn = createElement(toolbar, 'button', ['ms-2', 'btn', 'btn-outline-secondary'], fa('fa-bars'))
     const dataContainer = createElement(view, 'div')
 
@@ -1111,7 +1112,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     let data = allData
     const pager = new Pager(data.length, state.pageSize || Infinity, (page) => gotoPage(page))
     const pagerElem = pager.getElement()
-    pagerWrapper.appendChild(pagerElem)
+    toolbar.replaceChild(pagerElem, pagerPlaceholder)
 
     function gotoPage(page: number) {
         // only visible rows falling into the current page are shown, all others are hidden
@@ -1178,21 +1179,20 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const showSortButton = cfg.showSortButton ?? true
         const showFilter = cfg.showFilter ?? true// (arr.length > 1)
 
-        syncExistence(fieldSelect, showColumnSelector)
         syncExistence(sortBtn, showSortButton)
         syncExistence(sortHint, showSortButton)
         syncExistence(randomSortBtn, showSortButton)
         syncExistence(filter, showFilter)
         syncExistence(filterHint, showFilter)
         syncExistence(counts, showFilter)
-        syncExistence(pagerWrapper, !!state.pageSize)
+        syncExistence(pagerPlaceholder, !!state.pageSize)
 
         if (toolbar.lastElementChild) {
             (toolbar.lastElementChild as HTMLElement).classList.remove('me-2')
         }
     }
 
-    fieldSelect.onclick = async () => {
+    async function selectFields() {
         const r = await showSelection('Select Fields', properties, {
             initialSelection: state.columns??properties, 
             showOrder: true,
@@ -1250,7 +1250,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             console.log('data insights', info)
             showInDialog('Data Insights', await renderDataInsights(info))
         },
-        'Select Columns': () => fieldSelect.click(),
+        'Select Columns': () => selectFields(),
         'Change Page Size': async () => {
             const v = await prompt('Page Size', 'Enter number of items per page (enter 0 or negative number to disable paging)', `${state.pageSize || cfg.pageSize || 20}`)
             if (v) {
@@ -1350,7 +1350,7 @@ export class Pager {
     pageText: HTMLElement
     currentPage = 0
     constructor(private totalItems: number, private pageSize: number, private onPageChange: (pageIndex: number, pageSize: number) => void) {
-        this.toolbar = createElement(null, 'div', ['btn-group'])
+        this.toolbar = createElement(null, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
         const btnClass = ['btn', 'btn-secondary']
         this.firstBtn = createElement(this.toolbar, 'button', btnClass, '<<')
         this.privBtn = createElement(this.toolbar, 'button', btnClass, '<')
@@ -1390,6 +1390,7 @@ export class Pager {
     private updateUI() {
         const totalPages = Math.max(1, Math.ceil(this.totalItems / this.pageSize))
         this.pageText.textContent = `${this.currentPage + 1} / ${totalPages}`
+        this.pageText.title = `page size: ${this.pageSize}`
         this.privBtn.disabled = this.currentPage <= 0
         this.firstBtn.disabled = this.currentPage <= 0
         this.nextBtn.disabled = this.currentPage >= totalPages - 1
@@ -1527,7 +1528,7 @@ export function createFoldableArea(parent: Element | null, title: string, conten
         body.appendChild(content)
     }
 
-    const state = tu.createObservableState({ folded: initiallyFolded }, s => {
+    const state = tu.createObservableState(null, { folded: initiallyFolded }, s => {
         toggleBtn.replaceChildren(s.folded ? fa('fa-chevron-down') : fa('fa-chevron-up'))
         body.style.display = s.folded ? 'none' : ''
         div.style.borderColor = s.folded ? '#ccc' : '#007bff'

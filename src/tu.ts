@@ -355,13 +355,26 @@ export function safeExecute<T>(fn: () => T, defaultValue: T | ((e: unknown) => T
     }
 }
 
-// create an advanced object, where observers will be called when any property changes
-// onChange will be called immediately when created
-// substantial observers can be added using addObserver method, which will also be called immediately when added
-export function createObservableState<T extends object>(initialState: T, onChange: (s: T) => void): T & { addObserver: (cb: (s: T) => void) => void } {
+// create an advanced object, where 
+// 1. observers will be called when any property changes
+//    - onChange will be called immediately when created
+//    - substantial observers can be added using addObserver method, which will also be called immediately when added
+// 2. state will be persisted to localStorage if stateKey is given
+export function createObservableState<T extends object>(stateKey: string|null, initialState: T, onChange: (s: T) => void): T & { addObserver: (cb: (s: T) => void) => void } {
+    function loadState() {
+        if (!stateKey) return;
+        const stored = localStorage.getItem(stateKey)
+        return stored ? JSON.parse(stored) : {}
+    }
+    function saveState(s: T) {
+        if (!stateKey) return;
+        localStorage.setItem(stateKey, JSON.stringify(s))
+    }
+
     const observers: ((s: T) => void)[] = [onChange];
+    const internalState = {...initialState, ...loadState() } as T
     
-    const proxy = new Proxy(initialState, {
+    const proxy = new Proxy(internalState, {
         set(target, prop: string | symbol, value: any) {
             if (prop === 'addObserver') {
                 return false; // 防止覆盖 addObserver
@@ -376,6 +389,7 @@ export function createObservableState<T extends object>(initialState: T, onChang
                 (target as any)[prop] = value;
                 observers.forEach(cb => cb(proxy as any));
             }
+            saveState(proxy)
             return true;
         },
         get(target, prop: string | symbol) {
