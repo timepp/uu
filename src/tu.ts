@@ -355,24 +355,42 @@ export function safeExecute<T>(fn: () => T, defaultValue: T | ((e: unknown) => T
     }
 }
 
-export function createObservableState<T extends object>(initialState: T, onChange: (s: T) => void): T {
+// create an advanced object, where observers will be called when any property changes
+// onChange will be called immediately when created
+// substantial observers can be added using addObserver method, which will also be called immediately when added
+export function createObservableState<T extends object>(initialState: T, onChange: (s: T) => void): T & { addObserver: (cb: (s: T) => void) => void } {
+    const observers: ((s: T) => void)[] = [onChange];
+    
     const proxy = new Proxy(initialState, {
         set(target, prop: string | symbol, value: any) {
+            if (prop === 'addObserver') {
+                return false; // 防止覆盖 addObserver
+            }
             if (typeof prop === 'string' && prop in target) {
                 if ((target as any)[prop] !== value) {
                     (target as any)[prop] = value;
-                    onChange(proxy);
+                    observers.forEach(cb => cb(proxy as any));
                 }
             } else {
                 // 允许新增属性（可选）
                 (target as any)[prop] = value;
-                onChange(proxy);
+                observers.forEach(cb => cb(proxy as any));
             }
             return true;
+        },
+        get(target, prop: string | symbol) {
+            if (prop === 'addObserver') {
+                return (cb: (s: T) => void) => {
+                    observers.push(cb);
+                    cb(proxy as any);
+                };
+            }
+            return (target as any)[prop];
         }
     });
-    onChange(proxy)
-    return proxy;
+    
+    observers.forEach(cb => cb(proxy as any));
+    return proxy as T & { addObserver: (cb: (s: T) => void) => void };
 }
 
 export function createState<T extends object>(object: T, properties: (keyof T)[], stateKey?: string): Pick<T, typeof properties[number]> {

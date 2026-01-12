@@ -557,20 +557,35 @@ export type InputElement = string | {
     valueId?: string // For input type
     onClick?: (params: Record<string, string>) => HTMLElement | Promise<HTMLElement> | void
 }
-export function createDataArea(parent: Element|null, params: InputElement[]) {
+export function createDataArea(parent: Element|null, foldable: boolean, params: InputElement[]) {
     const div = createElement(parent, 'div', ['border', 'border-light-subtle', 'mb-2'])
     const inputArea = createElement(div, 'div', ['p-1', 'd-flex', 'gap-2', 'overflow-auto'])
     const resultArea = createElement(div, 'div', ['mt-2', 'p-1'])
     const regulatedParams = params.map(p => (typeof p === 'string')? { name: p } : p)
     const inputs = {} as Record<string, HTMLInputElement>
+
+    const state = tu.createObservableState({showResult: true}, s => {
+        resultArea.style.display = s.showResult ? '' : 'none'
+    })
+
+    if (foldable) {
+        const toggleBtn = createElement(inputArea, 'button', ['btn', 'btn-secondary'])
+        toggleBtn.title = 'Show/Hide Result Area'
+        toggleBtn.onclick = () => state.showResult = !state.showResult
+        state.addObserver(s => toggleBtn.replaceChildren(s.showResult ? fa('fa-chevron-up') : fa('fa-chevron-down')))
+    }
+
     for (const p of regulatedParams) {
         if (p.onClick) {
             // button
             const btn = createButton(inputArea, ['btn', 'btn-primary'], p.name, async () => {
-                const r = await p.onClick!(Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, v.value])))
+                if (!p.onClick) return
+                const params = Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, v.value]))
+                const r = await callAsyncFunctionWithProgress(async () => await p.onClick!(params))
                 if (r) {
                     setContent(resultArea, r)
                 }
+                state.showResult = true
             })
             btn.style.whiteSpace = 'nowrap'
         } else {
