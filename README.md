@@ -46,4 +46,5 @@ npm run incver
 
 ## Todo
 
-[ ] stringify support a callback function to receive the mapping between value and its position in the final string
+[x] stringify support a callback function to receive the mapping between value and its position in the final string
+[ ] hide column if all values are empty (null, undefined, etc) in visualizeArray

@@ -555,6 +555,7 @@ export async function promptMultiline(title: string, tip: string | HTMLElement, 
 export type InputElement = string | {
     name: string
     valueId?: string // For input type
+    initialValue?: string // For input type
     onClick?: (params: Record<string, string>) => HTMLElement | Promise<HTMLElement> | void
 }
 export function createDataArea(parent: Element|null, foldable: boolean, params: InputElement[]) {
@@ -590,7 +591,7 @@ export function createDataArea(parent: Element|null, foldable: boolean, params: 
             btn.style.whiteSpace = 'nowrap'
         } else {
             // input
-            const {ig, input} = createAutofillInput(p.name, '', p.valueId || p.name)
+            const {ig, input} = createAutofillInput(p.name, '', p.initialValue || '', p.valueId || p.name)
             // make input group grow to fill available space
             ig.classList.add('flex-grow-1')
             ig.style.minWidth = '200px'
@@ -607,7 +608,7 @@ export function createDataArea(parent: Element|null, foldable: boolean, params: 
 export function createInputAction(title: string, actionName: string, valueId: string, handler: (value: string) => Promise<HTMLElement>, value?: string) {
     const div = createElement(null, 'div', ['border', 'border-light-subtle', 'rounded'])
     const resultArea = createElement(null, 'div', ['mt-2', 'p-1'])
-    const {ig, input, button} = createAutofillInput(title, '', valueId, async v => {
+    const {ig, input, button} = createAutofillInput(title, '', '', valueId, async v => {
         const result = await callAsyncFunctionWithProgress(() => handler(v), `${actionName}`)
         setContent(resultArea, result)
     }, actionName)
@@ -620,7 +621,7 @@ export function createInputAction(title: string, actionName: string, valueId: st
     return div
 }
 
-export function createAutofillInput(title: string, placeholder: string, valueId = title, handler?: (value: string) => void, btn?: string) {
+export function createAutofillInput(title: string, placeholder: string, initialValue: string, valueId = title, handler?: (value: string) => void, btn?: string) {
     const ig = createElement(null, 'div', ['input-group'])
     const label = createElement(ig, 'label', ['input-group-text'], title, {minWidth: '100px'})
     const input = createElement(ig, 'input', ['form-control'], '', {}, {placeholder})
@@ -644,7 +645,7 @@ export function createAutofillInput(title: string, placeholder: string, valueId 
         }
     }
     input.id = valueId
-    input.value = localStorage.getItem(`input-${valueId}`) || ''
+    input.value = initialValue || localStorage.getItem(`input-${valueId}`) || ''
     label.style.cursor = 'pointer'
     label.onclick = async () => {
         // autofill support
@@ -653,13 +654,16 @@ export function createAutofillInput(title: string, placeholder: string, valueId 
             ...predefined,
             ...history.map(h => ({value: h, comment: 'from history'})).filter(p => !predefined.find(pp => pp.value === p.value))
         ]
+        // add current value to candidates if not exists
+        if (!candidates.find(c => c.value === input.value) && input.value.trim() !== '') {
+            candidates.unshift({value: input.value, comment: 'current value'})
+        }
         if (candidates.length !== 0) {
             const r = await chooseOne(candidates)
             if (r !== undefined) {
                 input.value = r
                 localStorage.setItem(`input-${valueId}`, input.value)
-                // update history
-
+                updateHistory(r)
             }
         }
         input.focus()
@@ -923,7 +927,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 }
                 v = v[part]
             }
-            console.log('fetching', prop, 'got', v)
             return v
         }
     }
@@ -1237,12 +1240,13 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         sortHint.textContent = `Random`
         gotoPage(0)
     }
-
-    filter.oninput = () => {
-        const v = filter.value
-        state.filter = v
-        applyFilter(v)
-    }
+    filter.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            const v = filter.value
+            state.filter = v
+            applyFilter(v)
+        }
+    })
 
     associateDropdownActions(optionBtn, {
         'Insights': async () => {
@@ -1523,7 +1527,7 @@ export function createFoldableArea(parent: Element | null, title: string, conten
     const header = createElement(div, 'div', ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'], '', {cursor: 'pointer'})
     const titleElem = createElement(header, 'span', [], title)
     const toggleBtn = createElement(header, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'])
-    const body = createElement(div, 'div', ['card-body'])
+    const body = createElement(div, 'div', ['card-body', 'p-1'])
     if (content) {
         body.appendChild(content)
     }
@@ -1648,8 +1652,9 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
         EditorView.decorations.of(commentDecorations), // 应用注释装饰
         commentTooltip,
         EditorView.theme({
-            "&": { height: "100%" },
-            ".cm-scroller": { overflow: "auto" }
+                        "&": { height: "100%" },
+                        ".cm-scroller": { overflow: "auto" },
+                        ".cm-content": { whiteSpace: "pre-wrap", wordBreak: "break-word" } // 自动换行
         }),
         search({ top: true }),                  // 搜索功能，搜索框在顶部
         keymap.of(searchKeymap)               // 搜索相关快捷键
