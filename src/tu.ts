@@ -78,6 +78,28 @@ export function trimEmptyLines(str: string, ...locations: ('head' | 'tail' | 'mi
     return lines.join('\n');
 }
 
+// get a number for string folding, so that "blabla...x more chars..." is just at desired length
+// returns x, and the inditor string '... x more chars...'
+export function getStringFoldingIndicator(fullStringLength: number, desiredLength: number) {
+    const ls = '...'
+    const rs = ' more chars...'
+    // fullStringLength - desiredLength = x - (ls + rs).length - number of digits in x
+    // we iterate on the digits of x, to find the correct x
+    let x = fullStringLength - desiredLength + ls.length + rs.length + 1
+    for (let digits = 1; digits <= 10; digits++) {
+        x = fullStringLength - desiredLength + ls.length + rs.length + digits
+        if (`${x}`.length === digits) {
+            break
+        }
+    }
+
+    return {
+        foldedLength: x,
+        foldIndicator: `${ls}${x}${rs}`
+    }
+}
+
+
 export function indentTextWithSpaces(text: string, spaces: number): string {
     const indent = ' '.repeat(spaces);
     return text.split('\n').map(line => indent + line).join('\n');

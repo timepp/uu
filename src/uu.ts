@@ -1074,7 +1074,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             const formater = swrapper || cfg.columnFormater || generalColumnFormatter
             const formattedValue = (prop === cfg.rawIndexColumn) ? `${dataIndex + 1}` : formater(item, prop)
             if (typeof formattedValue === 'string') {
-                td.textContent = formattedValue
+                td.appendChild(createFoldedString(formattedValue, 80))
             }
             else if (formattedValue instanceof HTMLElement) {
                 td.appendChild(formattedValue)
@@ -1279,14 +1279,41 @@ export function createFoldedString(content: string, maxLength: number) {
     if (content.length <= maxLength) {
         return createElement(null, 'span', [], content)
     } else {
-        const c = Math.floor((maxLength - 3) / 2)
+        const f = tu.getStringFoldingIndicator(content.length, maxLength)
+        const visibleLength = content.length - f.foldedLength
+        const c = Math.floor(visibleLength / 2)
         const leftContent = content.slice(0, c)
         const rightContent = content.slice(content.length - c)
-        const shortContent = leftContent + `...` + rightContent
-        const span = createElement(null, 'span', [], shortContent)
-        // hover to show full content
-        span.title = content
-        return span
+        // const shortContent = leftContent + `...` + rightContent
+        const div = createElement(null, 'div')
+        const folder = createElement(div, 'span', ['me-1'], '>>')
+        const shortContent = createElement(div, 'span')
+        createElement(shortContent, 'span', [], leftContent)
+        const foldIndicator = createElement(shortContent, 'span', ['text-muted', 'border'], f.foldIndicator)
+        createElement(shortContent, 'span', [], rightContent)
+        const longContent = createElement(div, 'span', [], content, { display: 'none' })
+        folder.style.color = 'blue'
+        folder.style.cursor = 'pointer'
+        folder.onclick = () => {
+            if (folder.textContent === '>>') {
+                folder.textContent = '<<'
+            } else {
+                folder.textContent = '>>'
+            }
+            syncDisplay(shortContent, folder.textContent === '>>')
+            syncDisplay(longContent, folder.textContent === '<<')
+        }
+        foldIndicator.style.cursor = 'pointer'
+        foldIndicator.onclick = () => {
+            const pre = createElement(null, 'pre')
+            pre.style.maxWidth = '80vw'
+            pre.style.whiteSpace = 'pre-wrap'
+            pre.style.wordBreak = 'break-all'
+            pre.textContent = content
+            showInDialog('Full Content', pre)
+        }
+        
+        return div
     }
 }
 
@@ -1596,19 +1623,43 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
     const visulizers = [] as {
         start: number,
         end: number,
+        type: 'fold' | 'visualizer',
         marker: any,
         render: EntityRenderer
     }[]
-    const doc = callback? tu.safeStringify(obj, 2, Infinity, Infinity, false, (path, value, start, end) => {
+    const doc = callback? tu.safeStringify(obj, 2, 80, Infinity, false, (path, value, start, end) => {
         const renderer = callback(path, value)
         if (renderer) {
             visulizers.push({ 
+                type: 'visualizer',
                 start, 
                 end, 
                 marker: Decoration.mark({attributes: { style: renderer.anchorStyle }, inclusive: false }),
                 render: renderer });
+        } else if (typeof value === 'string' && value.length > end - start) {
+            // this is string folding, we need to higlight it and when hover, show full string with \r\n processed
+            visulizers.push({
+                type: 'fold',
+                start,
+                end,
+                marker: Decoration.mark({attributes: { style: 'text-decoration: underline dotted; cursor: help;' }, inclusive: false }),
+                render: {
+                    anchorStyle: '',
+                    render: () => {
+                        const container = createElement(null, 'div')
+                        const pre = createElement(container, 'pre', [], '', {
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-all',
+                            margin: '0',
+                            maxWidth: '80vw'
+                        })
+                        pre.textContent = value
+                        return container
+                    }
+                }
+            });
         }
-    }) : JSON.stringify(obj, null, 2);
+    }).str : JSON.stringify(obj, null, 2);
 
     // // 创建 Decoration Set
     const commentDecorations = Decoration.set(
@@ -1618,7 +1669,7 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
     // hover tooltip 扩展
     const commentTooltip = hoverTooltip((view:any, pos:number) => {
       // 查找 pos 是否落在某个 comment 范围内
-      for (const c of visulizers) {
+      for (const c of visulizers.filter(v => v.type === 'visualizer')) {
         if (pos >= c.start && pos <= c.end) {
           return {
             pos: c.start,
@@ -1642,26 +1693,52 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
       return null; // 没找到返回 null，不显示
     });
 
+    // 点击事件处理器
+    const clickHandler = EditorView.domEventHandlers({
+      click: (event: MouseEvent, view: any) => {
+        const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
+        if (pos === null) return false
+        
+        // 查找点击位置是否在某个 visualizer 范围内
+        for (const c of visulizers) {
+          if (pos >= c.start && pos <= c.end) {
+            // 找到了，显示对话框
+            const rendered = c.render.render()
+            if (rendered instanceof Promise) {
+              rendered.then(element => {
+                showInDialog('Details', element)
+              })
+            } else {
+              showInDialog('Details', rendered)
+            }
+            return true
+          }
+        }
+        return false
+      }
+    })
+
     const state = EditorState.create({
-      doc: JSON.stringify(obj, null, 2),
+      doc,
       extensions: [
         lineNumbers(),                          // 显示行号
         syntaxHighlighting(defaultHighlightStyle), // 默认语法高亮样式
         json(),                                 // JSON 语言支持（解析 + 高亮）
         EditorState.readOnly.of(true),          // 状态级只读：禁止通过键盘/粘贴等修改内容
-        EditorView.decorations.of(commentDecorations), // 应用注释装饰
-        commentTooltip,
+         EditorView.decorations.of(commentDecorations), // 应用注释装饰
+         commentTooltip,                        // 保留 hover tooltip
+         clickHandler,                          // 添加点击处理器
         EditorView.theme({
                         "&": { height: "100%" },
                         ".cm-scroller": { overflow: "auto" },
-                        ".cm-content": { whiteSpace: "pre-wrap", wordBreak: "break-word" } // 自动换行
+                        // ".cm-content": { whiteSpace: "pre-wrap", wordBreak: "break-word" } // 自动换行
         }),
         search({ top: true }),                  // 搜索功能，搜索框在顶部
         keymap.of(searchKeymap)               // 搜索相关快捷键
       ]
     });
     const view = new EditorView({ state, parent });
-    
+    parent.style.minWidth = '50vw'
     return parent;
 }
 
