@@ -95,6 +95,7 @@ export function getStringFoldingIndicator(fullStringLength: number, desiredLengt
 
     return {
         foldedLength: x,
+        unfoldedLength: fullStringLength - x,
         foldIndicator: `${ls}${x}${rs}`
     }
 }
@@ -236,7 +237,7 @@ export function stringify(obj: any, space?: number | string, compact = false, ma
     return safeStringify(obj, space, maxStrLen, maxArrSize, compact).str
 }
 
-export type SafeStringifyCallback = (path: string[], value: any, startPos: number, endPos: number) => void
+export type SafeStringifyCallback = (path: string[], value: any, startPos: number, endPos: number, isTrimmed: boolean) => void
 export function safeStringify(obj: any, space: number | string | undefined, maxStrLen = Infinity, maxArrSize = Infinity, compact = true, callback?: SafeStringifyCallback) {
     const ssc = createSsContext()
     const str = safeStringifyInternal(obj, [], [], 0, typeof space === 'number' ? ' '.repeat(space) : space, compact, maxStrLen, maxArrSize, ssc, callback)
@@ -271,6 +272,7 @@ function safeStringifyInternal(obj: any, parents: object[], path: string[], pos:
     //     return `${open}\n${inner}\n${indent}${close}`
     // }
 
+    let isTrimmed = false
     let str = ''
     if (obj === null) {
         str = 'null'
@@ -279,7 +281,9 @@ function safeStringifyInternal(obj: any, parents: object[], path: string[], pos:
     } else if (typeof obj === 'string') {
         let v = obj
         if (obj.length > maxStrLen) {
-            v = obj.slice(0, maxStrLen - 12) + ` …${obj.length - maxStrLen + 12} more chars…`
+            const f = getStringFoldingIndicator(obj.length, maxStrLen)
+            v = obj.slice(0, f.unfoldedLength) + f.foldIndicator
+            isTrimmed = true
             ssc.trimmedStrings++
         }
         str = JSON.stringify(v)
@@ -297,6 +301,7 @@ function safeStringifyInternal(obj: any, parents: object[], path: string[], pos:
             if (Array.isArray(obj)) {
                 let arr = obj
                 if (obj.length > maxArrSize) {
+                    isTrimmed = true
                     ssc.trimmedArrays++
                     arr = obj.slice(0, maxArrSize - 1)
                     arr.push(`…${obj.length - maxArrSize + 1} more items…`)
@@ -349,7 +354,7 @@ function safeStringifyInternal(obj: any, parents: object[], path: string[], pos:
     }
     
     if (callback) {
-        callback(path, obj, pos, pos + str.length)
+        callback(path, obj, pos, pos + str.length, isTrimmed)
     }
     return str
 }

@@ -558,11 +558,68 @@ export type InputElement = string | {
     initialValue?: string // For input type
     onClick?: (params: Record<string, string>) => HTMLElement | Promise<HTMLElement> | void
 }
+
+export type Input = {
+    type: 'input' | 'button' | 'select',
+    id: string,
+    name?: string,
+    options?: string[],
+    initialValue?: string
+}
+export function createInputArea(parent: Element|null, elements: string | Input[]) {
+    if (typeof elements === 'string') {
+        // schema in the string: input:username User Name | input:age | button:search
+        const parts = elements.split('|').map(p => p.trim())
+        const params = parts.map(part => {
+            const colonPos = part.indexOf(':')
+            const spacePos = part.indexOf(' ')
+            if (colonPos === -1) {
+                throw new Error(`Invalid input area schema: ${part}`)
+            }
+            const type = part.substring(0, colonPos)
+            const id = (spacePos === -1) ? part.substring(colonPos + 1) : part.substring(colonPos + 1, spacePos)
+            const name = (spacePos === -1) ? undefined : part.substring(spacePos + 1)
+            return { type: type as 'input' | 'button' | 'select', id, name }
+        })
+        return createInputArea(parent, params)
+    }
+    const inputs: Record<string, HTMLInputElement> = {}
+    const buttons: Record<string, HTMLButtonElement> = {}
+    const selects: Record<string, HTMLSelectElement> = {}
+    const div = createElement(parent, 'div', ['p-1', 'd-flex', 'gap-2', 'overflow-auto'])
+    for (const e of elements) {
+        if (e.type === 'input') {
+            const {ig, input} = createAutofillInput(e.name || e.id, '', e.initialValue || '', e.id)
+            // make input group grow to fill available space
+            ig.classList.add('flex-grow-1')
+            div.appendChild(ig)
+            inputs[e.id] = input
+        } else if (e.type === 'button') {
+            const btn = createButton(div, ['btn', 'btn-primary'], e.name || e.id)
+            buttons[e.id] = btn
+        } else if (e.type === 'select') {
+            const ig = createElement(div, 'div', ['input-group', 'flex-grow-1'])
+            const label = createElement(ig, 'label', ['input-group-text'], e.name || e.id, {minWidth: '100px'})
+            const select = createElement(ig, 'select', ['form-select'], '', {}, {id: e.id})
+            if (e.options) {
+                for (const option of e.options) {
+                    const optionElem = createElement(select, 'option', [], option, {}, {value: option})
+                    if (e.initialValue && e.initialValue === option) {
+                        optionElem.selected = true
+                    }
+                }
+            }
+            selects[e.id] = select
+        }
+    }
+    return { div, inputs, buttons, selects }
+}
+
 export function createDataArea(parent: Element|null, foldable: boolean, params: InputElement[]) {
     const div = createElement(parent, 'div', ['border', 'border-light-subtle', 'mb-2'])
+    const regulatedParams = params.map(p => (typeof p === 'string')? { name: p } : p)
     const inputArea = createElement(div, 'div', ['p-1', 'd-flex', 'gap-2', 'overflow-auto'])
     const resultArea = createElement(div, 'div', ['mt-2', 'p-1'])
-    const regulatedParams = params.map(p => (typeof p === 'string')? { name: p } : p)
     const inputs = {} as Record<string, HTMLInputElement>
 
     const state = tu.createObservableState(null, {showResult: true}, s => {
@@ -858,11 +915,18 @@ export type VisualizeConfig<T extends object> = {
 
     // initial columns to show, if not present, all columns are shown
     columns: string[]
+
+    // whether to hide columns which as the same value for all items
+    // default: true
+    // take effect only when `columns` is not provided
+    hideUniformColumns: boolean
+    
     // initial sort by settings, if not present, no sorting is applied
     sortBy: {
         column: string
         order: 'asc' | 'desc'
     }[]
+
     // initial filter string, if not present, no filtering is applied
     filter: string
 
@@ -882,7 +946,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
     const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
     const itemFilter = cfg.itemFilter || ((item: T, filter: string) => {
-        return tu.fuzzyFind(item, filter) !== null
+        return tu.fuzzyFind(item, filter, false) !== null
     })
     const renderStyle = cfg.renderStyle || 'table'
     
@@ -903,6 +967,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     // now paging section, which looks like 4 buttons and an edit: "<< < [8] > >>
 
+    const hideUniformColumns = cfg.hideUniformColumns??true
     let allProps = tu.dataProperties(arr)
     if (cfg.flattenNestedObjects) {
         const props = new Set<string>()
@@ -943,14 +1008,33 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     // properties used to construct table columns
     // presentation columns should be put before other columns but after raw index column
     const presentationColumns = cfg.columns ?? []
-    const properties = [
+    const allColumns = [
         cfg.rawIndexColumn, 
         ...presentationColumns,
         ...allProps.filter(p => !presentationColumns.includes(p))
     ].filter(v => !!v) as string[]
+    let meaningfulProps = allProps
+    if (hideUniformColumns) {
+        meaningfulProps = allProps.filter(p => {
+            const firstValue = valueFetcher(arr[0], p)
+            return arr.some(item => {
+                const v = valueFetcher(item, p)
+                return String(v) !== String(firstValue)
+            })
+        })
+    }
+    const meaningfulColumns = [
+        cfg.rawIndexColumn, 
+        ...presentationColumns,
+        ...meaningfulProps.filter(p => !presentationColumns.includes(p))
+    ].filter(v => !!v) as string[]
     
     const state = tu.createState(cfg, ['columns', 'sortBy', 'filter', 'pageSize'], cfg.stateKey)
     filter.value = state.filter || ''
+
+    function visibleColumns() {
+        return state.columns || meaningfulColumns
+    }
 
     function tableRenderer(startIndex: number, endIndex: number) {
         const table = createElement(null, 'table', ['table', 'table-bordered', 'table-hover'])
@@ -958,7 +1042,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const tbody = createElement(table, 'tbody')
         const tr = createElement(thead, 'tr', [])
         const sortBy = state.sortBy || []
-        for (const prop of state.columns ?? properties) {
+        for (const prop of visibleColumns()) {
             const th = createElement(tr, 'th')
             createElement(th, 'span', [], prop)
             const i = sortBy.findIndex(s => s.column === prop)
@@ -1004,7 +1088,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         })
         for (let i = startIndex; i < endIndex; i++) {
             if (cfg.itemFormater) {
-                container.appendChild(cfg.itemFormater(data[i].item, data[i].index, state.columns ?? properties))
+                container.appendChild(cfg.itemFormater(data[i].item, data[i].index, visibleColumns()))
                 continue
             }
 
@@ -1012,7 +1096,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             const dataIndex = data[i].index
             const card = createElement(container, 'div', ['card', 'p-1', 'hover-effect'], '', cfg.itemStyle?.(item, dataIndex))
             // const cardBody = createElement(card, 'div', ['card-body', 'd-flex', 'flex-column', 'gap-2'])
-            for (const [j, prop] of (state.columns ?? properties).entries()) {
+            for (const [j, prop] of visibleColumns().entries()) {
                 const div = createElement(card, 'div', [], '', cfg.columnProperties?.[prop]?.style)
                 if (cfg.columnProperties?.[prop]?.onCellClick) {
                     div.style.cursor = 'pointer'
@@ -1063,7 +1147,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     function createRow(item: T, dataIndex: number) {
         const tr = createElement(null, 'tr', [], '', cfg.itemStyle?.(item, dataIndex));
-        for (const [j, prop] of (state.columns??properties).entries()) {
+        for (const [j, prop] of visibleColumns().entries()) {
             const td = createElement(tr, 'td', [], '', cfg.columnProperties?.[prop]?.style)
             if (cfg.columnProperties?.[prop]?.onCellClick) {
                 td.style.cursor = 'pointer'
@@ -1196,8 +1280,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     async function selectFields() {
-        const r = await showSelection('Select Fields', properties, {
-            initialSelection: state.columns??properties, 
+        const r = await showSelection('Select Fields', allColumns, {
+            initialSelection: visibleColumns(), 
             showOrder: true,
             styleModifier: (item, elem) => {
                 if (item === cfg.rawIndexColumn) {
@@ -1214,7 +1298,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     sortBtn.onclick = async () => {
         // construct all properties
-        const allOptions = properties.map(p => [`${p} ${toArrow('asc')}`, `${p} ${toArrow('desc')}`]).flat()
+        const allOptions = allColumns.map(p => [`${p} ${toArrow('asc')}`, `${p} ${toArrow('desc')}`]).flat()
         const sortOptions = state.sortBy?.map(s => `${s.column} ${toArrow(s.order)}`)
         const checker = (oldSelection: string[], newSelection: string[]) => {
             if (newSelection.length > oldSelection.length) {
@@ -1310,7 +1394,7 @@ export function createFoldedString(content: string, maxLength: number) {
             pre.style.whiteSpace = 'pre-wrap'
             pre.style.wordBreak = 'break-all'
             pre.textContent = content
-            showInDialog('Full Content', pre)
+            showDialog('Full String', pre)
         }
         
         return div
@@ -1627,7 +1711,7 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
         marker: any,
         render: EntityRenderer
     }[]
-    const doc = callback? tu.safeStringify(obj, 2, 80, Infinity, false, (path, value, start, end) => {
+    const doc = callback? tu.safeStringify(obj, 2, 80, Infinity, false, (path, value, start, end, isTrimmed) => {
         const renderer = callback(path, value)
         if (renderer) {
             visulizers.push({ 
@@ -1636,7 +1720,7 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
                 end, 
                 marker: Decoration.mark({attributes: { style: renderer.anchorStyle }, inclusive: false }),
                 render: renderer });
-        } else if (typeof value === 'string' && value.length > end - start) {
+        } else if (typeof value === 'string' && isTrimmed) {
             // this is string folding, we need to higlight it and when hover, show full string with \r\n processed
             visulizers.push({
                 type: 'fold',
@@ -1706,10 +1790,10 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
             const rendered = c.render.render()
             if (rendered instanceof Promise) {
               rendered.then(element => {
-                showInDialog('Details', element)
+                showDialog('Details', element)
               })
             } else {
-              showInDialog('Details', rendered)
+              showDialog('Details', rendered)
             }
             return true
           }
