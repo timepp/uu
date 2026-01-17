@@ -420,6 +420,7 @@ export function showDialog<T>(
     // reflow
     if (content || actions) {
         dialog.style.height = `${dialog.offsetHeight + 1}px`
+        dialog.style.width = `${dialog.offsetWidth + 1}px`
     }
     return promise
 }
@@ -562,13 +563,14 @@ export type InputElement = string | {
 export type Input = {
     type: 'input' | 'button' | 'select',
     id: string,
-    name?: string,
-    options?: string[],
+    label?: string,
+    options?: string[], // for select
+    grow?: number,
     initialValue?: string
 }
 export function createInputArea(parent: Element|null, elements: string | Input[]) {
     if (typeof elements === 'string') {
-        // schema in the string: input:username User Name | input:age | button:search
+        // schema in the string: input:user User Name | input:age | button:search
         const parts = elements.split('|').map(p => p.trim())
         const params = parts.map(part => {
             const colonPos = part.indexOf(':')
@@ -586,20 +588,22 @@ export function createInputArea(parent: Element|null, elements: string | Input[]
     const inputs: Record<string, HTMLInputElement> = {}
     const buttons: Record<string, HTMLButtonElement> = {}
     const selects: Record<string, HTMLSelectElement> = {}
-    const div = createElement(parent, 'div', ['p-1', 'd-flex', 'gap-2', 'overflow-auto'])
+    const div = createElement(parent, 'div', ['d-flex', 'gap-2', 'overflow-auto'])
     for (const e of elements) {
         if (e.type === 'input') {
-            const {ig, input} = createAutofillInput(e.name || e.id, '', e.initialValue || '', e.id)
+            const {ig, input} = createAutofillInput(e.label || e.id, '', e.initialValue || '', e.id)
             // make input group grow to fill available space
-            ig.classList.add('flex-grow-1')
+            ig.classList.add(`flex-shrink-0`, 'w-auto')
+            ig.style.flexGrow = (e.grow || 1).toString()
+            // ig.style.width = '0'
             div.appendChild(ig)
             inputs[e.id] = input
         } else if (e.type === 'button') {
-            const btn = createButton(div, ['btn', 'btn-primary'], e.name || e.id)
+            const btn = createButton(div, ['btn', 'btn-primary'], e.label || e.id)
             buttons[e.id] = btn
         } else if (e.type === 'select') {
-            const ig = createElement(div, 'div', ['input-group', 'flex-grow-1'])
-            const label = createElement(ig, 'label', ['input-group-text'], e.name || e.id, {minWidth: '100px'})
+            const ig = createElement(div, 'div', ['input-group', 'flex-shrink-0', 'w-auto'])
+            const label = createElement(ig, 'label', ['input-group-text'], e.label || e.id, {minWidth: '100px'})
             const select = createElement(ig, 'select', ['form-select'], '', {}, {id: e.id})
             if (e.options) {
                 for (const option of e.options) {
@@ -920,6 +924,8 @@ export type VisualizeConfig<T extends object> = {
     // default: true
     // take effect only when `columns` is not provided
     hideUniformColumns: boolean
+
+    stringFoldThreshold: number
     
     // initial sort by settings, if not present, no sorting is applied
     sortBy: {
@@ -1014,13 +1020,17 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         ...allProps.filter(p => !presentationColumns.includes(p))
     ].filter(v => !!v) as string[]
     let meaningfulProps = allProps
-    if (hideUniformColumns) {
+    if (hideUniformColumns && arr.length > 1) {
         meaningfulProps = allProps.filter(p => {
             const firstValue = valueFetcher(arr[0], p)
-            return arr.some(item => {
+            const hasDifferentValue = arr.some(item => {
                 const v = valueFetcher(item, p)
-                return String(v) !== String(firstValue)
+                return JSON.stringify(v) !== JSON.stringify(firstValue)
             })
+            if (!hasDifferentValue) {
+                console.log(`Hiding column '${p}' as all values are the same: ${firstValue}`)
+            }
+            return hasDifferentValue
         })
     }
     const meaningfulColumns = [
@@ -1158,7 +1168,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             const formater = swrapper || cfg.columnFormater || generalColumnFormatter
             const formattedValue = (prop === cfg.rawIndexColumn) ? `${dataIndex + 1}` : formater(item, prop)
             if (typeof formattedValue === 'string') {
-                td.appendChild(createFoldedString(formattedValue, 80))
+                td.appendChild(createFoldedString(formattedValue, cfg.stringFoldThreshold??120))
             }
             else if (formattedValue instanceof HTMLElement) {
                 td.appendChild(formattedValue)
@@ -1634,7 +1644,7 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
 
 export function createFoldableArea(parent: Element | null, title: string, content?: HTMLElement, initiallyFolded = true) {
     // create a foldable area using bootstrap card
-    const div = createElement(parent, 'div', ['card', 'mb-2'])
+    const div = createElement(parent, 'div', ['card', 'mb-2', 'mt-2'])
     const header = createElement(div, 'div', ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'], '', {cursor: 'pointer'})
     const titleElem = createElement(header, 'span', [], title)
     const toggleBtn = createElement(header, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'])
