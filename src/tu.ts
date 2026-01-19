@@ -359,6 +359,82 @@ function safeStringifyInternal(obj: any, parents: object[], path: string[], pos:
     return str
 }
 
+// extract json object from a mixed text
+export function extractJsonObjects(text: string) {
+    let startPos = 0
+    const results = []
+    while (startPos < text.length) {
+        const res = extractJsonObject(text.slice(startPos))
+        if (res) {
+            results.push(res.obj)
+            startPos += res.endPos
+        } else {
+            break
+        }
+    }
+    return results
+}
+
+export function extractJsonObject(text: string) {
+    text = text.trim()
+    const stack = []
+    let startPos = -1
+    let inString = false
+    let escapeNext = false
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+
+        if (startPos === -1 && (ch === '{' || ch === '[')) {
+            startPos = i;
+            stack.push(ch);
+            continue;
+        }
+
+        if (startPos === -1) continue;
+
+        if (inString) {
+            if (escapeNext) {
+                escapeNext = false;
+            } else if (ch === '\\') {
+                escapeNext = true;
+            } else if (ch === '"') {
+                inString = false;
+            }
+            continue;
+        } else {
+            if (ch === '"') {
+                inString = true;
+                continue;
+            }
+        }
+
+        if (ch === '{' || ch === '[') {
+            stack.push(ch);
+        } else if (ch === '}' || ch === ']') {
+            if (stack.length > 0) {
+                const last = stack[stack.length - 1];
+                if ((ch === '}' && last === '{') || (ch === ']' && last === '[')) {
+                    stack.pop();
+                    if (stack.length === 0) {
+                        try {
+                            return {
+                                obj: JSON.parse(text.substring(startPos, i + 1)),
+                                startPos,
+                                endPos: i + 1,
+                            };
+                        } catch (e) {
+                            return null;
+                        }
+                    }
+                } else {
+                    return null;
+                }
+            }
+        }
+    }
+    return null;
+}
+
 export function dataProperties(arr: object[]): string[] {
     const propSet = new Set<string>()
     for (const item of arr) {

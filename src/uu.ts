@@ -392,7 +392,7 @@ export function showDialog<T>(
         const acts = actions
         if (Array.isArray(acts)) {
             for (const btnText of acts) {
-                const button = createElement(footerToolbar, 'button', ['btn', 'btn-primary'], btnText)
+                const button = createElement(footerToolbar, 'button', ['btn', 'btn-primary-outline'], btnText)
                 button.onclick = () => {
                     finishFunc(btnText as any)
                 }
@@ -400,7 +400,7 @@ export function showDialog<T>(
             }
         } else {
             for (const [btnText, handler] of Object.entries(acts)) {
-                const button = createElement(footerToolbar, 'button', ['btn', 'btn-primary'], btnText)
+                const button = createElement(footerToolbar, 'button', ['btn', 'btn-outline-secondary'], btnText)
                 button.onclick = async () => {
                     const shouldClose = await handler()
                     if (shouldClose) {
@@ -471,6 +471,22 @@ export async function showJsonResult(title: string, content: string | object, pa
     actions.Close = () => true
 
     showInDialog(title, div, actions)
+}
+
+export function showGeneralText(title: string, content: string) {
+    const pre = createElement(null, 'pre')
+    pre.style.maxWidth = '80vw'
+    pre.style.whiteSpace = 'pre-wrap'
+    pre.style.wordBreak = 'break-all'
+    pre.textContent = content
+    showDialog(title, pre, {
+        actions: {
+            parseJson: () => {
+                const objects = tu.extractJsonObjects(content)
+                showJsonResult('Parsed JSON Objects', objects)
+            }
+        }
+    })
 }
 
 export async function showConfirmationDialog(title: string, text: string) {
@@ -946,7 +962,7 @@ export type VisualizeConfig<T extends object> = {
 
 export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}) {
     if (arr.length === 0) {
-        return createElement(null, 'div', ['alert', 'alert-info'], 'No data to display: empty array.')
+        return createElement(null, 'div', ['alert', 'alert-info', 'mb-0'], 'No data to display: empty array.')
     }
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
@@ -1021,17 +1037,19 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     ].filter(v => !!v) as string[]
     let meaningfulProps = allProps
     if (hideUniformColumns && arr.length > 1) {
-        meaningfulProps = allProps.filter(p => {
+        const hiddenProps = [] as string[]
+        meaningfulProps = [] as string[]
+        allProps.forEach(p => {
             const firstValue = valueFetcher(arr[0], p)
             const hasDifferentValue = arr.some(item => {
                 const v = valueFetcher(item, p)
                 return JSON.stringify(v) !== JSON.stringify(firstValue)
             })
-            if (!hasDifferentValue) {
-                console.log(`Hiding column '${p}' as all values are the same: ${firstValue}`)
-            }
-            return hasDifferentValue
+            hasDifferentValue? meaningfulProps.push(p) : hiddenProps.push(p)
         })
+        if (hiddenProps.length > 0) {
+            console.log(`Hiding columns [${hiddenProps.join(', ')}] as they have the same value for all items.`)
+        }
     }
     const meaningfulColumns = [
         cfg.rawIndexColumn, 
@@ -1047,7 +1065,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     function tableRenderer(startIndex: number, endIndex: number) {
-        const table = createElement(null, 'table', ['table', 'table-bordered', 'table-hover'])
+        const table = createElement(null, 'table', ['table', 'table-bordered', 'table-hover', 'mb-0'])
         const thead = createElement(table, 'thead', ['bg-light'])
         const tbody = createElement(table, 'tbody')
         const tr = createElement(thead, 'tr', [])
@@ -1398,14 +1416,7 @@ export function createFoldedString(content: string, maxLength: number) {
             syncDisplay(longContent, folder.textContent === '<<')
         }
         foldIndicator.style.cursor = 'pointer'
-        foldIndicator.onclick = () => {
-            const pre = createElement(null, 'pre')
-            pre.style.maxWidth = '80vw'
-            pre.style.whiteSpace = 'pre-wrap'
-            pre.style.wordBreak = 'break-all'
-            pre.textContent = content
-            showDialog('Full String', pre)
-        }
+        foldIndicator.onclick = () => showGeneralText('Full Content', content)
         
         return div
     }
