@@ -1993,3 +1993,16 @@ export async function renderDataInsights(info: tu.DataPropStat[]) {
     
     return div
 }
+
+export function injectStyles() {
+    const styleId = 'uu-common-styles'
+    if (document.getElementById(styleId)) return
+    const style = createElement(document.head, 'style', [], '', {}, { id: styleId })
+    style.textContent = `
+        dialog::backdrop {
+            background: rgba(0,0,0,0.25);            /* 微暗化 */
+            backdrop-filter: blur(8px) brightness(0.9);
+            -webkit-backdrop-filter: blur(8px) brightness(0.9); /* Safari */
+        }
+    `
+}
