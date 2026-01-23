@@ -53,6 +53,12 @@ export function trimPrefix(str: string, prefix: string): string {
     return str;
 }
 
+// This is helpful when you want to console.log a url and keep the full url visible
+// (otherwise the browser will render the url as a link and shortens it)
+export function trimHttps(url: string) {
+    return trimPrefix(url, 'https:')
+}
+
 export function trimEmptyLines(str: string, ...locations: ('head' | 'tail' | 'middle')[]): string {
     let lines = str.split('\n');
 

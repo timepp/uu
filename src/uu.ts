@@ -392,7 +392,7 @@ export function showDialog<T>(
         const acts = actions
         if (Array.isArray(acts)) {
             for (const btnText of acts) {
-                const button = createElement(footerToolbar, 'button', ['btn', 'btn-primary-outline'], btnText)
+                const button = createElement(footerToolbar, 'button', ['btn', 'btn-outline-secondary'], btnText)
                 button.onclick = () => {
                     finishFunc(btnText as any)
                 }
@@ -1037,19 +1037,13 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     ].filter(v => !!v) as string[]
     let meaningfulProps = allProps
     if (hideUniformColumns && arr.length > 1) {
-        const hiddenProps = [] as string[]
-        meaningfulProps = [] as string[]
-        allProps.forEach(p => {
+        meaningfulProps = allProps.filter(p => {
             const firstValue = valueFetcher(arr[0], p)
-            const hasDifferentValue = arr.some(item => {
+            return arr.some(item => {
                 const v = valueFetcher(item, p)
                 return JSON.stringify(v) !== JSON.stringify(firstValue)
             })
-            hasDifferentValue? meaningfulProps.push(p) : hiddenProps.push(p)
         })
-        if (hiddenProps.length > 0) {
-            console.log(`Hiding columns [${hiddenProps.join(', ')}] as they have the same value for all items.`)
-        }
     }
     const meaningfulColumns = [
         cfg.rawIndexColumn, 
@@ -1671,7 +1665,7 @@ export function createFoldableArea(parent: Element | null, title: string, conten
     })
 
     header.onclick = () => state.folded = !state.folded
-    return { div, body }
+    return { div, header, body, toggleBtn }
 }
 
 class CodeMirrorLoader {
@@ -1730,10 +1724,10 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
         end: number,
         type: 'fold' | 'visualizer',
         marker: any,
-        render: EntityRenderer
+        render: EntityRenderer|string
     }[]
-    const doc = callback? tu.safeStringify(obj, 2, 80, Infinity, false, (path, value, start, end, isTrimmed) => {
-        const renderer = callback(path, value)
+    const doc = tu.safeStringify(obj, 2, 80, Infinity, false, (path, value, start, end, isTrimmed) => {
+        const renderer = callback?.(path, value)
         if (renderer) {
             visulizers.push({ 
                 type: 'visualizer',
@@ -1748,23 +1742,10 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
                 start,
                 end,
                 marker: Decoration.mark({attributes: { style: 'text-decoration: underline dotted; cursor: help;' }, inclusive: false }),
-                render: {
-                    anchorStyle: '',
-                    render: () => {
-                        const container = createElement(null, 'div')
-                        const pre = createElement(container, 'pre', [], '', {
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-all',
-                            margin: '0',
-                            maxWidth: '80vw'
-                        })
-                        pre.textContent = value
-                        return container
-                    }
-                }
+                render: value
             });
         }
-    }).str : JSON.stringify(obj, null, 2);
+    }).str
 
     // // 创建 Decoration Set
     const commentDecorations = Decoration.set(
@@ -1782,7 +1763,7 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
             above: true,        // 提示框显示在上方（可改成 false 在下方）
             create: () => {
               const dom = document.createElement("div");
-              const rendered = c.render.render();
+              const rendered = (c.render as EntityRenderer).render();
               if (rendered instanceof Promise) {
                 rendered.then(element => {
                   dom.appendChild(element);
@@ -1808,13 +1789,17 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
         for (const c of visulizers) {
           if (pos >= c.start && pos <= c.end) {
             // 找到了，显示对话框
-            const rendered = c.render.render()
-            if (rendered instanceof Promise) {
-              rendered.then(element => {
-                showDialog('Details', element)
-              })
+            if (typeof c.render === 'string') {
+                showGeneralText('Full Content', c.render)
             } else {
-              showDialog('Details', rendered)
+                const rendered = c.render.render()
+                if (rendered instanceof Promise) {
+                    rendered.then(element => {
+                        showDialog('Details', element)
+                    })
+                } else {
+                    showDialog('Details', rendered)
+                }
             }
             return true
           }
@@ -1845,6 +1830,35 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
     const view = new EditorView({ state, parent });
     parent.style.minWidth = '50vw'
     return parent;
+}
+
+export async function createCodeMirrorJsonEditor(initialText: string) {
+    const { EditorState, EditorView, lineNumbers, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap } = await CodeMirrorLoader.getModules();
+    const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '400px', overflow: 'hidden' });
+    const state = EditorState.create({
+        doc: initialText,
+        extensions: [
+            lineNumbers(),                          // 显示行号
+            syntaxHighlighting(defaultHighlightStyle), // 默认语法高亮样式
+            json(),                                 // JSON 语言支持（解析 + 高亮）
+            EditorView.theme({
+                "&": { height: "100%" },
+                ".cm-scroller": { overflow: "auto" },
+                // ".cm-content": { whiteSpace: "pre-wrap", wordBreak: "break-word" } // 自动换行
+            })
+        ]
+    });
+    const view = new EditorView({ state, parent });
+
+    return {
+        div: parent,
+        getValue: () => view.state.doc.toString(),
+        setValue: (text: string) => {
+            view.dispatch({
+                changes: { from: 0, to: view.state.doc.length, insert: text }
+            });
+        }
+    }
 }
 
 class MarkdownLoader {
