@@ -202,6 +202,8 @@ export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>, hin
         createElement(dc, 'hr')
         if (e instanceof Error) {
             createElement(dc, 'pre', ['text-start', 'overflow-auto'], e.stack || e.message)
+        } else if (typeof e === 'string') {
+            createElement(dc, 'pre', ['text-start', 'overflow-auto'], e)
         } else {
             const jsonView = createJsonView(JSON.stringify(e, null, 2))
             jsonView.style.textAlign = "left"
