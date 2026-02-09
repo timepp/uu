@@ -448,7 +448,7 @@ export function setGlobalEntityParser(parser: EntityParser) {
 export async function showJsonResult(title: string, content: string | object, parser?: EntityParser) {
     const obj = typeof content === 'string' ? JSON.parse(content) : content
     const fullText = JSON.stringify(obj, null, 2)
-    const p = (parser || globalEntityParser)? (path: string[], value: any) => {
+    const entityParser = (parser || globalEntityParser)? (path: string[], value: any) => {
         if (parser) {
             const r = parser(path, value)
             if (r) return r
@@ -457,9 +457,27 @@ export async function showJsonResult(title: string, content: string | object, pa
             return globalEntityParser(path, value)
         }
     }: undefined
-    const div = await createCodeMirrorJsonViewer(obj, p)
+    let stringFoldThreshold = 80
+    const createJsonViewer = async () => {
+        return await createCodeMirrorJsonViewer(obj, {
+            stringFoldThreshold,
+            visualizeCallback: entityParser
+        })
+    }
+
+    const div = createElement(null, 'div')
+    div.append(await createJsonViewer())
 
     const actions: Record<string, ButtonAction> = {
+        "Fold Less": async () => {
+            stringFoldThreshold += 80
+            div.replaceChildren(await createJsonViewer())
+        },
+        "Fold More": async () => {
+            stringFoldThreshold -= 80
+            if (stringFoldThreshold < 80) stringFoldThreshold = 80
+            div.replaceChildren(await createJsonViewer())
+        },
         Copy: () => navigator.clipboard.writeText(fullText),
         Download: () => triggerDownload(obj, `${title.replace(/\s+/g, '_')}.json`),
     }
@@ -962,7 +980,7 @@ export type VisualizeConfig<T extends object> = {
 
 export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}) {
     if (arr.length === 0) {
-        return createElement(null, 'div', ['alert', 'alert-info', 'mb-0'], 'No data to display: empty array.')
+        return createElement(null, 'div', ['alert', 'alert-info', 'mb-0'], 'Data is empty.')
     }
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
@@ -1714,9 +1732,14 @@ export type EntityRenderer = {
     anchorStyle: string,
     render: () => HTMLElement | Promise<HTMLElement>
 }
-
 export type VisualizeCallback = (path: string[], value: any) => EntityRenderer|undefined
-export async function createCodeMirrorJsonViewer(obj: object, callback?: VisualizeCallback) {
+
+export type JsonViewerOptions = {
+    stringFoldThreshold?: number
+    visualizeCallback?: VisualizeCallback
+}
+
+export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewerOptions = {}) {
     const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap, openSearchPanel, keymap } = await CodeMirrorLoader.getModules();
     const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '100%', overflow: 'hidden' });
     const visulizers = [] as {
@@ -1726,8 +1749,8 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
         marker: any,
         render: EntityRenderer|string
     }[]
-    const doc = tu.safeStringify(obj, 2, 80, Infinity, false, (path, value, start, end, isTrimmed) => {
-        const renderer = callback?.(path, value)
+    const doc = tu.safeStringify(obj, 2, options.stringFoldThreshold ?? 80, Infinity, false, (path, value, start, end, isTrimmed) => {
+        const renderer = options.visualizeCallback?.(path, value)
         if (renderer) {
             visulizers.push({ 
                 type: 'visualizer',
@@ -1819,16 +1842,30 @@ export async function createCodeMirrorJsonViewer(obj: object, callback?: Visuali
          commentTooltip,                        // 保留 hover tooltip
          clickHandler,                          // 添加点击处理器
         EditorView.theme({
-                        "&": { height: "100%" },
-                        ".cm-scroller": { overflow: "auto" },
-                        // ".cm-content": { whiteSpace: "pre-wrap", wordBreak: "break-word" } // 自动换行
+                        "&": { height: "100%", maxWidth: "100%" },
+                        ".cm-scroller": { overflow: "auto", maxWidth: "100%" },
+                        ".cm-content": { 
+                            whiteSpace: "pre-wrap !important", 
+                            wordBreak: "break-word",
+                            overflowWrap: "anywhere",
+                            maxWidth: "100%"
+                        },
+                        ".cm-line": { 
+                            whiteSpace: "pre-wrap !important", 
+                            wordBreak: "break-word !important",
+                            overflowWrap: "anywhere !important",
+                            maxWidth: "100%"
+                        }
         }),
         search({ top: true }),                  // 搜索功能，搜索框在顶部
         keymap.of(searchKeymap)               // 搜索相关快捷键
       ]
     });
     const view = new EditorView({ state, parent });
-    parent.style.minWidth = '50vw'
+    parent.style.width = '100%'
+    parent.style.maxWidth = '80vw'
+    parent.style.minHeight = '400px'
+    parent.style.maxHeight = '70vh'
     return parent;
 }
 
@@ -1844,7 +1881,7 @@ export async function createCodeMirrorJsonEditor(initialText: string) {
             EditorView.theme({
                 "&": { height: "100%" },
                 ".cm-scroller": { overflow: "auto" },
-                // ".cm-content": { whiteSpace: "pre-wrap", wordBreak: "break-word" } // 自动换行
+                ".cm-content": { whiteSpace: "pre-wrap", wordBreak: "break-word" } // 自动换行
             })
         ]
     });
