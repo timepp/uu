@@ -125,12 +125,14 @@ export function createCheck(parent: Element | null, classes: string[] = [], labe
     return { btn, checkbox }
 }
 
-export function createCheck2(parent: Element | null, classes: string[] = [], labelText: string, accentColor?: string, checked = false, onChange = (checked: boolean) => {}) {
+export function createCheckBtn(parent: Element | null, classes: string[] = [], labelText: string, accentColor?: string, checked = false, onChange = (checked: boolean) => {}) {
     const div = createElement(parent, 'div', ['input-group', 'w-auto', ...classes])
+    div.style.cursor = 'pointer'
     const label = createElement(div, 'label', ['input-group-text'], '', {userSelect: 'none'})
     const checkbox = createElement(label, 'input', ['me-2'], '', {}, {type: 'checkbox'})
     createElement(label, 'span', ['me-2'], ' ', {backgroundColor: '#cccccc', width: '1px', height: '80%'})
     label.append(labelText)
+    label.style.cursor = 'pointer'
 
     checkbox.checked = checked
     if (accentColor) label.style.backgroundColor = checked ? accentColor : ''
