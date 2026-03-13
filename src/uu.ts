@@ -1112,6 +1112,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                     state.sortBy = [{ column: prop, order: 'asc' }]
                 }
                 applySort()
+                gotoPage(0)
             }
         }
 
@@ -1252,6 +1253,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         dataContainer.appendChild(renderer(startIndex, endIndex))
     }
 
+    function applyFilterAndSort(s: string) {
+        applyFilter(s)
+        applySort()
+        gotoPage(0)
+    }
+
     function applyFilter(s: string) {
         if (s.trim() === '') {
             data = allData
@@ -1259,10 +1266,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             data = allData.filter(v => itemFilter(v.item, s))
         }
         counts.textContent = `${data.length} / ${arr.length}`
-        // currentPage = 0
         pager.setTotalItems(data.length)
-        // TODO: there are too many 'gotoPage' calls. 
-        applySort()
     }
 
     function applySort() {
@@ -1298,8 +1302,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         } else {
             data.sort((a, b) => a.index - b.index)
         }
-
-        gotoPage(0)
     }
 
     function syncRegionExistence() {
@@ -1360,6 +1362,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             return {column, order: fromArrow(order) as 'asc' | 'desc'}
         })
         applySort()
+        gotoPage(0)
     }
 
     randomSortBtn.onclick = () => {
@@ -1372,7 +1375,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         if (e.key === 'Enter' && !e.shiftKey) {
             const v = filter.value
             state.filter = v
-            applyFilter(v)
+            applyFilterAndSort(v)
         }
     })
 
@@ -1398,8 +1401,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     // logic start here
     syncRegionExistence()
-    applyFilter(state.filter || '')
-    applySort()
+    applyFilterAndSort(state.filter || '')
     return view
 }
 
@@ -1525,12 +1527,10 @@ export class Pager {
 
     setPageSize(pageSize: number) {
         this.pageSize = pageSize
-        this.gotoPage(this.currentPage)
     }
 
     setTotalItems(totalItems: number) {
         this.totalItems = totalItems
-        this.gotoPage(this.currentPage)
     }
 
     getPageRange(page: number) {
@@ -1556,6 +1556,10 @@ export class Pager {
         this.currentPage = page
         this.updateUI()
         this.onPageChange(this.currentPage, this.pageSize)
+    }
+
+    refreshCurrentPage() {
+        this.gotoPage(this.currentPage)
     }
 
     getElement() {
