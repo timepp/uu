@@ -606,6 +606,9 @@ export type Input = {
     grow?: number,
     initialValue?: string
 }
+/**
+ * Simple form: createInputArea(parent, 'input:name Name | input:age Age | button:search Search')
+ */
 export function createInputArea(parent: Element|null, elements: string | Input[]) {
     if (typeof elements === 'string') {
         // schema in the string: input:user User Name | input:age | button:search
@@ -1249,6 +1252,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     function gotoPage(page: number) {
         // only visible rows falling into the current page are shown, all others are hidden
         const {startIndex, endIndex} = pager.getPageRange(page)
+        console.log(`goto page ${page}, show items from ${startIndex} to ${endIndex}`)
         dataContainer.innerHTML = ''
         dataContainer.appendChild(renderer(startIndex, endIndex))
     }
@@ -1263,7 +1267,10 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         if (s.trim() === '') {
             data = allData
         } else {
-            data = allData.filter(v => itemFilter(v.item, s))
+            data = allData
+            for (const c of s.split(' ')) {
+                data = data.filter(v => itemFilter(v.item, c))
+            }
         }
         counts.textContent = `${data.length} / ${arr.length}`
         pager.setTotalItems(data.length)
