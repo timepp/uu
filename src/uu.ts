@@ -374,8 +374,7 @@ export function showDialog<T>(
         overflow: 'auto',
         padding: '0 10px'
     }, {
-        tabIndex: -1,
-        autofocus: true
+        tabIndex: -1
     })
     if (content) {
         if (typeof content === 'string') {
@@ -420,6 +419,12 @@ export function showDialog<T>(
         onCreate({ dialog, header, closeButton, contentArea, footer, buttons }, finishFunc)
     }
     dialog.showModal()
+    // Keep current page scroll position when moving focus into the dialog.
+    try {
+        contentArea.focus({ preventScroll: true })
+    } catch {
+        contentArea.focus()
+    }
 
     // reflow
     if (content || actions) {
@@ -913,7 +918,11 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
         de.buttons['Cancel'].onclick = () => finish()
 
         updateUI()
-        filter.focus()
+        try {
+            filter.focus({ preventScroll: true })
+        } catch {
+            filter.focus()
+        }
     })
 }
 
