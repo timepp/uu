@@ -1258,7 +1258,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     function applyFilterAndSort(s: string) {
         applyFilter(s)
         applySort()
-        gotoPage(0)
+        pager.gotoPage(0)
     }
 
     function applyFilter(s: string) {
@@ -1301,6 +1301,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         filter.style.backgroundColor = hasFilterError ? '#ffcccc' : (data.length < arr.length ? '#ccffcc' : '')
     }
 
+    const zhCollator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'base' })
+
     function applySort() {
         // update sort hint
         const sortBy = state.sortBy || []
@@ -1321,7 +1323,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                     else if (typeof aValue === 'number' && typeof bValue === 'number') {
                         ret = aValue - bValue
                     } else {
-                        ret = `${aValue}`.localeCompare(`${bValue}`, 'zh-Hans-CN', { sensitivity: 'base' })
+                        ret = zhCollator.compare(`${aValue}`, `${bValue}`)
                     }
                     // console.log(`"${aValue}" vs "${bValue}" => ${ret}`)
                     if (ret !== 0) {
@@ -1425,7 +1427,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 if (!isNaN(n)) {
                     state.pageSize = n > 0 ? n : undefined
                     pager.setPageSize(state.pageSize || Infinity)
-                    gotoPage(0)
+                    pager.gotoPage(0)
                 }
             }
         }
