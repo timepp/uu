@@ -913,6 +913,7 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
         de.buttons['Cancel'].onclick = () => finish()
 
         updateUI()
+        filter.focus()
     })
 }
 
@@ -992,9 +993,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
     const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
-    const itemFilter = cfg.itemFilter || ((item: T, filter: string) => {
-        return tu.fuzzyFind(item, filter, false) !== null
-    })
     const renderStyle = cfg.renderStyle || 'table'
     
     // overall dom
@@ -1264,16 +1262,43 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     function applyFilter(s: string) {
-        if (s.trim() === '') {
+        let hasFilterError = false
+        s = s.trim()
+        if (s === '') {
             data = allData
         } else {
-            data = allData
-            for (const c of s.split(' ')) {
-                data = data.filter(v => itemFilter(v.item, c))
+            const isExpr = /[><]|===?|!==?|&&|\|\||\.\w+\(/.test(s)
+            if (isExpr) {
+                // advanced filter, we compile this as a function
+                const funcCode = `with (item) { return (${s}) }`
+                console.log('compile filter function with code:', funcCode)
+                try {
+                    const filterFunc = new Function('item', funcCode) as (item: T) => boolean
+                    data = allData.filter(v => {
+                        try {
+                            return filterFunc(v.item)
+                        } catch (e) {
+                            return false
+                        }
+                    })
+                } catch (e) {
+                    console.error('invalid filter code', e)
+                    hasFilterError = true
+                    data = []
+                }
+            } else {
+                data = allData
+                const itemFilter = cfg.itemFilter || ((item: T, filter: string) => {
+                    return tu.fuzzyFind(item, filter, false) !== null
+                })
+                for (const c of s.split(' ')) {
+                    data = data.filter(v => itemFilter(v.item, c))
+                }
             }
         }
         counts.textContent = `${data.length} / ${arr.length}`
         pager.setTotalItems(data.length)
+        filter.style.backgroundColor = hasFilterError ? '#ffcccc' : (data.length < arr.length ? '#ccffcc' : '')
     }
 
     function applySort() {
