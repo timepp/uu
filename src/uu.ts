@@ -957,6 +957,7 @@ export type VisualizeConfig<T extends object> = {
     noDefaultAction: boolean
 
     onCellClick: (item: T, prop: string, dataIndex: number) => void
+    onRowClick: (item: T, dataIndex: number) => void
 
     // initial columns to show, if not present, all columns are shown
     columns: string[]
@@ -1239,6 +1240,17 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 btn.onclick = () => action(item, dataIndex)
             }
         }
+
+        if (cfg.onRowClick) {
+            tr.style.cursor = 'pointer'
+            tr.onclick = (e) => {
+                if (window.getSelection()?.toString()) return;
+                // if click on action button, do not trigger row click
+                if ((e.target as HTMLElement).closest('.actions-cell')) return;
+                cfg.onRowClick!(item, dataIndex)
+            }
+        }
+
         return tr
     }
 
