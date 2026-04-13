@@ -990,6 +990,7 @@ export type VisualizeConfig<T extends object> = {
     // item filter, used to filter items given the filter string
     // the default filter will do a deep search on all properties of the item
     // It's recommended to provide a custom filter for better performance, if there are many large items
+    // Custom filter will be disabled when the filter string is exception
     itemFilter: (item: T, filter: string) => boolean
     // If not empty, sort and column settings will be saved to local storage with the given key
     stateKey: string
@@ -1002,7 +1003,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
     const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
-    const renderStyle = cfg.renderStyle || 'table'
+    let renderStyle = cfg.renderStyle || 'table'
     
     // overall dom
     const view = createElement(null, 'div', ['border', 'p-2'])
@@ -1198,7 +1199,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         return container
     }
 
-    const renderer = (renderStyle === 'table') ? tableRenderer : tileRenderer
+    let renderer = (renderStyle === 'table') ? tableRenderer : tileRenderer
 
     function createRow(item: T, dataIndex: number) {
         const tr = createElement(null, 'tr', [], '', cfg.itemStyle?.(item, dataIndex));
@@ -1439,6 +1440,16 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                     pager.gotoPage(0)
                 }
             }
+        },
+        'Switch to Table View': () => {
+            renderStyle = 'table'
+            renderer = tableRenderer
+            pager.refreshCurrentPage()
+        },
+        'Switch to Tile View': () => {
+            renderStyle = 'tile'
+            renderer = tileRenderer
+            pager.refreshCurrentPage()
         }
     })
 
