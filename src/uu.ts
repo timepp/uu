@@ -1322,8 +1322,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         if (sortBy.length > 0) {
             data.sort((a, b) => {
                 for (const s of sortBy) {
-                    const aValue = (s.column === cfg.rawIndexColumn)? a.index : a.item[s.column as keyof T]
-                    const bValue = (s.column === cfg.rawIndexColumn)? b.index : b.item[s.column as keyof T]
+                    const aValue = (s.column === cfg.rawIndexColumn)? a.index : valueFetcher(a.item, s.column)
+                    const bValue = (s.column === cfg.rawIndexColumn)? b.index : valueFetcher(b.item, s.column)
                     if (aValue === bValue) continue
                     let ret = 0
                     if (aValue === undefined) ret = -1
