@@ -1459,6 +1459,23 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     return view
 }
 
+export type VisualizeObjectConfig<T extends object> = {
+}
+
+export function visualizeObject(obj: object, cfg: Partial<VisualizeObjectConfig<any>> = {}) {
+    // create a table to render object properties
+    const table = createElement(null, 'table', ['table', 'table-bordered'])
+    const tbody = createElement(table, 'tbody')
+    const props = tu.dataProperties([obj])
+    for (const prop of props) {
+        const tr = createElement(tbody, 'tr')
+        createElement(tr, 'th', [], prop)
+        const value = obj[prop as keyof typeof obj] as any
+        const td = createElement(tr, 'td', [], value instanceof Object ? tu.stringify(value) : `${value}`)
+    }
+    return table
+}
+
 export function createFoldedString(content: string, maxLength: number) {
     if (content.length <= maxLength) {
         return createElement(null, 'span', [], content)
