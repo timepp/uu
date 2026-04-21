@@ -374,8 +374,7 @@ export function showDialog<T>(
         overflow: 'auto',
         padding: '0 10px'
     }, {
-        tabIndex: -1,
-        autofocus: true
+        tabIndex: -1
     })
     if (content) {
         if (typeof content === 'string') {
@@ -420,6 +419,12 @@ export function showDialog<T>(
         onCreate({ dialog, header, closeButton, contentArea, footer, buttons }, finishFunc)
     }
     dialog.showModal()
+    // Keep current page scroll position when moving focus into the dialog.
+    try {
+        contentArea.focus({ preventScroll: true })
+    } catch {
+        contentArea.focus()
+    }
 
     // reflow
     if (content || actions) {
@@ -913,7 +918,11 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
         de.buttons['Cancel'].onclick = () => finish()
 
         updateUI()
-        filter.focus()
+        try {
+            filter.focus({ preventScroll: true })
+        } catch {
+            filter.focus()
+        }
     })
 }
 
@@ -982,6 +991,7 @@ export type VisualizeConfig<T extends object> = {
     // item filter, used to filter items given the filter string
     // the default filter will do a deep search on all properties of the item
     // It's recommended to provide a custom filter for better performance, if there are many large items
+    // Custom filter will be disabled when the filter string is exception
     itemFilter: (item: T, filter: string) => boolean
     // If not empty, sort and column settings will be saved to local storage with the given key
     stateKey: string
@@ -994,7 +1004,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
     const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
-    const renderStyle = cfg.renderStyle || 'table'
+    let renderStyle = cfg.renderStyle || 'table'
     
     // overall dom
     const view = createElement(null, 'div', ['border', 'p-2'])
@@ -1190,7 +1200,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         return container
     }
 
-    const renderer = (renderStyle === 'table') ? tableRenderer : tileRenderer
+    let renderer = (renderStyle === 'table') ? tableRenderer : tileRenderer
 
     function createRow(item: T, dataIndex: number) {
         const tr = createElement(null, 'tr', [], '', cfg.itemStyle?.(item, dataIndex));
@@ -1270,7 +1280,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     function applyFilterAndSort(s: string) {
         applyFilter(s)
         applySort()
-        gotoPage(0)
+        pager.gotoPage(0)
     }
 
     function applyFilter(s: string) {
@@ -1313,6 +1323,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         filter.style.backgroundColor = hasFilterError ? '#ffcccc' : (data.length < arr.length ? '#ccffcc' : '')
     }
 
+    const zhCollator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'base' })
+
     function applySort() {
         // update sort hint
         const sortBy = state.sortBy || []
@@ -1322,8 +1334,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         if (sortBy.length > 0) {
             data.sort((a, b) => {
                 for (const s of sortBy) {
-                    const aValue = (s.column === cfg.rawIndexColumn)? a.index : a.item[s.column as keyof T]
-                    const bValue = (s.column === cfg.rawIndexColumn)? b.index : b.item[s.column as keyof T]
+                    const aValue = (s.column === cfg.rawIndexColumn)? a.index : valueFetcher(a.item, s.column)
+                    const bValue = (s.column === cfg.rawIndexColumn)? b.index : valueFetcher(b.item, s.column)
                     if (aValue === bValue) continue
                     let ret = 0
                     if (aValue === undefined) ret = -1
@@ -1333,7 +1345,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                     else if (typeof aValue === 'number' && typeof bValue === 'number') {
                         ret = aValue - bValue
                     } else {
-                        ret = `${aValue}`.localeCompare(`${bValue}`, 'zh-Hans-CN', { sensitivity: 'base' })
+                        ret = zhCollator.compare(`${aValue}`, `${bValue}`)
                     }
                     // console.log(`"${aValue}" vs "${bValue}" => ${ret}`)
                     if (ret !== 0) {
@@ -1437,9 +1449,19 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 if (!isNaN(n)) {
                     state.pageSize = n > 0 ? n : undefined
                     pager.setPageSize(state.pageSize || Infinity)
-                    gotoPage(0)
+                    pager.gotoPage(0)
                 }
             }
+        },
+        'Switch to Table View': () => {
+            renderStyle = 'table'
+            renderer = tableRenderer
+            pager.refreshCurrentPage()
+        },
+        'Switch to Tile View': () => {
+            renderStyle = 'tile'
+            renderer = tileRenderer
+            pager.refreshCurrentPage()
         }
     })
 
@@ -1447,6 +1469,23 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     syncRegionExistence()
     applyFilterAndSort(state.filter || '')
     return view
+}
+
+export type VisualizeObjectConfig<T extends object> = {
+}
+
+export function visualizeObject(obj: object, cfg: Partial<VisualizeObjectConfig<any>> = {}) {
+    // create a table to render object properties
+    const table = createElement(null, 'table', ['table', 'table-bordered'])
+    const tbody = createElement(table, 'tbody')
+    const props = tu.dataProperties([obj])
+    for (const prop of props) {
+        const tr = createElement(tbody, 'tr')
+        createElement(tr, 'th', [], prop)
+        const value = obj[prop as keyof typeof obj] as any
+        const td = createElement(tr, 'td', [], value instanceof Object ? tu.stringify(value) : `${value}`)
+    }
+    return table
 }
 
 export function createFoldedString(content: string, maxLength: number) {
