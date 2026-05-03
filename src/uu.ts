@@ -796,6 +796,132 @@ export async function chooseOne(data: (string|AnnotatedString)[]) {
 }
 
 export type SelectionItem = AnnotatedString | string
+export type DraggableSortedContainerOption = {
+    showOrder: boolean
+    interactive: boolean
+    removable: boolean
+    emptyText: string
+    onChange: (items: string[]) => void
+}
+
+export class DraggableSortedContainer {
+    root: HTMLElement
+    private items: string[] = []
+    private dragFromIndex = -1
+
+    constructor(parent: Element | null, private cfg: Partial<DraggableSortedContainerOption> = {}) {
+        this.root = createElement(parent, 'div', ['d-flex'], '', {
+            whiteSpace: 'nowrap',
+            overflow: 'auto',
+            textOverflow: 'ellipsis'
+        })
+    }
+
+    setStrings(arr: string[]) {
+        this.items = [...arr]
+        this.render()
+    }
+
+    getStrings(arr: string[] = []) {
+        arr.length = 0
+        arr.push(...this.items)
+        return arr
+    }
+
+    private emitChange() {
+        this.cfg.onChange?.([...this.items])
+    }
+
+    private render() {
+        this.root.innerHTML = ''
+
+        if (this.items.length === 0) {
+            createElement(this.root, 'span', ['text-muted'], this.cfg.emptyText || '(none)')
+            return
+        }
+
+        for (const [i, item] of this.items.entries()) {
+            const chip = createElement(this.root, 'span', ['me-1', 'px-1', 'rounded', 'd-inline-flex', 'align-items-center'], '', {
+                border: '1px solid #cccccc',
+                backgroundColor: '#f8f9fa',
+                userSelect: 'none'
+            })
+            createElement(chip, 'span', ['me-1'], this.cfg.showOrder ? `${i + 1}: ${item}` : item)
+
+            const clearDropHint = () => {
+                chip.style.borderColor = '#cccccc'
+                chip.style.boxShadow = ''
+            }
+
+            const interactive = this.cfg.interactive ?? true
+            if (interactive) {
+                chip.draggable = true
+                chip.title = 'Drag to reorder'
+
+                chip.ondragstart = (evt: DragEvent) => {
+                    this.dragFromIndex = i
+                    evt.dataTransfer?.setData('text/plain', `${i}`)
+                    if (evt.dataTransfer) evt.dataTransfer.effectAllowed = 'move'
+                    chip.style.opacity = '0.6'
+                }
+
+                chip.ondragend = () => {
+                    chip.style.opacity = '1'
+                    this.dragFromIndex = -1
+                    clearDropHint()
+                }
+
+                chip.ondragover = (evt: DragEvent) => {
+                    evt.preventDefault()
+                    const rect = chip.getBoundingClientRect()
+                    const insertAfter = evt.clientX > rect.left + rect.width / 2
+                    chip.style.borderColor = insertAfter ? '#198754' : '#0d6efd'
+                    chip.style.boxShadow = insertAfter
+                        ? 'inset -3px 0 0 #198754'
+                        : 'inset 3px 0 0 #0d6efd'
+                }
+
+                chip.ondragleave = () => {
+                    clearDropHint()
+                }
+
+                chip.ondrop = (evt: DragEvent) => {
+                    evt.preventDefault()
+                    clearDropHint()
+
+                    const raw = evt.dataTransfer?.getData('text/plain')
+                    const from = raw ? parseInt(raw, 10) : this.dragFromIndex
+                    if (Number.isNaN(from) || from < 0 || from >= this.items.length || from === i) return
+
+                    const rect = chip.getBoundingClientRect()
+                    const insertAfter = evt.clientX > rect.left + rect.width / 2
+                    const insertIndex = i + (insertAfter ? 1 : 0)
+
+                    const newItems = [...this.items]
+                    const [moved] = newItems.splice(from, 1)
+                    const adjustedIndex = from < insertIndex ? insertIndex - 1 : insertIndex
+                    newItems.splice(adjustedIndex, 0, moved)
+
+                    this.items = newItems
+                    this.render()
+                    this.emitChange()
+                }
+            }
+
+            if (this.cfg.removable ?? true) {
+                const removeBtn = createElement(chip, 'a', ['text-decoration-none'], '✕', { cursor: 'pointer' })
+                removeBtn.title = 'Remove'
+                removeBtn.draggable = false
+                removeBtn.onclick = () => {
+                    this.items = this.items.filter((_, index) => index !== i)
+                    this.render()
+                    this.emitChange()
+                }
+            }
+        }
+    }
+}
+
 export type SelectOption = {
     singleSelect: boolean
     pickAndClose: boolean
@@ -803,6 +929,10 @@ export type SelectOption = {
     showOrder: boolean
     showToolbar: boolean
     showStatus: boolean
+
+    // when true, selected items in status bar can be reordered and removed quickly
+    // default: true
+    statusInteractive: boolean
 
     // return `newSelection` if the new selection is valid
     // otherwise, return a selection if checker can fix invalid selection
@@ -831,6 +961,14 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
         // UI
         const dc = createElement(de.contentArea, 'div', ['d-flex', 'flex-column'])
         const statusBar = createElement(dc, 'span', ['form-control'])
+        const selectedPrefix = createElement(statusBar, 'span', ['me-2'], 'Selected: ', { color: 'blue' })
+        const selectedItems = new DraggableSortedContainer(statusBar, {
+            emptyText: '(none)',
+            showOrder: cfg.showOrder,
+            interactive: (cfg.statusInteractive ?? true) && !cfg.singleSelect,
+            removable: (cfg.statusInteractive ?? true) && !cfg.singleSelect,
+            onChange: (newSelection) => onSelectionChange(selection, newSelection)
+        })
         const toolbar = createElement(dc, 'div', ['input-group', 'mb-4', 'mt-2'])
         const filter = createElement(toolbar, 'input', ['form-control'], '', {}, {placeholder: 'Filter'})
         const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☑')
@@ -846,15 +984,12 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
         syncDisplay(unSelectAllBtn, !cfg.singleSelect)
         syncDisplay(de.footer, !cfg.pickAndClose)
 
-        function createStatusView() {
-            const div = createElement(null, 'div', ['d-flex'], '', { whiteSpace: 'nowrap', overflow: 'auto', textOverflow: 'ellipsis' })
-            createElement(div, 'span', ['me-2'], 'Selected: ', {color: 'blue'})
-            div.append(...selection.map((item, i) => createElement(null, 'span', ['me-1'], cfg.showOrder ? `${i + 1}: ${item}` : item)))
-            return div
-        }
-
         function updateUI() {
-            statusBar.replaceChildren(createStatusView())
+            if (!statusBar.firstChild) {
+                statusBar.appendChild(selectedPrefix)
+                statusBar.appendChild(selectedItems.root)
+            }
+            selectedItems.setStrings(selection)
 
             for (const [value, div] of Object.entries(elements)) {
                 const isItemSelected = selection.includes(value)
