@@ -526,7 +526,7 @@ export async function showConfirmationDialog(title: string, text: string) {
 }
 
 export type InputField = {
-    tip: string | HTMLElement,
+    tip: string,
     initialValue?: string,
     multiLine?: boolean
 }
@@ -537,42 +537,21 @@ export function showInputDialog(title: string, fields: InputField[]) {
         actions: ['OK', 'Cancel'],
         softDismissable: false
     }, (elements, finish) => {
-        const dc = createElement(elements.contentArea, 'div', ['d-flex', 'flex-column'])
-        const gridContainer = createElement(dc, 'div', [], '', {
-            display: 'grid',
-            gridTemplateColumns: 'auto 1fr',
-            gap: '10px',
-            alignItems: 'start'
-        })
-        const inputs: (HTMLInputElement | HTMLTextAreaElement)[] = []
-        for (const field of fields) {
-            // Create tip cell
-            if (typeof field.tip === 'string') {
-                createElement(gridContainer, 'div', [], field.tip, { 
-                    whiteSpace: 'nowrap',
-                    paddingTop: '6px', // Align with input padding
-                    textAlign: 'right'
-                })
-            } else {
-                const tipContainer = createElement(gridContainer, 'div', [], '', { 
-                    whiteSpace: 'nowrap',
-                    textAlign: 'right'
-                })
-                tipContainer.appendChild(field.tip)
-            }
-            
-            // Create input cell
-            const input = createElement(gridContainer, field.multiLine ? 'textarea' : 'input', ['form-control'], '', {})
-            input.value = field.initialValue || ''
-            if (field.multiLine) {
-                (input as HTMLTextAreaElement).rows = 5
-            }
-            inputs.push(input)
-        }
-        const finishWithValue = () => finish(inputs.map(i => i.value))
+        const inputArea = createInputArea(elements.contentArea, fields.map(f => (
+            {
+                type: 'input',
+                id: f.tip.toString(),
+                label: f.tip,
+                initialValue: f.initialValue,
+                multiLine: f.multiLine
+            })
+        ))
+
+        const finishWithValue = () => finish(Object.values(inputArea.inputs).map(input => input.value))
 
         if (fields.length === 1 && !fields[0].multiLine) {
-            inputs[0].addEventListener('keydown', async (evt: Event) => {
+            const firstInput = Object.values(inputArea.inputs)[0]
+            firstInput.addEventListener('keydown', async (evt: Event) => {
                 const e = evt as KeyboardEvent
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
@@ -587,13 +566,42 @@ export function showInputDialog(title: string, fields: InputField[]) {
 }
 
 export async function prompt(title: string, tip: string | HTMLElement, initialValue?: string) {
-    const r = await showInputDialog(title, [{ tip, initialValue, multiLine: false }])
-    return r ? r[0] : undefined
+    return showDialog<string>(title, undefined, {
+        classes: [],
+        style: {width: '50vw'},
+        actions: ['OK', 'Cancel'],
+        softDismissable: true
+    }, (elements, finish) => {
+        createElement(elements.contentArea, 'div', ['text-muted', 'mb-1'], tip)
+        const input = createElement(elements.contentArea, 'input', ['form-control'], '', {}, { value: initialValue || '' })
+        const finishWithValue = () => finish(input.value)
+        input.addEventListener('keydown', async (evt: Event) => {
+                const e = evt as KeyboardEvent
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    finishWithValue()
+                }
+        })
+
+        elements.buttons['OK'].onclick = () => finishWithValue()
+        elements.buttons['Cancel'].onclick = () => finish()
+    })
 }
 
 export async function promptMultiline(title: string, tip: string | HTMLElement, initialValue?: string) {
-    const r = await showInputDialog(title, [{ tip, initialValue, multiLine: true }])
-    return r ? r[0] : undefined
+    return showDialog<string>(title, undefined, {
+        classes: [],
+        style: {width: '50vw'},
+        actions: ['OK', 'Cancel'],
+        softDismissable: true
+    }, (elements, finish) => {
+        createElement(elements.contentArea, 'div', ['text-muted', 'mb-1'], tip)
+        const input = createElement(elements.contentArea, 'textarea', ['form-control'], '', {}, { value: initialValue || '' })
+        input.rows = 5
+        const finishWithValue = () => finish(input.value)
+        elements.buttons['OK'].onclick = () => finishWithValue()
+        elements.buttons['Cancel'].onclick = () => finish()
+    })
 }
 
 export type InputElement = string | {
