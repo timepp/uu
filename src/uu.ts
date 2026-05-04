@@ -1420,8 +1420,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         dataContainer.appendChild(renderer(startIndex, endIndex))
     }
 
-    function applyFilterAndSort(s: string) {
-        applyFilter(s)
+    function applyFilterAndSort() {
+        applyFilter(state.filter || '')
         applySort()
         pager.gotoPage(0)
     }
@@ -1574,7 +1574,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         if (e.key === 'Enter' && !e.shiftKey) {
             const v = filter.value
             state.filter = v
-            applyFilterAndSort(v)
+            applyFilterAndSort()
         }
     })
 
@@ -1610,7 +1610,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     // logic start here
     syncRegionExistence()
-    applyFilterAndSort(state.filter || '')
+    applyFilterAndSort()
     return view
 }
 
@@ -1728,6 +1728,7 @@ export class Pager {
     lastBtn: HTMLButtonElement
     firstBtn: HTMLButtonElement
     pageText: HTMLElement
+    pageSizeCtrl: HTMLElement
     currentPage = 0
     constructor(private totalItems: number, private pageSize: number, private onPageChange: (pageIndex: number, pageSize: number) => void) {
         this.toolbar = createElement(null, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
@@ -1735,6 +1736,7 @@ export class Pager {
         this.firstBtn = createElement(this.toolbar, 'button', btnClass, '<<')
         this.privBtn = createElement(this.toolbar, 'button', btnClass, '<')
         this.pageText = createElement(this.toolbar, 'button', ['btn', 'btn-secondary'], '1 / 1')
+        this.pageSizeCtrl = createElement(this.toolbar, 'span', ['btn', 'btn-secondary'], '[20]')
         this.nextBtn = createElement(this.toolbar, 'button', btnClass, '>')
         this.lastBtn = createElement(this.toolbar, 'button', btnClass, '>>')
         this.firstBtn.onclick = () => this.gotoPage(0)
@@ -1745,6 +1747,16 @@ export class Pager {
             const page = await prompt('Go to Page', 'Enter page number', `${this.currentPage + 1}`)
             if (page) {
                 this.gotoPage(Number(page) - 1)
+            }
+        }
+        this.pageSizeCtrl.onclick = async () => {
+            const size = await prompt('Page Size', 'Enter number of items per page (enter 0 or negative number to disable paging)', `${this.pageSize}`)
+            if (size) {
+                const n = parseInt(size)
+                if (!isNaN(n)) {
+                    this.setPageSize(n > 0 ? n : Infinity)
+                    this.gotoPage(0)
+                }
             }
         }
         // this.gotoPage(this.currentPage)
@@ -1768,7 +1780,7 @@ export class Pager {
     private updateUI() {
         const totalPages = Math.max(1, Math.ceil(this.totalItems / this.pageSize))
         this.pageText.textContent = `${this.currentPage + 1} / ${totalPages}`
-        this.pageText.title = `page size: ${this.pageSize}`
+        this.pageSizeCtrl.textContent = `📄 ${this.pageSize === Infinity ? '' : this.pageSize}`
         this.privBtn.disabled = this.currentPage <= 0
         this.firstBtn.disabled = this.currentPage <= 0
         this.nextBtn.disabled = this.currentPage >= totalPages - 1
