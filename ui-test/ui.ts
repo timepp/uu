@@ -17,7 +17,7 @@ const e = uu.visualizeArray(arr, {
     stateKey: 'windowTable', 
     rawIndexColumn: '#', 
     pageSize: 10,
-    onCellClick: (item, prop) => {
+    onPropClick: (item, prop) => {
         if (prop === 'value') {
             const value = item.value
             const text = uu.stringify(value, 2)

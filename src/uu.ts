@@ -61,6 +61,16 @@ export function isFontAwesomeAvailable() {
     return _isFaAvailable
 }
 
+export function enableFontAwesome(cdnUrl?: string) {
+    const url = cdnUrl || 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = url
+    document.head.appendChild(link)
+    // Reset cache so isFontAwesomeAvailable will recheck
+    _isFaAvailable = undefined
+}
+
 export function fa(...classNames: string[]) {
     if (isFontAwesomeAvailable()) {
         return createElement(null, 'i', ['fa', ...classNames])
@@ -144,11 +154,11 @@ export function createCheckBtn(parent: Element | null, classes: string[] = [], l
     return { div, checkbox }
 }
 
-export function createTable(parent: Element|null, columns: string[] = [], classes: string[] = [], styles: Partial<CSSStyleDeclaration> = {}) {
+export function createTable(parent: Element|null, props: string[] = [], classes: string[] = [], styles: Partial<CSSStyleDeclaration> = {}) {
     const tbl = createElement(parent, 'table', classes, '', styles)
     const thead = createElement(tbl, 'thead')
     const tr = createElement(thead, 'tr')
-    const headCells = columns.map(c => createElement(tr, 'th', [], c))
+    const headCells = props.map(p => createElement(tr, 'th', [], p))
     const tbody = createElement(tbl, 'tbody')
     return {
         tbl,
@@ -1069,62 +1079,83 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
     })
 }
 
-export type ColumnProperty = {
-    formater?: (value: any, item?: any) => string | HTMLElement
+export type PropRenderOption<T extends object> = {
+    formatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement
     style?: Partial<CSSStyleDeclaration>
-    onCellClick?: (item: any, dataIndex: number) => void
+    onClick?: (item: T, prop: string, dataIndex: number) => boolean
 }
 export type ItemAction = (item: any, dataIndex: number) => void
 export type ItemActions = Record<string, ItemAction>
+export type WallRenderOption<T extends object> = RenderOption<T> & {
+    // Required: returns the image URL for a given item
+    imageUrl: (item: T, dataIndex: number) => string
+    // Fixed width of each image cell, default '200px'
+    imageWidth?: string
+    // Vertical gap between images in each column, default '6px'
+    rowGap?: string
+}
+
+export type RenderOption<T extends object> = {
+    props?: string[]
+    propOptions?: Record<string, PropRenderOption<T>>
+
+    propFormatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement | undefined
+    propStyle?: (item: T, prop: string, dataIndex: number) => Partial<CSSStyleDeclaration> | undefined
+    onPropClick?: (item: T, prop: string, dataIndex: number) => boolean
+    
+    // When used in table mode, this must return a tr element directly.
+    itemFormatter?: (item: T, dataIndex: number, props: string[]) => HTMLElement | undefined
+    onItemClick?: (item: T, dataIndex: number) => boolean
+    itemStyle?: (item: T, dataIndex: number) => Partial<CSSStyleDeclaration> | undefined
+}
 export type VisualizeConfig<T extends object> = {
     // the default render style is 'table'
-    renderStyle: 'table' | 'tile'
+    renderStyle: 'table' | 'tile' | 'wall'
 
-    showColumnSelector: boolean
+    showPropSelector: boolean
     showSortButton: boolean
     showFilter: boolean    
 
-    columnProperties: Record<string, ColumnProperty>
-    columnFormater: (item: T, prop: string) => string | HTMLElement
+    renderOption: RenderOption<T>
+    tableRenderOption: RenderOption<T>
+    tileRenderOption: RenderOption<T>
+    wallRenderOption: WallRenderOption<T>
+    
     itemActions: ItemActions | ((item: T, dataIndex: number) => ItemActions)
 
-    // used only for 'tile' render style
-    itemFormater: (item: T, dataIndex: number, columns: string[]) => HTMLElement
-    itemStyle: (item: T, dataIndex: number) =>Partial<CSSStyleDeclaration>
+    // If not empty, raw index will be shown in the first prop with the given prop name
+    // note: this prop can be hide / sort as well
+    // default: #
+    // set it to empty string to hide raw index
+    rawIndexProp: string
 
-    // If not empty, raw index will be shown in the first column with the given name
-    // note: this column can be hide / sort as well
-    // typical usages is passing a '#' here
-    rawIndexColumn: string
+    // If not empty, an additional prop will be shown with the given name, which contains actions for each item
+    // note: this prop can be hide / sort as well
+    // default: (Actions)
+    // set it to empty string to hide action prop
+    actionProp: string
+
+    noDefaultActions: boolean
 
     // if present, paging will be enabled
     // if not present, all rows will be shown
     pageSize: number
 
     // if true, nested objects will be flattened using dot notation
-    // so that their properties can be shown as columns
-    // e.g. { a: { b: 1 } } => column "a.b" with value 1
+    // so that their properties can be shown as props
+    // e.g. { a: { b: 1 } } => prop "a.b" with value 1
     flattenNestedObjects: boolean
 
-    // Do not add the default action column if no action is given manually
-    noDefaultAction: boolean
-
-    onCellClick: (item: T, prop: string, dataIndex: number) => void
-    onRowClick: (item: T, dataIndex: number) => void
-
-    // initial columns to show, if not present, all columns are shown
-    columns: string[]
-
-    // whether to hide columns which as the same value for all items
+    // whether to hide props which as the same value for all items
     // default: true
-    // take effect only when `columns` is not provided
-    hideUniformColumns: boolean
+    // take effect only when `props` is not provided
+    hideUniformProps: boolean
 
     stringFoldThreshold: number
     
     // initial sort by settings, if not present, no sorting is applied
     sortBy: {
-        column: string
+        prop: string
         order: 'asc' | 'desc'
     }[]
 
@@ -1136,7 +1167,7 @@ export type VisualizeConfig<T extends object> = {
     // It's recommended to provide a custom filter for better performance, if there are many large items
     // Custom filter will be disabled when the filter string is exception
     itemFilter: (item: T, filter: string) => boolean
-    // If not empty, sort and column settings will be saved to local storage with the given key
+    // If not empty, sort and prop settings will be saved to local storage with the given key
     stateKey: string
 }
 
@@ -1148,25 +1179,39 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
     const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
     let renderStyle = cfg.renderStyle || 'table'
+    const rawIndexProp = cfg.rawIndexProp ?? '#'
+    const actionProp = cfg.actionProp ?? '(Actions)'
     
     // overall dom
     const view = createElement(null, 'div', ['border', 'p-2'])
-    const toolbar = createElement(view, 'div', ['d-flex', 'gap-2', 'mb-2'])
+    const toolbar = createElement(view, 'div', ['d-flex', 'gap-1', 'mb-2'])
+    const renderStyleToIndex = (s: string) => s === 'table' ? 0 : s === 'tile' ? 1 : 2
+    const indexToRenderStyle = (i: number) => ['table', 'tile', 'wall'][i] as 'table' | 'tile' | 'wall'
+    const viewToggle = createToggleBar([fa('fa-table'), fa('fa-grip-horizontal'), fa('fa-image')], renderStyleToIndex(renderStyle), (v) => {
+        const nextRenderStyle = indexToRenderStyle(v)
+        if (renderStyle === nextRenderStyle) return
+        renderStyle = nextRenderStyle
+        pager.refreshCurrentPage()
+    })
+    viewToggle.classList.add('flex-shrink-0')
+    toolbar.appendChild(viewToggle)
+    const igPropSelector = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
+    const propSelectorBtn = createElement(igPropSelector, 'button', ['btn', 'btn-outline-secondary'], fa('fa-eye'))
     const igSort = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
     const sortBtn = createElement(igSort, 'button', ['btn', 'btn-outline-secondary'], fa('fa-sort'))
     const sortHint = createElement(igSort, 'span', ['input-group-text'])
-    const randomSortBtn = createButton(igSort, ['btn', 'btn-outline-secondary', 'me-2'], fa('fa-random'))
+    const randomSortBtn = createButton(igSort, ['btn', 'btn-outline-secondary'], fa('fa-random'))
     const igFiler = createElement(toolbar, 'div', ['input-group', 'flex-grow-1'])
     const filterHint = createElement(igFiler, 'span', ['input-group-text'], fa('fa-filter'))
     const filter = createElement(igFiler, 'input', ['form-control'], '')
-    const counts = createElement(igFiler, 'span', ['input-group-text', 'me-2'], '20 / 100')
+    const counts = createElement(igFiler, 'span', ['input-group-text'], '20 / 100')
     const pagerPlaceholder = createElement(toolbar, 'div', [])
-    const optionBtn = createElement(toolbar, 'button', ['ms-2', 'btn', 'btn-outline-secondary'], fa('fa-bars'))
+    const optionBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-bars'))
     const dataContainer = createElement(view, 'div')
 
     // now paging section, which looks like 4 buttons and an edit: "<< < [8] > >>
 
-    const hideUniformColumns = cfg.hideUniformColumns??true
+    const hideUniformProps = cfg.hideUniformProps??true
     let allProps = tu.dataProperties(arr)
     if (cfg.flattenNestedObjects) {
         const props = new Set<string>()
@@ -1180,71 +1225,225 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         })
         allProps = [...props]
     }
-    let valueFetcher = (item: any, prop: string): any => item[prop]
-    if (cfg.flattenNestedObjects) {
-        valueFetcher = (item: any, prop: string): any => {
-            const parts = prop.split('.')
-            let v = item
-            for (const part of parts) {
-                if (v === null || v === undefined) {
-                    return undefined
-                }
-                v = v[part]
-            }
-            return v
+
+    // get prop value
+    function getPropValue(item: T, prop: string, index: number) {
+        if (prop === rawIndexProp) {
+            return index + 1
         }
+        if (prop === actionProp) {
+            return `action #${index + 1}`
+        }
+        if (!cfg.flattenNestedObjects) {
+            return item[prop as keyof T]
+        }
+        const parts = prop.split('.')
+        let v = item as any
+        for (const part of parts) {
+            if (v === null || v === undefined) {
+                return undefined
+            }
+            v = v[part]
+        }
+        return v
     }
-    const generalColumnFormatter = (item: T, prop: string) => {
-        const value = valueFetcher(item, prop)
+
+    function getActiveViewRenderOption() {
+        if (renderStyle === 'table') return cfg.tableRenderOption
+        if (renderStyle === 'tile') return cfg.tileRenderOption
+        return cfg.wallRenderOption
+    }
+
+    function createActionArea(item: T, index: number) {
+        const actions = (typeof cfg.itemActions === 'function') ? cfg.itemActions(item, index) : (cfg.itemActions || {})
+        const defaultActions = cfg.noDefaultActions ? {} : {
+            raw: () => showJsonResult(`Raw data (index: ${index})`, item)
+        }
+        const allActions = { ...defaultActions, ...actions }
+        const container = createElement(null, 'div', ['d-flex', 'gap-2'])
+        for (const [name, action] of Object.entries(allActions)) {
+            const btn = createElement(container, 'a', ['me-2'], name)
+            btn.style.cursor = 'pointer'
+            btn.onclick = () => action(item, index)
+        }
+        return container
+    }
+
+    const generalPropFormatter = (item: T, prop: string, dataIndex: number) => {
+        const value = getPropValue(item, prop, dataIndex)
         if (typeof value === 'object' && value !== null) {
             // return createJsonView(JSON.stringify(value, null, 2))
             return tu.stringify(value)
+        } else if (prop === actionProp) {
+            // create action buttons
+            return createActionArea(item, dataIndex)
         } else {
             return `${value}`
         }
     }
 
-    // properties used to construct table columns
-    // presentation columns should be put before other columns but after raw index column
-    const presentationColumns = cfg.columns ?? []
-    const allColumns = [
-        cfg.rawIndexColumn, 
-        ...presentationColumns,
-        ...allProps.filter(p => !presentationColumns.includes(p))
+    // returns an html element for the given prop of the given item
+    function renderPropValue(item: T, prop: string, index: number) {
+        const viewOption = getActiveViewRenderOption()
+        // now render the property, try formatters until getting a non-undefined result
+        const formatterFallbackChain = [
+            viewOption?.propOptions?.[prop]?.formatter,
+            viewOption?.propFormatter,
+            cfg.renderOption?.propOptions?.[prop]?.formatter,
+            cfg.renderOption?.propFormatter,
+            generalPropFormatter
+        ]
+        let value = undefined
+        for (const formatter of formatterFallbackChain) {
+            if (!formatter) continue
+            value = formatter(item, prop, index)
+            if (value !== undefined) break
+        }
+        // wrap string with html element
+        if (typeof value === 'string') {
+            value = createFoldedString(value, cfg.stringFoldThreshold??120)
+        }
+        // value is HTML element now
+        const element = value as HTMLElement
+
+        // get style in the same way
+        const styleFallbackChain = [
+            () => viewOption?.propOptions?.[prop]?.style,
+            viewOption?.propStyle,
+            () => cfg.renderOption?.propOptions?.[prop]?.style,
+            cfg.renderOption?.propStyle
+        ]
+        const mergedStyle = {} as Partial<CSSStyleDeclaration>
+        for (const styleGetter of styleFallbackChain) {
+            if (!styleGetter) continue
+            const style = styleGetter(item, prop, index)
+            if (style !== undefined) {
+                Object.assign(mergedStyle, style)
+                break
+            }
+        }
+        
+        Object.assign(element.style, mergedStyle)
+
+        // onclick: execute onclick chain backwards until one handler returns true
+        const onClickFallbackChain = [
+            viewOption?.propOptions?.[prop]?.onClick,
+            viewOption?.onPropClick,
+            cfg.renderOption?.propOptions?.[prop]?.onClick,
+            cfg.renderOption?.onPropClick
+        ].filter(v => !!v)
+        if (onClickFallbackChain.length > 0) {
+            element.onclick = (evt) => {
+                evt.stopPropagation()
+                if (window.getSelection()?.toString()) return
+                for (const onClickHandler of onClickFallbackChain) {
+                    if (!onClickHandler) continue
+                    const handled = onClickHandler(item, prop, index)
+                    if (handled) break
+                }
+            }
+            element.style.cursor = 'pointer'
+        }
+
+        return element
+    }
+
+    // properties used to construct visible props
+    // presentation props should be put before other props but after raw index prop
+    const presentationProps = cfg.renderOption?.props ?? []
+    const allPropsWithRaw = [
+        rawIndexProp,
+        ...presentationProps,
+        ...allProps.filter(p => !presentationProps.includes(p)),
+        actionProp
     ].filter(v => !!v) as string[]
     let meaningfulProps = allProps
-    if (hideUniformColumns && arr.length > 1) {
+    if (hideUniformProps && arr.length > 1) {
         meaningfulProps = allProps.filter(p => {
-            const firstValue = valueFetcher(arr[0], p)
-            return arr.some(item => {
-                const v = valueFetcher(item, p)
+            const firstValue = getPropValue(arr[0], p, 0)
+            return arr.some((item, index) => {
+                const v = getPropValue(item, p, index)
                 return JSON.stringify(v) !== JSON.stringify(firstValue)
             })
         })
     }
-    const meaningfulColumns = [
-        cfg.rawIndexColumn, 
-        ...presentationColumns,
-        ...meaningfulProps.filter(p => !presentationColumns.includes(p))
+    const meaningfulPropsWithRaw = [
+        rawIndexProp,
+        ...presentationProps,
+        ...meaningfulProps.filter(p => !presentationProps.includes(p))
     ].filter(v => !!v) as string[]
     
-    const state = tu.createState(cfg, ['columns', 'sortBy', 'filter', 'pageSize'], cfg.stateKey)
+    const state = tu.createObservableState(cfg.stateKey || null, {
+        sortBy: (cfg.sortBy || []) as VisualizeConfig<T>['sortBy'],
+        filter: cfg.filter || '',
+        pageSize: cfg.pageSize,
+        tableProps: undefined as string[] | undefined,
+        tileProps: undefined as string[] | undefined,
+        wallProps: undefined as string[] | undefined,
+    }, () => {})
     filter.value = state.filter || ''
 
-    function visibleColumns() {
-        return state.columns || meaningfulColumns
+    function getVisibleProps() {
+        const stateProps = renderStyle === 'table' ? state.tableProps : renderStyle === 'tile' ? state.tileProps : state.wallProps
+        const viewOption = getActiveViewRenderOption()
+        return stateProps || viewOption?.props || cfg.renderOption?.props || meaningfulPropsWithRaw
+    }
+
+    function renderItem(item: T, index: number) {
+        const viewOption = getActiveViewRenderOption()
+        const itemFormatterFallbackChain = [
+            viewOption?.itemFormatter,
+            cfg.renderOption?.itemFormatter
+        ].filter(v => !!v) as ((item: T, dataIndex: number, props: string[]) => HTMLElement)[]
+        for (const itemFormatter of itemFormatterFallbackChain) {
+            const r = itemFormatter(item, index, getVisibleProps())
+            if (r) return r
+        }
+    }
+
+    function getItemStyle(item: T, index: number) {
+        const viewOption = getActiveViewRenderOption()
+        const itemStyleFallbackChain = [
+            viewOption?.itemStyle,
+            cfg.renderOption?.itemStyle
+        ].filter(v => !!v) as ((item: T, dataIndex: number) => Partial<CSSStyleDeclaration>)[]
+        let style = undefined
+        for (const itemStyleGetter of itemStyleFallbackChain) {
+            style = itemStyleGetter(item, index)
+            if (style) break
+        }
+        return style
+    }
+
+    function attachItemClickHandler(item: T, index: number, element: HTMLElement) {
+        const viewOption = getActiveViewRenderOption()
+        const onItemClickFallbackChain = [
+            viewOption?.onItemClick,
+            cfg.renderOption?.onItemClick
+        ].filter(v => !!v) as ((item: T, dataIndex: number) => boolean)[]
+        if (onItemClickFallbackChain.length === 0) return
+        element.onclick = (evt) => {
+            evt.stopPropagation()
+            for (const onItemClickHandler of onItemClickFallbackChain) {
+                const handled = onItemClickHandler(item, index)
+                if (handled) break
+            }
+        }
+        element.style.cursor = 'pointer'
     }
 
     function tableRenderer(startIndex: number, endIndex: number) {
         const table = createElement(null, 'table', ['table', 'table-bordered', 'table-hover', 'mb-0'])
-        const thead = createElement(table, 'thead', ['bg-light'])
         const tbody = createElement(table, 'tbody')
-        const tr = createElement(thead, 'tr', [])
         const sortBy = state.sortBy || []
-        for (const prop of visibleColumns()) {
+
+        // thead
+        const thead = createElement(table, 'thead', ['bg-light'])
+        const tr = createElement(thead, 'tr', [])
+        for (const prop of getVisibleProps()) {
             const th = createElement(tr, 'th')
             createElement(th, 'span', [], prop)
-            const i = sortBy.findIndex(s => s.column === prop)
+            const i = sortBy.findIndex(s => s.prop === prop)
             if (i >= 0) {
                 const s = sortBy[i]
                 createElement(th, 'span', [], toArrow(s.order))
@@ -1256,26 +1455,34 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             th.style.cursor = 'pointer'
             th.style.userSelect = 'none'
             th.onclick = () => {
-                const s = state.sortBy?.find(s => s.column === prop)
+                const s = state.sortBy?.find(s => s.prop === prop)
                 if (s) {
                     if (s.order === 'asc') {
-                        state.sortBy = [{ column: prop, order: 'desc' }]
+                        state.sortBy = [{ prop, order: 'desc' }]
                     } else if (s.order === 'desc') {
                         state.sortBy = []
                     }
                 } else {
-                    state.sortBy = [{ column: prop, order: 'asc' }]
+                    state.sortBy = [{ prop, order: 'asc' }]
                 }
                 applySort()
                 gotoPage(0)
             }
         }
 
-        if (!cfg.noDefaultAction || (cfg.itemActions)) {
-            const th = createElement(tr, 'th', ['actions-cell'], 'Actions')
-        }
         for (let i = startIndex; i < endIndex; i++) {
-            tbody.append(createRow(data[i].item, data[i].index))
+            let tr = renderItem(data[i].item, data[i].index)
+            if (!tr) {
+                // create row in the default way
+                tr = createElement(null, 'tr', [], '', getItemStyle(data[i].item, data[i].index))
+                for (const [j, prop] of getVisibleProps().entries()) {
+                    const td = createElement(tr, 'td')
+                    const element = renderPropValue(data[i].item, prop, data[i].index)
+                    td.appendChild(element)
+                }
+            }
+            attachItemClickHandler(data[i].item, data[i].index, tr)
+            tbody.appendChild(tr)
         }
         return table
     }
@@ -1286,123 +1493,92 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             gap: '10px',
             gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))'
         })
+
         for (let i = startIndex; i < endIndex; i++) {
-            if (cfg.itemFormater) {
-                container.appendChild(cfg.itemFormater(data[i].item, data[i].index, visibleColumns()))
-                continue
+            let card = renderItem(data[i].item, data[i].index)
+            if (!card) {
+                const item = data[i].item
+                const dataIndex = data[i].index
+                card = createElement(container, 'div', ['card', 'p-1', 'hover-effect'], '', getItemStyle(item, dataIndex))
+
+                // const cardBody = createElement(card, 'div', ['card-body', 'd-flex', 'flex-column', 'gap-2'])
+                for (const [j, prop] of getVisibleProps().entries()) {
+                    const element = renderPropValue(item, prop, dataIndex)
+                    card.appendChild(element)
+                }
             }
 
-            const item = data[i].item
-            const dataIndex = data[i].index
-            const card = createElement(container, 'div', ['card', 'p-1', 'hover-effect'], '', cfg.itemStyle?.(item, dataIndex))
-            // const cardBody = createElement(card, 'div', ['card-body', 'd-flex', 'flex-column', 'gap-2'])
-            for (const [j, prop] of visibleColumns().entries()) {
-                const div = createElement(card, 'div', [], '', cfg.columnProperties?.[prop]?.style)
-                if (cfg.columnProperties?.[prop]?.onCellClick) {
-                    div.style.cursor = 'pointer'
-                }
-                div.style.wordBreak = 'break-all'
-                const specificFormater = cfg.columnProperties?.[prop]?.formater
-                const swrapper = specificFormater ? (item: T, prop: string) => specificFormater(valueFetcher(item, prop), item) : null
-                const formater = swrapper || cfg.columnFormater || generalColumnFormatter
-                const formattedValue = (prop === cfg.rawIndexColumn) ? `${dataIndex + 1}` : formater(item, prop)
-                if (typeof formattedValue === 'string') {
-                    div.textContent = formattedValue
-                }
-                else if (formattedValue instanceof HTMLElement) {
-                    div.appendChild(formattedValue)
-                }
-
-                const specificClickHandler = cfg.columnProperties?.[prop]?.onCellClick
-                if (specificClickHandler) {
-                    div.onclick = () => {
-                        if (window.getSelection()?.toString()) return;
-                        specificClickHandler(item, dataIndex)
-                    }
-                } else if (cfg.onCellClick) {
-                    div.onclick = () => {
-                        if (window.getSelection()?.toString()) return;
-                        cfg.onCellClick!(item, prop, dataIndex)
-                    }
-                }
-            }
-            if (!cfg.noDefaultAction || (cfg.itemActions)) {
-                const td = createElement(card, 'div', ['actions-cell'])
-                const actions = (typeof cfg.itemActions === 'function') ? cfg.itemActions(item, dataIndex) : (cfg.itemActions || {})
-                const defaultActions = cfg.noDefaultAction ? {} : {
-                    raw: () => showJsonResult(`Raw data (index: ${dataIndex})`, item)
-                }
-                const allActions = { ...defaultActions, ...actions }
-                for (const [name, action] of Object.entries(allActions)) {
-                    const btn = createElement(td, 'a', ['me-2'], name)
-                    btn.style.cursor = 'pointer'
-                    btn.onclick = () => action(item, dataIndex)
-                }
-            }
+            attachItemClickHandler(data[i].item, data[i].index, card)
         }
         return container
     }
 
-    let renderer = (renderStyle === 'table') ? tableRenderer : tileRenderer
+    function wallRenderer(startIndex: number, endIndex: number) {
+        const wallOption = cfg.wallRenderOption
+        const imageWidth = wallOption?.imageWidth || '200px'
+        const rowGap = wallOption?.rowGap || '6px'
+        const container = createElement(null, 'div', [], '', {
+            columnWidth: imageWidth,
+            columnGap: rowGap
+        })
 
-    function createRow(item: T, dataIndex: number) {
-        const tr = createElement(null, 'tr', [], '', cfg.itemStyle?.(item, dataIndex));
-        for (const [j, prop] of visibleColumns().entries()) {
-            const td = createElement(tr, 'td', [], '', cfg.columnProperties?.[prop]?.style)
-            if (cfg.columnProperties?.[prop]?.onCellClick) {
-                td.style.cursor = 'pointer'
-            }
-            td.style.wordBreak = 'break-all'
-            const specificFormater = cfg.columnProperties?.[prop]?.formater
-            const swrapper = specificFormater ? (item: T, prop: string) => specificFormater(valueFetcher(item, prop), item) : null
-            const formater = swrapper || cfg.columnFormater || generalColumnFormatter
-            const formattedValue = (prop === cfg.rawIndexColumn) ? `${dataIndex + 1}` : formater(item, prop)
-            if (typeof formattedValue === 'string') {
-                td.appendChild(createFoldedString(formattedValue, cfg.stringFoldThreshold??120))
-            }
-            else if (formattedValue instanceof HTMLElement) {
-                td.appendChild(formattedValue)
+        for (let i = startIndex; i < endIndex; i++) {
+            const item = data[i].item
+            const dataIndex = data[i].index
+
+            const imgUrl = wallOption?.imageUrl(item, dataIndex) ?? ''
+
+            // wrapper needs relative positioning for the overlay
+            const wrapper = createElement(container, 'div', [], '', {
+                position: 'relative',
+                overflow: 'hidden',
+                lineHeight: '0',
+                marginBottom: rowGap
+            })
+            Object.assign(wrapper.style, getItemStyle(item, dataIndex) || {})
+
+            const img = createElement(wrapper, 'img', [], '', {
+                width: '100%',
+                height: 'auto',
+                display: 'block'
+            }) as HTMLImageElement
+            img.src = imgUrl
+            img.loading = 'lazy'
+
+            // semi-transparent hover overlay listing visible prop values
+            const overlay = createElement(wrapper, 'div', [], '', {
+                position: 'absolute',
+                bottom: '0',
+                left: '0',
+                right: '0',
+                background: 'rgba(0,0,0,0.65)',
+                color: '#fff',
+                padding: '4px 6px',
+                fontSize: '0.75em',
+                lineHeight: '1.4',
+                opacity: '0',
+                transition: 'opacity 0.2s',
+                overflowY: 'auto',
+                maxHeight: '60%'
+            })
+            for (const prop of getVisibleProps()) {
+                const val = getPropValue(item, prop, dataIndex)
+                if (val === undefined || val === null) continue
+                const row = createElement(overlay, 'div', [])
+                createElement(row, 'span', [], `${prop}: `, { fontWeight: 'bold', opacity: '0.75' })
+                createElement(row, 'span', [], renderPropValue(item, prop, dataIndex))
             }
 
-            const specificClickHandler = cfg.columnProperties?.[prop]?.onCellClick
-            if (specificClickHandler) {
-                td.onclick = () => {
-                    if (window.getSelection()?.toString()) return;
-                    specificClickHandler(item, dataIndex)
-                }
-            } else if (cfg.onCellClick) {
-                td.onclick = () => {
-                    if (window.getSelection()?.toString()) return;
-                    cfg.onCellClick!(item, prop, dataIndex)
-                }
-            }
+            wrapper.addEventListener('mouseenter', () => { overlay.style.opacity = '1' })
+            wrapper.addEventListener('mouseleave', () => { overlay.style.opacity = '0' })
+
+            attachItemClickHandler(item, dataIndex, wrapper)
         }
+        return container
+    }
 
-        if (!cfg.noDefaultAction || (cfg.itemActions)) {
-            const td = createElement(tr, 'td', ['actions-cell'])
-            const actions = (typeof cfg.itemActions === 'function') ? cfg.itemActions(item, dataIndex) : (cfg.itemActions || {})
-            const defaultActions = cfg.noDefaultAction ? {} : {
-                raw: () => showJsonResult(`Raw data (index: ${dataIndex})`, item)
-            }
-            const allActions = { ...defaultActions, ...actions }
-            for (const [name, action] of Object.entries(allActions)) {
-                const btn = createElement(td, 'a', ['me-2'], name)
-                btn.style.cursor = 'pointer'
-                btn.onclick = () => action(item, dataIndex)
-            }
-        }
-
-        if (cfg.onRowClick) {
-            tr.style.cursor = 'pointer'
-            tr.onclick = (e) => {
-                if (window.getSelection()?.toString()) return;
-                // if click on action button, do not trigger row click
-                if ((e.target as HTMLElement).closest('.actions-cell')) return;
-                cfg.onRowClick!(item, dataIndex)
-            }
-        }
-
-        return tr
+    function getRenderer() {
+        return renderStyle === 'table' ? tableRenderer : renderStyle === 'tile' ? tileRenderer : wallRenderer
     }
 
     // data is filtered view of arr
@@ -1417,7 +1593,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const {startIndex, endIndex} = pager.getPageRange(page)
         console.log(`goto page ${page}, show items from ${startIndex} to ${endIndex}`)
         dataContainer.innerHTML = ''
-        dataContainer.appendChild(renderer(startIndex, endIndex))
+        dataContainer.appendChild(getRenderer()(startIndex, endIndex))
     }
 
     function applyFilterAndSort() {
@@ -1471,14 +1647,14 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     function applySort() {
         // update sort hint
         const sortBy = state.sortBy || []
-        sortHint.textContent = `${sortBy.map(s => `${s.column} ${toArrow(s.order)}`).join(', ')}`
+        sortHint.textContent = `${sortBy.map(s => `${s.prop} ${toArrow(s.order)}`).join(', ')}`
 
         // sort the table rows
         if (sortBy.length > 0) {
             data.sort((a, b) => {
                 for (const s of sortBy) {
-                    const aValue = (s.column === cfg.rawIndexColumn)? a.index : valueFetcher(a.item, s.column)
-                    const bValue = (s.column === cfg.rawIndexColumn)? b.index : valueFetcher(b.item, s.column)
+                    const aValue = getPropValue(a.item, s.prop, a.index)
+                    const bValue = getPropValue(b.item, s.prop, b.index)
                     if (aValue === bValue) continue
                     let ret = 0
                     if (aValue === undefined) ret = -1
@@ -1507,7 +1683,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         // we directly remove unneeded elements in toolbar
         // rather than hiding them, so that toolbar looks cleaner (e.g. radius of borders)
         
-        const showColumnSelector = cfg.showColumnSelector ?? true// ?? (properties.length > 1)
+        const showPropSelector = cfg.showPropSelector ?? true// ?? (properties.length > 1)
         const showSortButton = cfg.showSortButton ?? true
         const showFilter = cfg.showFilter ?? true// (arr.length > 1)
 
@@ -1524,12 +1700,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         }
     }
 
-    async function selectFields() {
-        const r = await showSelection('Select Fields', allColumns, {
-            initialSelection: visibleColumns(), 
+    async function selectProps() {
+        const r = await showSelection('visible props for ' + renderStyle, allPropsWithRaw, {
+            initialSelection: getVisibleProps(), 
             showOrder: true,
             styleModifier: (item, elem) => {
-                if (item === cfg.rawIndexColumn) {
+                if (item === rawIndexProp) {
                     elem.style.fontWeight = 'bold'
                     elem.style.borderBottom = '2px solid blue'
                 }
@@ -1537,14 +1713,20 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         })
         if (r === undefined) return
 
-        state.columns = r
+        if (renderStyle === 'table') {
+            state.tableProps = r
+        } else if (renderStyle === 'tile') {
+            state.tileProps = r
+        } else {
+            state.wallProps = r
+        }
         gotoPage(pager.currentPage)
     }
 
     sortBtn.onclick = async () => {
         // construct all properties
-        const allOptions = allColumns.map(p => [`${p} ${toArrow('asc')}`, `${p} ${toArrow('desc')}`]).flat()
-        const sortOptions = state.sortBy?.map(s => `${s.column} ${toArrow(s.order)}`)
+        const allOptions = allPropsWithRaw.map(p => [`${p} ${toArrow('asc')}`, `${p} ${toArrow('desc')}`]).flat()
+        const sortOptions = state.sortBy?.map(s => `${s.prop} ${toArrow(s.order)}`)
         const checker = (oldSelection: string[], newSelection: string[]) => {
             if (newSelection.length > oldSelection.length) {
                 // a new sort is added, we will make sure to remove old duplicates if there is
@@ -1557,12 +1739,13 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const r = await showSelection('Sort By', allOptions, {showOrder: true, initialSelection: sortOptions, checker})
         if (r === undefined) return
         state.sortBy = r.map(s => {
-            const [column, order] = s.split(' ')
-            return {column, order: fromArrow(order) as 'asc' | 'desc'}
+            const [prop, order] = s.split(' ')
+            return {prop, order: fromArrow(order) as 'asc' | 'desc'}
         })
         applySort()
         gotoPage(0)
     }
+    propSelectorBtn.onclick = () => selectProps()
 
     randomSortBtn.onclick = () => {
         state.sortBy = []
@@ -1584,7 +1767,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             console.log('data insights', info)
             showInDialog('Data Insights', await renderDataInsights(info))
         },
-        'Select Columns': () => selectFields(),
+        'Select Props': () => selectProps(),
         'Change Page Size': async () => {
             const v = await prompt('Page Size', 'Enter number of items per page (enter 0 or negative number to disable paging)', `${state.pageSize || cfg.pageSize || 20}`)
             if (v) {
@@ -1595,16 +1778,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                     pager.gotoPage(0)
                 }
             }
-        },
-        'Switch to Table View': () => {
-            renderStyle = 'table'
-            renderer = tableRenderer
-            pager.refreshCurrentPage()
-        },
-        'Switch to Tile View': () => {
-            renderStyle = 'tile'
-            renderer = tileRenderer
-            pager.refreshCurrentPage()
         }
     })
 
