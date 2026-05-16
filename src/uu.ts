@@ -1101,16 +1101,16 @@ export type RenderOption<T extends object> = {
 
     propFormatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement | undefined
     propStyle?: (item: T, prop: string, dataIndex: number) => Partial<CSSStyleDeclaration> | undefined
-    onPropClick?: (item: T, prop: string, dataIndex: number) => boolean
+    onPropClick?: (item: T, prop: string, dataIndex: number) => boolean|undefined
     
     // When used in table mode, this must return a tr element directly.
     itemFormatter?: (item: T, dataIndex: number, props: string[]) => HTMLElement | undefined
-    onItemClick?: (item: T, dataIndex: number) => boolean
+    onItemClick?: (item: T, dataIndex: number) => boolean|undefined
     itemStyle?: (item: T, dataIndex: number) => Partial<CSSStyleDeclaration> | undefined
 }
 export type VisualizeConfig<T extends object> = {
     // the default render style is 'table'
-    renderStyle: 'table' | 'tile' | 'wall'
+    renderStyles: ('table' | 'tile' | 'wall')[]
 
     showPropSelector: boolean
     showSortButton: boolean
@@ -1175,39 +1175,24 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     if (arr.length === 0) {
         return createElement(null, 'div', ['alert', 'alert-info', 'mb-0'], 'Data is empty.')
     }
+
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
     const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
-    let renderStyle = cfg.renderStyle || 'table'
+    const renderStyles = cfg.renderStyles || ['table', 'tile', 'wall']
     const rawIndexProp = cfg.rawIndexProp ?? '#'
     const actionProp = cfg.actionProp ?? '(Actions)'
-    
-    // overall dom
-    const view = createElement(null, 'div', ['border', 'p-2'])
-    const toolbar = createElement(view, 'div', ['d-flex', 'gap-1', 'mb-2'])
-    const renderStyleToIndex = (s: string) => s === 'table' ? 0 : s === 'tile' ? 1 : 2
-    const indexToRenderStyle = (i: number) => ['table', 'tile', 'wall'][i] as 'table' | 'tile' | 'wall'
-    const viewToggle = createToggleBar([fa('fa-table'), fa('fa-grip-horizontal'), fa('fa-image')], renderStyleToIndex(renderStyle), (v) => {
-        const nextRenderStyle = indexToRenderStyle(v)
-        if (renderStyle === nextRenderStyle) return
-        renderStyle = nextRenderStyle
-        pager.refreshCurrentPage()
-    })
-    viewToggle.classList.add('flex-shrink-0')
-    toolbar.appendChild(viewToggle)
-    const igPropSelector = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
-    const propSelectorBtn = createElement(igPropSelector, 'button', ['btn', 'btn-outline-secondary'], fa('fa-eye'))
-    const igSort = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
-    const sortBtn = createElement(igSort, 'button', ['btn', 'btn-outline-secondary'], fa('fa-sort'))
-    const sortHint = createElement(igSort, 'span', ['input-group-text'])
-    const randomSortBtn = createButton(igSort, ['btn', 'btn-outline-secondary'], fa('fa-random'))
-    const igFiler = createElement(toolbar, 'div', ['input-group', 'flex-grow-1'])
-    const filterHint = createElement(igFiler, 'span', ['input-group-text'], fa('fa-filter'))
-    const filter = createElement(igFiler, 'input', ['form-control'], '')
-    const counts = createElement(igFiler, 'span', ['input-group-text'], '20 / 100')
-    const pagerPlaceholder = createElement(toolbar, 'div', [])
-    const optionBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-bars'))
-    const dataContainer = createElement(view, 'div')
+
+    // persist state
+    const state = tu.createObservableState(cfg.stateKey || null, {
+        sortBy: (cfg.sortBy || []) as VisualizeConfig<T>['sortBy'],
+        filter: cfg.filter || '',
+        pageSize: cfg.pageSize,
+        renderStyle: renderStyles[0],
+        tableProps: undefined as string[] | undefined,
+        tileProps: undefined as string[] | undefined,
+        wallProps: undefined as string[] | undefined,
+    }, () => { })
 
     // now paging section, which looks like 4 buttons and an edit: "<< < [8] > >>
 
@@ -1249,12 +1234,13 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     function getActiveViewRenderOption() {
-        if (renderStyle === 'table') return cfg.tableRenderOption
-        if (renderStyle === 'tile') return cfg.tileRenderOption
+        if (state.renderStyle === 'table') return cfg.tableRenderOption
+        if (state.renderStyle === 'tile') return cfg.tileRenderOption
         return cfg.wallRenderOption
     }
 
     function createActionArea(item: T, index: number) {
+        console.log('createActionArea', item, index)
         const actions = (typeof cfg.itemActions === 'function') ? cfg.itemActions(item, index) : (cfg.itemActions || {})
         const defaultActions = cfg.noDefaultActions ? {} : {
             raw: () => showJsonResult(`Raw data (index: ${index})`, item)
@@ -1339,7 +1325,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 for (const onClickHandler of onClickFallbackChain) {
                     if (!onClickHandler) continue
                     const handled = onClickHandler(item, prop, index)
-                    if (handled) break
+                    if (handled !== false) break
                 }
             }
             element.style.cursor = 'pointer'
@@ -1372,19 +1358,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         ...presentationProps,
         ...meaningfulProps.filter(p => !presentationProps.includes(p))
     ].filter(v => !!v) as string[]
-    
-    const state = tu.createObservableState(cfg.stateKey || null, {
-        sortBy: (cfg.sortBy || []) as VisualizeConfig<T>['sortBy'],
-        filter: cfg.filter || '',
-        pageSize: cfg.pageSize,
-        tableProps: undefined as string[] | undefined,
-        tileProps: undefined as string[] | undefined,
-        wallProps: undefined as string[] | undefined,
-    }, () => {})
-    filter.value = state.filter || ''
 
     function getVisibleProps() {
-        const stateProps = renderStyle === 'table' ? state.tableProps : renderStyle === 'tile' ? state.tileProps : state.wallProps
+        const stateProps = state.renderStyle === 'table' ? state.tableProps : state.renderStyle === 'tile' ? state.tileProps : state.wallProps
         const viewOption = getActiveViewRenderOption()
         return stateProps || viewOption?.props || cfg.renderOption?.props || meaningfulPropsWithRaw
     }
@@ -1426,7 +1402,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             evt.stopPropagation()
             for (const onItemClickHandler of onItemClickFallbackChain) {
                 const handled = onItemClickHandler(item, index)
-                if (handled) break
+                if (handled !== false) break
             }
         }
         element.style.cursor = 'pointer'
@@ -1578,7 +1554,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     function getRenderer() {
-        return renderStyle === 'table' ? tableRenderer : renderStyle === 'tile' ? tileRenderer : wallRenderer
+        return state.renderStyle === 'table' ? tableRenderer : state.renderStyle === 'tile' ? tileRenderer : wallRenderer
     }
 
     // data is filtered view of arr
@@ -1586,7 +1562,42 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     let data = allData
     const pager = new Pager(data.length, state.pageSize || Infinity, (page) => gotoPage(page))
     const pagerElem = pager.getElement()
+
+    // overall dom
+    const view = createElement(null, 'div', ['border', 'p-2'])
+    const toolbar = createElement(view, 'div', ['d-flex', 'gap-1', 'mb-2'])
+    const renderStyleToIndex = (s: 'table' | 'tile' | 'wall') => renderStyles.indexOf(s)
+    const indexToRenderStyle = (i: number) => renderStyles[i]
+    const enabledRenderStyleIcons = renderStyles.map(s => {
+        if (s === 'table') return fa('fa-table')
+        if (s === 'tile') return fa('fa-grip-horizontal')
+        if (s === 'wall') return fa('fa-image')
+        return document.createElement('span')
+    })
+    const viewToggle = createToggleBar(enabledRenderStyleIcons, renderStyleToIndex(state.renderStyle), (v) => {
+        const nextRenderStyle = indexToRenderStyle(v)
+        if (state.renderStyle === nextRenderStyle) return
+        state.renderStyle = nextRenderStyle
+        pager.refreshCurrentPage()
+    })
+    viewToggle.classList.add('flex-shrink-0')
+    toolbar.appendChild(viewToggle)
+    const igPropSelector = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
+    const propSelectorBtn = createElement(igPropSelector, 'button', ['btn', 'btn-outline-secondary'], fa('fa-eye'))
+    const igSort = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
+    const sortBtn = createElement(igSort, 'button', ['btn', 'btn-outline-secondary'], fa('fa-sort'))
+    const sortHint = createElement(igSort, 'span', ['input-group-text'])
+    const randomSortBtn = createButton(igSort, ['btn', 'btn-outline-secondary'], fa('fa-random'))
+    const igFiler = createElement(toolbar, 'div', ['input-group', 'flex-grow-1'])
+    const filterHint = createElement(igFiler, 'span', ['input-group-text'], fa('fa-filter'))
+    const filter = createElement(igFiler, 'input', ['form-control'], '')
+    const counts = createElement(igFiler, 'span', ['input-group-text'], '20 / 100')
+    const pagerPlaceholder = createElement(toolbar, 'div', [])
+    const optionBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-bars'))
+    const dataContainer = createElement(view, 'div')
+
     toolbar.replaceChild(pagerElem, pagerPlaceholder)
+    filter.value = state.filter || ''
 
     function gotoPage(page: number) {
         // only visible rows falling into the current page are shown, all others are hidden
@@ -1686,7 +1697,10 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const showPropSelector = cfg.showPropSelector ?? true// ?? (properties.length > 1)
         const showSortButton = cfg.showSortButton ?? true
         const showFilter = cfg.showFilter ?? true// (arr.length > 1)
+        const showViewToggle = renderStyles.length > 1
 
+        syncExistence(viewToggle, showViewToggle)
+        syncExistence(igPropSelector, showPropSelector)
         syncExistence(sortBtn, showSortButton)
         syncExistence(sortHint, showSortButton)
         syncExistence(randomSortBtn, showSortButton)
@@ -1701,7 +1715,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     async function selectProps() {
-        const r = await showSelection('visible props for ' + renderStyle, allPropsWithRaw, {
+        const r = await showSelection('visible props for ' + state.renderStyle, allPropsWithRaw, {
             initialSelection: getVisibleProps(), 
             showOrder: true,
             styleModifier: (item, elem) => {
@@ -1713,9 +1727,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         })
         if (r === undefined) return
 
-        if (renderStyle === 'table') {
+        if (state.renderStyle === 'table') {
             state.tableProps = r
-        } else if (renderStyle === 'tile') {
+        } else if (state.renderStyle === 'tile') {
             state.tileProps = r
         } else {
             state.wallProps = r
