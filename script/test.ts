@@ -99,3 +99,49 @@ Deno.test('hash', async () => {
     console.log('hash of "hello":', tu.simpleHash('hello'))
     console.log('hash of "world":', await tu.hash('world'))
 })
+
+Deno.test('parseTimeRange basics and range syntax', () => {
+    const r = tu.parseTimeRange('2025-03-01 01:02..2025-03-02 03:04:05', 0)
+    ut.assertEquals(r.start.toISOString(), '2025-03-01T01:02:00.000Z')
+    ut.assertEquals(r.end.toISOString(), '2025-03-02T03:04:05.000Z')
+
+    const rs = tu.parseTimeRange('2025-03-02 00:00..2025-03-01 00:00', 0)
+    ut.assertEquals(rs.start.toISOString(), '2025-03-01T00:00:00.000Z')
+    ut.assertEquals(rs.end.toISOString(), '2025-03-02T00:00:00.000Z')
+})
+
+Deno.test('parseTimeRange rangeSpec and alias reuse', () => {
+    const day = tu.parseTimeRange('2025-03-21', 0)
+    ut.assertEquals(day.start.toISOString(), '2025-03-21T00:00:00.000Z')
+    ut.assertEquals(day.end.toISOString(), '2025-03-22T00:00:00.000Z')
+
+    const month = tu.parseTimeRange('2025-03', 0)
+    ut.assertEquals(month.start.toISOString(), '2025-03-01T00:00:00.000Z')
+    ut.assertEquals(month.end.toISOString(), '2025-04-01T00:00:00.000Z')
+
+    const year = tu.parseTimeRange('2025', 0)
+    ut.assertEquals(year.start.toISOString(), '2025-01-01T00:00:00.000Z')
+    ut.assertEquals(year.end.toISOString(), '2026-01-01T00:00:00.000Z')
+})
+
+Deno.test('parseTimeRange wrapper applies adjustment before boundary', () => {
+    const r = tu.parseTimeRange('month(2025-03-31-1M)', 0)
+    ut.assertEquals(r.start.toISOString(), '2025-02-01T00:00:00.000Z')
+    ut.assertEquals(r.end.toISOString(), '2025-03-01T00:00:00.000Z')
+
+    const d = tu.parseTimeRange('day(2025-03-31-1M)', 0)
+    ut.assertEquals(d.start.toISOString(), '2025-02-28T00:00:00.000Z')
+    ut.assertEquals(d.end.toISOString(), '2025-03-01T00:00:00.000Z')
+})
+
+Deno.test('parseTimeRange timezone shift and flexible spaces/case', () => {
+    const r = tu.parseTimeRange('  ThIs   WeEk  ', 8 * 60)
+    const expected = tu.parseTimeRange('week(now)', 8 * 60)
+    ut.assertEquals(r.start.toISOString(), expected.start.toISOString())
+    ut.assertEquals(r.end.toISOString(), expected.end.toISOString())
+})
+
+Deno.test('parseTimeRange rejects standalone timeSpec and multiple adjustments', () => {
+    ut.assertThrows(() => tu.parseTimeRange('now', 0))
+    ut.assertThrows(() => tu.parseTimeRange('now+1d+2h..now+3d', 0))
+})

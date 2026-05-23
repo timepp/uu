@@ -3,21 +3,7 @@
 
 // tu: a set of utility functions
 
-/// get time as YYYY-MM-DD HH:mm:ss
-/// timeZoneOffset is in minutes, e.g. 
-//     -480: for UTC+8
-//     480: for UTC-8
-//     0: for UTC
-//     undefined: for local device timezone (so the result can be different on different devices)
-export function formatTime(d: Date, timeZoneOffset?: number): string {
-    const t = d.getTime()
-    const date = new Date(t - (timeZoneOffset??d.getTimezoneOffset()) * 60 * 1000)
-    return date.toISOString().slice(0, 19).replace('T', ' ')
-}
-
-export function formatDate(d: Date, timeZoneOffset?: number): string {
-    return formatTime(d, timeZoneOffset).slice(0, 10)
-}
+export * from './tu-datetime.ts'
 
 export function formatFloat(n: number, digits = 2, mininumDigits = 0) {
     return n.toLocaleString(undefined, { 
@@ -657,51 +643,6 @@ export function getJsonRegexps(): [RegExp, string][] {
         [/null/g, 'null'],
         [/[{}[\]:,]/g, 'punctuation'],
     ]
-}
-
-/** get the date boundaries for a given date and type
- *  @example getDateBoundaries(new Date(), 'week', 1) // get the next week boundaries
- *  @example getDateBoundaries(new Date(), 'week', -1) // get the last week boundaries
- *  @example getDateBoundaries(new Date(), 'month', 0) // get current month boundaries
- */
-export function getDateBoundaries(t: Date, type: 'week' | 'month' | 'day' | 'year', offset: number = 0): { start: Date, end: Date } {
-    const start = new Date(t);
-    const end = new Date(t);
-
-    switch (type) {
-        case 'week':
-            start.setDate(start.getDate() - (start.getDay() + 6) % 7 + offset * 7);
-            end.setDate(start.getDate() + 6);
-            break;
-        case 'month':
-            start.setMonth(start.getMonth() + offset, 1);
-            end.setMonth(start.getMonth() + 1, 0);
-            break;
-        case 'day':
-            start.setDate(start.getDate() + offset);
-            end.setDate(start.getDate());
-            break;
-        case 'year':
-            start.setFullYear(start.getFullYear() + offset, 0, 1);
-            end.setFullYear(start.getFullYear(), 11, 31);
-            break;
-    }
-
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-
-    return { start, end };
-}
-
-/** This function fixes the bug in Date that when time part it's not given, it 
-    will construct UTC date instead of local date.
-    @see https://www.google.com/search?q=date-only+forms+are+interpreted+as+a+UTC+time
-*/
-export function parseDate(s: string) : Date {
-    if (!s.includes(':')) {
-        s = s + 'T00:00:00'
-    }
-    return new Date(s)
 }
 
 /** replace html template
