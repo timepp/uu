@@ -1166,7 +1166,7 @@ export type VisualizeConfig<T extends object> = {
     // the default filter will do a deep search on all properties of the item
     // It's recommended to provide a custom filter for better performance, if there are many large items
     // Custom filter will be disabled when the filter string is exception
-    itemFilter: (item: T, filter: string) => boolean
+    itemFilter: (item: T, filter: string) => boolean | undefined
     // If not empty, sort and prop settings will be saved to local storage with the given key
     stateKey: string
 }
@@ -1640,9 +1640,11 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 }
             } else {
                 data = allData
-                const itemFilter = cfg.itemFilter || ((item: T, filter: string) => {
+                const itemFilter = (item: T, filter: string) => {
+                    const r = cfg.itemFilter ? cfg.itemFilter(item, filter) : undefined
+                    if (r !== undefined) return r
                     return tu.fuzzyFind(item, filter, false) !== null
-                })
+                }
                 for (const c of s.split(' ')) {
                     data = data.filter(v => itemFilter(v.item, c))
                 }
@@ -1779,6 +1781,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         'Insights': async () => {
             const info = tu.getDataInsights(arr)
             console.log('data insights', info)
+            // const goodInfo = info.filter(v => v.uniqueValues.length <= 200)
             showInDialog('Data Insights', await renderDataInsights(info))
         },
         'Select Props': () => selectProps(),
@@ -2408,58 +2411,238 @@ export function guessDataType(data: string | string[]) : DataType {
 }
 
 export async function renderDataInsights(info: tu.DataPropStat[]) {
-    const div = createElement(null, 'div', ['d-flex', 'flex-wrap', 'gap-2'])
+    const div = createElement(null, 'div')
+    // bar chart for selected prop, y axis: count, x axis: unique values / bins
+    // configurable:
+    // - pick which prop to show
+    // - x axis sort by value or count
+    // - hide high-count values to make long tail clearer
+    // - numeric/date values support configurable bin size for histogram view
+    const controls = createElement(div, 'div', ['d-flex', 'flex-wrap', 'gap-2', 'align-items-end', 'mb-2'])
+    const chartHost = createElement(div, 'div', ['border', 'border-light-subtle', 'rounded', 'p-2'])
+    const chartHeader = createElement(chartHost, 'div', ['d-flex', 'justify-content-between', 'align-items-center', 'mb-2'])
+    const title = createElement(chartHeader, 'h6', ['m-0'], 'Data insights')
+    const subtitle = createElement(chartHeader, 'small', ['text-muted'], '')
+    const chartBody = createElement(chartHost, 'div')
 
+    if (info.length === 0) {
+        createElement(chartBody, 'div', ['text-muted'], 'No data insights available.')
+        return div
+    }
+
+    const propGroup = createElement(controls, 'div', [])
+    createElement(propGroup, 'label', ['form-label', 'mb-1'], 'Property')
+    const propSelect = createElement(propGroup, 'select', ['form-select']) as HTMLSelectElement
     for (const stat of info) {
-        // filter out data that are not suitable for charting
-        if (stat.uniqueValues.length === 0 || stat.uniqueValues.length > 100) continue
-        if (stat.uniqueValues.some(uv => `${uv.value}`.length > 20)) continue
-        const dataType = guessDataType(stat.uniqueValues.map(uv => uv.value || ''))
+        createElement(propSelect, 'option', [], stat.propName, {}, { value: stat.propName })
+    }
 
-        console.log(`creating chart for ${stat.propName}`, stat)
+    const sortGroup = createElement(controls, 'div', [])
+    createElement(sortGroup, 'label', ['form-label', 'mb-1'], 'Sort by')
+    const sortSelect = createElement(sortGroup, 'select', ['form-select']) as HTMLSelectElement
+    createElement(sortSelect, 'option', [], 'Count (desc)', {}, { value: 'count' })
+    createElement(sortSelect, 'option', [], 'Value (asc)', {}, { value: 'value' })
 
-        const card = createElement(div, 'div', ['p-2', 'border', 'border-light-subtle', 'rounded'], '', {maxWidth: '100%'})
-        createElement(card, 'h6', ['text-center', 'mb-2'], `Group by "${stat.propName}"`)
-        let chartType = 'doughnut'
-        let width = '300px'
-        let height = '300px'
-        let values = stat.uniqueValues
-        if (values.length > 6) {
-            chartType = 'bar'
-            const w = stat.uniqueValues.length * 60
-            width = `${w}px`
-            // if (w > 1000) {
-            //     width = '100%'
-            //     card.style.width = '100%'
-            // }
-            if (dataType === 'integer') {
-                // sort by value
-                values = values.sort((a, b) => Number(a.value) - Number(b.value))
-            } else if (dataType === 'date') {
-                // sort by date
-                values = values.sort((a, b) => {
-                    const da = new Date(a.value || '')
-                    const db = new Date(b.value || '')
-                    return da.getTime() - db.getTime()
-                })
+    const binGroup = createElement(controls, 'div', [])
+    const binLabel = createElement(binGroup, 'label', ['form-label', 'mb-1'], 'Bin size')
+    const binInput = createElement(binGroup, 'input', ['form-control'], '', {}, {
+        type: 'number',
+        min: 1,
+        step: 1,
+        value: 1
+    }) as HTMLInputElement
+    const dateBinSelect = createElement(binGroup, 'select', ['form-select'], '', { display: 'none' }) as HTMLSelectElement
+    createElement(dateBinSelect, 'option', [], 'Minute', {}, { value: 'minute' })
+    createElement(dateBinSelect, 'option', [], 'Hour', {}, { value: 'hour' })
+    createElement(dateBinSelect, 'option', [], 'Day', {}, { value: 'day' })
+    createElement(dateBinSelect, 'option', [], 'Month', {}, { value: 'month' })
+    createElement(dateBinSelect, 'option', [], 'Year', {}, { value: 'year' })
+
+    const hideGroup = createElement(controls, 'div', [])
+    createElement(hideGroup, 'label', ['form-label', 'mb-1'], 'Hide count >')
+    const hideAboveInput = createElement(hideGroup, 'input', ['form-control'], '', {}, {
+        type: 'number',
+        min: 0,
+        step: 1,
+        value: ''
+    }) as HTMLInputElement
+    hideAboveInput.placeholder = 'No limit'
+
+    const hideLowGroup = createElement(controls, 'div', [])
+    createElement(hideLowGroup, 'label', ['form-label', 'mb-1'], 'Hide count <')
+    const hideBelowInput = createElement(hideLowGroup, 'input', ['form-control'], '', {}, {
+        type: 'number',
+        min: 0,
+        step: 1,
+        value: ''
+    }) as HTMLInputElement
+    hideBelowInput.placeholder = 'No limit'
+
+    let currentChart: any = null
+
+    function isFiniteNumberString(v: string) {
+        const n = Number(v)
+        return Number.isFinite(n)
+    }
+
+    function toDateLabel(t: number) {
+        const d = new Date(t)
+        const y = d.getFullYear()
+        const m = `${d.getMonth() + 1}`.padStart(2, '0')
+        const day = `${d.getDate()}`.padStart(2, '0')
+        return `${y}-${m}-${day}`
+    }
+
+    function toDateTimeLabel(t: number, unit: 'minute' | 'hour' | 'day' | 'month' | 'year') {
+        const d = new Date(t)
+        const y = d.getFullYear()
+        const m = `${d.getMonth() + 1}`.padStart(2, '0')
+        const day = `${d.getDate()}`.padStart(2, '0')
+        const h = `${d.getHours()}`.padStart(2, '0')
+        const min = `${d.getMinutes()}`.padStart(2, '0')
+        if (unit === 'year') return `${y}`
+        if (unit === 'month') return `${y}-${m}`
+        if (unit === 'day') return `${y}-${m}-${day}`
+        if (unit === 'hour') return `${y}-${m}-${day} ${h}:00`
+        return `${y}-${m}-${day} ${h}:${min}`
+    }
+
+    function floorDateToBoundary(dt: Date, unit: 'minute' | 'hour' | 'day' | 'month' | 'year') {
+        const d = new Date(dt)
+        d.setSeconds(0, 0)
+        if (unit === 'minute') return d
+        d.setMinutes(0)
+        if (unit === 'hour') return d
+        d.setHours(0)
+        if (unit === 'day') return d
+        d.setDate(1)
+        if (unit === 'month') return d
+        d.setMonth(0)
+        return d
+    }
+
+    function aggregateNumeric(values: { value: string, count: number }[], unit: number) {
+        const map = new Map<number, number>()
+        for (const item of values) {
+            const n = Number(item.value)
+            if (!Number.isFinite(n)) continue
+            const bucket = Math.floor(n / unit) * unit
+            map.set(bucket, (map.get(bucket) || 0) + item.count)
+        }
+        return [...map.entries()].map(([bucket, count]) => ({
+            value: unit === 1 ? `${bucket}` : `${bucket} ~ ${bucket + unit}`,
+            count,
+            _sortValue: bucket,
+        }))
+    }
+
+    function aggregateDate(values: { value: string, count: number }[], unit: 'minute' | 'hour' | 'day' | 'month' | 'year') {
+        const map = new Map<number, number>()
+        for (const item of values) {
+            const dt = new Date(item.value)
+            const t = dt.getTime()
+            if (!Number.isFinite(t)) continue
+            const bucket = floorDateToBoundary(dt, unit).getTime()
+            map.set(bucket, (map.get(bucket) || 0) + item.count)
+        }
+        return [...map.entries()].map(([bucket, count]) => ({
+            value: `${toDateTimeLabel(bucket, unit)}`,
+            count,
+            _sortValue: bucket,
+        }))
+    }
+
+    async function render() {
+        const stat = info.find(s => s.propName === propSelect.value) || info[0]
+        if (!stat) return
+
+        let values = [...stat.uniqueValues]
+
+        const dataType = guessDataType(stat.uniqueValues.map(v => v.value || ''))
+        const useHistogram = dataType === 'integer' || dataType === 'float' || dataType === 'date'
+        // binGroup.style.display = useHistogram ? '' : 'none'
+        const isDate = dataType === 'date'
+        binInput.disabled = !useHistogram || isDate
+        dateBinSelect.disabled = !isDate
+        binInput.style.display = isDate ? 'none' : ''
+        dateBinSelect.style.display = isDate ? '' : 'none'
+        binLabel.textContent = isDate ? 'Date bin size' : 'Bin size'
+
+        let chartValues: ({ value: string, count: number, _sortValue?: number })[] = values
+        const unit = Math.max(1, Number(binInput.value) || 1)
+        if (useHistogram) {
+            if (isDate) {
+                const dateUnit = (dateBinSelect.value || 'day') as 'minute' | 'hour' | 'day' | 'month' | 'year'
+                chartValues = aggregateDate(values, dateUnit)
+            } else if (values.every(v => isFiniteNumberString(v.value))) {
+                chartValues = aggregateNumeric(values, unit)
             }
         }
-        await createChart(card, width, height, {
-            type: chartType,
+
+        const beforeCountFilter = chartValues.length
+        const hideBelow = Number(hideBelowInput.value)
+        if (Number.isFinite(hideBelow) && hideBelowInput.value.trim() !== '' && hideBelow >= 0) {
+            chartValues = chartValues.filter(v => v.count >= hideBelow)
+        }
+        const hideAbove = Number(hideAboveInput.value)
+        if (Number.isFinite(hideAbove) && hideAboveInput.value.trim() !== '' && hideAbove >= 0) {
+            chartValues = chartValues.filter(v => v.count <= hideAbove)
+        }
+
+        if (sortSelect.value === 'value') {
+            if (dataType === 'integer' || dataType === 'float' || dataType === 'date') {
+                chartValues.sort((a, b) => (a._sortValue || 0) - (b._sortValue || 0))
+            } else {
+                chartValues.sort((a, b) => `${a.value}`.localeCompare(`${b.value}`))
+            }
+        } else {
+            chartValues.sort((a, b) => b.count - a.count)
+        }
+
+        title.textContent = `Group by "${stat.propName}"`
+        subtitle.textContent = `${chartValues.length} categories${chartValues.length !== beforeCountFilter ? ` (filtered from ${beforeCountFilter})` : ''}`
+
+        chartBody.innerHTML = ''
+        if (chartValues.length === 0) {
+            createElement(chartBody, 'div', ['text-muted'], 'No values to display with current filters.')
+            return
+        }
+
+        if (currentChart && typeof currentChart.destroy === 'function') {
+            currentChart.destroy()
+            currentChart = null
+        }
+
+        const width = `${Math.max(500, chartValues.length * 55)}px`
+        const { chart } = await createChart(chartBody, width, '420px', {
+            type: 'bar',
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                }
             },
             data: {
-                labels: values.map(uv => uv.value||'(empty)'),
+                labels: chartValues.map(uv => uv.value || '(empty)'),
                 datasets: [{
                     label: stat.propName,
-                    data: values.map(uv => uv.count),
-                    backgroundColor: dataType === 'colorName' ? values.map(v => v.value) : values.map(uv => getStringColor(`${uv.value}`, 100, 80)),
+                    data: chartValues.map(uv => uv.count),
+                    backgroundColor: chartValues.map(uv => getStringColor(`${uv.value}`, 100, 80)),
                 }]
             }
         })
+        currentChart = chart
     }
+
+    propSelect.onchange = render
+    sortSelect.onchange = render
+    hideBelowInput.oninput = render
+    hideAboveInput.oninput = render
+    binInput.oninput = render
+    dateBinSelect.onchange = render
+
+    await render()
     
     return div
 }

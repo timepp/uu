@@ -757,15 +757,21 @@ export function getDataInsights(arr: object[]) {
     }
 
     function isGoodStat(stat: DataPropStat) {
-        if (stat.uniqueValues.length < 2) return false
-        const n = stat.uniqueValues.length
-        const an = stat.uniqueValues.filter(v => v.count > 1).length
-        const m = stat.uniqueValues[0].count
-        if (m <= 10 && an / n < 0.1) return false
+        // if (stat.uniqueValues.length < 2) return false
+        // const n = stat.uniqueValues.length
+        // const an = stat.uniqueValues.filter(v => v.count > 1).length
+        // const m = stat.uniqueValues[0].count
+        // if (m <= 10 && an / n < 0.1) return false
+        if (stat.uniqueValues.length > 200) return false
         return true
     }
 
-    return stats.filter(isGoodStat).sort((a, b) => a.uniqueValues.length - b.uniqueValues.length);
+    // const goodStats = stats.filter(isGoodStat)
+    const goodStats = stats
+    goodStats.sort((a, b) => a.uniqueValues.length - b.uniqueValues.length)
+    return goodStats
+    // return stats.filter(isGoodStat).sort((a, b) => a.uniqueValues.length - b.uniqueValues.length);
+
 }
 
 export function findIndexes(s: string, sub: string): number[] {
