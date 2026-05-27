@@ -4,6 +4,7 @@
 // tu: a set of utility functions
 
 export * from './tu-datetime.ts'
+export * from './tu-cache.ts'
 
 export function formatFloat(n: number, digits = 2, mininumDigits = 0) {
     return n.toLocaleString(undefined, { 

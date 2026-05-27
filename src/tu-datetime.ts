@@ -69,7 +69,7 @@ export function parseDate(s: string) : Date {
  *   time := HH:mm:ss
  *   adjustment := ( '+' | '-' ) number unit
  *   unit := 'd' | 'h' | 'm' | 's' | 'M' | 'y' (day, hour, minute, second, month, year)
- *   rangeSpec := yyyy | yyyy-MM | yyyy-MM-dd | today | yesterday | tomorrow | this week | last week | next week | this month | last month | next month | this year | last year | next year | day(timeSpec) | week(timeSpec) | month(timeSpec) | year(timeSpec)
+ *   rangeSpec := yyyy | yyyy-MM | yyyy-MM-dd | today | yesterday | tomorrow | this-week | last-week | next-week | this-month | last-month | next-month | this-year | last-year | next-year | day(timeSpec) | week(timeSpec) | month(timeSpec) | year(timeSpec)
  * @param s the time range string, e.g.
  *     '2025-03'
  *     '2025-03-01 01:02..2025-03-02 03:04:05'
@@ -259,15 +259,15 @@ export function parseTimeRange(s: string, timeZoneOffset?: number) {
             'today': 'day(now)',
             'yesterday': 'day(now-1d)',
             'tomorrow': 'day(now+1d)',
-            'this week': 'week(now)',
-            'last week': 'week(now-7d)',
-            'next week': 'week(now+7d)',
-            'this month': 'month(now)',
-            'last month': 'month(now-1M)',
-            'next month': 'month(now+1M)',
-            'this year': 'year(now)',
-            'last year': 'year(now-1y)',
-            'next year': 'year(now+1y)',
+            'this-week': 'week(now)',
+            'last-week': 'week(now-7d)',
+            'next-week': 'week(now+7d)',
+            'this-month': 'month(now)',
+            'last-month': 'month(now-1M)',
+            'next-month': 'month(now+1M)',
+            'this-year': 'year(now)',
+            'last-year': 'year(now-1y)',
+            'next-year': 'year(now+1y)',
         }
         const aliased = aliases[normalized]
         if (aliased) {
@@ -325,4 +325,70 @@ export function parseTimeRange(s: string, timeZoneOffset?: number) {
         return { start: shiftedStart, end: shiftedEnd }
     }
     return { start: shiftedEnd, end: shiftedStart }
+}
+
+export type TimeUnit = 'day' | 'hour' | 'minute' | 'second' | 'month' | 'year'
+/**
+ * Adjust a time by a specified amount and unit
+ * @param base 
+ * @param amount 
+ * @param unit 
+ * @returns new Date
+ * @example adjustTimeUtc(new Date('2025-03-10T12:00:00Z'), 1, 'day') // 2025-03-11T12:00:00Z
+ * @example adjustTimeUtc(new Date('2025-03-10T12:00:00Z'), -2, 'hour') // 2025-03-10T10:00:00Z
+ * @example adjustTimeUtc(new Date('2025-01-31T12:00:00Z'), 1, 'month') // 2025-02-28T12:00:00Z (clamped)
+ * @example adjustTimeUtc(new Date('2024-02-29T12:00:00Z'), 1, 'year') // 2025-02-28T12:00:00Z (clamped)
+ */
+export function adjustTimeUtc(base: Date, amount: number, unit: TimeUnit) {
+    function addMonthsClampedUtc(base: Date, deltaMonths: number) {
+        const year = base.getUTCFullYear()
+        const month0 = base.getUTCMonth()
+        const day = base.getUTCDate()
+        const hour = base.getUTCHours()
+        const minute = base.getUTCMinutes()
+        const second = base.getUTCSeconds()
+        const ms = base.getUTCMilliseconds()
+
+        const total = year * 12 + month0 + deltaMonths
+        const targetYear = Math.floor(total / 12)
+        const targetMonth0 = ((total % 12) + 12) % 12
+        const maxDay = new Date(Date.UTC(targetYear, targetMonth0 + 1, 0)).getUTCDate()
+        const targetDay = Math.min(day, maxDay)
+
+        return new Date(Date.UTC(targetYear, targetMonth0, targetDay, hour, minute, second, ms))
+    }
+
+    const n = amount
+    const MINUTE_MS = 60 * 1000
+    const DAY_MS = 24 * 60 * MINUTE_MS
+    switch (unit) {
+        case 'day':
+            return new Date(base.getTime() + n * DAY_MS)
+        case 'hour':
+            return new Date(base.getTime() + n * 60 * MINUTE_MS)
+        case 'minute':
+            return new Date(base.getTime() + n * MINUTE_MS)
+        case 'second':
+            return new Date(base.getTime() + n * 1000)
+        case 'month':
+            return addMonthsClampedUtc(base, n)
+        case 'year':
+            return addMonthsClampedUtc(base, n * 12)
+        default:
+            throw new Error(`Invalid adjustment unit: ${unit}`)
+    }
+}
+
+function ulc(t: Date, converter: (t: Date) => Date, timeZoneOffset?: number) {
+    const offsetMinutes = timeZoneOffset ?? t.getTimezoneOffset()
+    const utc = new Date(t.getTime() - offsetMinutes * 60 * 1000)
+    const converted = converter(utc)
+    return new Date(converted.getTime() + offsetMinutes * 60 * 1000)
+}
+
+export function adjustTime(base: Date, amount: number, unit: TimeUnit, timeZoneOffset?: number) {
+    const offsetMinutes = timeZoneOffset ?? base.getTimezoneOffset()
+    const baseUtc = new Date(base.getTime() - offsetMinutes * 60 * 1000)
+    const adjustedUtc = adjustTimeUtc(baseUtc, amount, unit)
+    return new Date(adjustedUtc.getTime() + offsetMinutes * 60 * 1000)
 }
