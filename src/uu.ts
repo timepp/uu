@@ -8,13 +8,6 @@ export type AnnotatedString = {
     value: string,
     comment?: string
 }
-export type AutofillProvider = (category: string) => AnnotatedString[]
-
-let autofillProvider = (category: string) => [] as AnnotatedString[]
-
-export function setAutofillProvider(provider: AutofillProvider) {
-    autofillProvider = provider
-}
 
 export function triggerDownload(data: Blob | string | object, filename: string) {
     const blob = data instanceof Blob ? data : new Blob([typeof data === 'string' ? data : JSON.stringify(data, null, 2)], { type: 'application/json' })
@@ -118,12 +111,12 @@ export function createButton(parent: Element | null, classes: string[] = [], chi
 }
 
 export function createCheck(parent: Element | null, classes: string[] = [], labelText: string, checked = false, onChange = (checked: boolean) => {}) {
-    // 使用 label 替代 button，利用 label 的原生特性实现点击文字切换 checkbox
-    // 使用 d-flex 和 align-items-center 实现垂直居中对齐
+    // Use label instead of button, leveraging label's native feature to toggle checkbox on text click
+    // Use d-flex and align-items-center for vertical center alignment
     const btn = createElement(parent, 'label', ['btn', 'd-flex', 'align-items-center', ...classes])
     
     const checkbox = createElement(btn, 'input', ['me-2'], '', {}, {type: 'checkbox'})
-    // 消除 checkbox 可能存在的默认 margin 导致的对齐偏差
+    // Remove potential alignment offset caused by checkbox's default margin
     checkbox.style.marginTop = '0'
     createElement(btn, 'span', [], labelText)
 
@@ -144,13 +137,17 @@ export function createCheckBtn(parent: Element | null, classes: string[] = [], l
     label.append(labelText)
     label.style.cursor = 'pointer'
 
-    checkbox.checked = checked
-    if (accentColor) label.style.backgroundColor = checked ? accentColor : ''
-    checkbox.onchange = () => {
+    const updateStyle = () => {
         if (accentColor) label.style.backgroundColor = checkbox.checked ? accentColor : ''
-        onChange(checkbox.checked)
     }
 
+    checkbox.checked = checked
+    updateStyle() // Set initial style
+    
+    checkbox.onchange = () => {
+        updateStyle()
+        onChange(checkbox.checked)
+    }
     return { div, checkbox }
 }
 
@@ -335,14 +332,15 @@ export function showDialog<T>(
     onCreate?: (elements: DialogElements, finisher: (value?: T) => void) => void
 ) {
     const dialog = createElement(document.body, 'dialog', options.classes || [], '', {
-        padding: '5px',
+        padding: '0',
         display: 'flex',
         flexDirection: 'column',
         resize: 'both',
         ...(options.style || {})
     })
     // create a top bar with title and a close button to the right
-    const header = createElement(dialog, 'div', ['d-flex', 'justify-content-between', 'align-items-center', 'pb-2', 'border-bottom', 'mb-2', 'mt-1', 'pe-2'])
+    const header = createElement(dialog, 'div', ['d-flex', 'justify-content-between', 'align-items-center', 'p-2', 'border-bottom', 'mb-2'])
+    header.style.backgroundColor = '#005cf030'
     const titleElem = createElement(header, 'h4', ['m-0', 'ms-2'], title)
     const closeButton = createElement(header, 'button', ['btn', 'btn-close'])
 
@@ -382,7 +380,8 @@ export function showDialog<T>(
     const contentArea = createElement(dc, 'div', [], '', {
         flex: '1',
         overflow: 'auto',
-        padding: '0 10px'
+        padding: '0 10px',
+        outline: 'none'
     }, {
         tabIndex: -1
     })
@@ -526,294 +525,6 @@ export function showGeneralText(title: string, content: string) {
     })
 }
 
-export async function showConfirmationDialog(title: string, text: string) {
-    const r = await showDialog(title, text, {
-        style: { width: '400px' },
-        softDismissable: false,
-        actions: ['OK', 'Cancel']
-    })
-    return r === 'OK'
-}
-
-export type InputField = {
-    tip: string,
-    initialValue?: string,
-    multiLine?: boolean
-}
-export function showInputDialog(title: string, fields: InputField[]) {
-    return showDialog<string[]>(title, undefined, {
-        classes: [],
-        style: {width: '50vw'},
-        actions: ['OK', 'Cancel'],
-        softDismissable: false
-    }, (elements, finish) => {
-        const inputArea = createInputArea(elements.contentArea, fields.map(f => (
-            {
-                type: 'input',
-                id: f.tip.toString(),
-                label: f.tip,
-                initialValue: f.initialValue,
-                multiLine: f.multiLine
-            })
-        ))
-
-        const finishWithValue = () => finish(Object.values(inputArea.inputs).map(input => input.value))
-
-        if (fields.length === 1 && !fields[0].multiLine) {
-            const firstInput = Object.values(inputArea.inputs)[0]
-            firstInput.addEventListener('keydown', async (evt: Event) => {
-                const e = evt as KeyboardEvent
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    finishWithValue()
-                }
-            })
-        }
-
-        elements.buttons['OK'].onclick = () => finishWithValue()
-        elements.buttons['Cancel'].onclick = () => finish()
-    })
-}
-
-export async function prompt(title: string, tip: string | HTMLElement, initialValue?: string) {
-    return showDialog<string>(title, undefined, {
-        classes: [],
-        style: {width: '50vw'},
-        actions: ['OK', 'Cancel'],
-        softDismissable: true
-    }, (elements, finish) => {
-        createElement(elements.contentArea, 'div', ['text-muted', 'mb-1'], tip)
-        const input = createElement(elements.contentArea, 'input', ['form-control'], '', {}, { value: initialValue || '' })
-        const finishWithValue = () => finish(input.value)
-        input.addEventListener('keydown', async (evt: Event) => {
-                const e = evt as KeyboardEvent
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    finishWithValue()
-                }
-        })
-
-        elements.buttons['OK'].onclick = () => finishWithValue()
-        elements.buttons['Cancel'].onclick = () => finish()
-    })
-}
-
-export async function promptMultiline(title: string, tip: string | HTMLElement, initialValue?: string) {
-    return showDialog<string>(title, undefined, {
-        classes: [],
-        style: {width: '50vw'},
-        actions: ['OK', 'Cancel'],
-        softDismissable: true
-    }, (elements, finish) => {
-        createElement(elements.contentArea, 'div', ['text-muted', 'mb-1'], tip)
-        const input = createElement(elements.contentArea, 'textarea', ['form-control'], '', {}, { value: initialValue || '' })
-        input.rows = 5
-        const finishWithValue = () => finish(input.value)
-        elements.buttons['OK'].onclick = () => finishWithValue()
-        elements.buttons['Cancel'].onclick = () => finish()
-    })
-}
-
-export type InputElement = string | {
-    name: string
-    valueId?: string // For input type
-    initialValue?: string // For input type
-    onClick?: (params: Record<string, string>) => HTMLElement | Promise<HTMLElement> | void
-}
-
-export type Input = {
-    type: 'input' | 'button' | 'select',
-    id: string,
-    label?: string,
-    options?: string[], // for select
-    grow?: number,
-    initialValue?: string
-}
-/**
- * Simple form: createInputArea(parent, 'input:name Name | input:age Age | button:search Search')
- */
-export function createInputArea(parent: Element|null, elements: string | Input[]) {
-    if (typeof elements === 'string') {
-        // schema in the string: input:user User Name | input:age | button:search
-        const parts = elements.split('|').map(p => p.trim())
-        const params = parts.map(part => {
-            const colonPos = part.indexOf(':')
-            const spacePos = part.indexOf(' ')
-            if (colonPos === -1) {
-                throw new Error(`Invalid input area schema: ${part}`)
-            }
-            const type = part.substring(0, colonPos)
-            const id = (spacePos === -1) ? part.substring(colonPos + 1) : part.substring(colonPos + 1, spacePos)
-            const name = (spacePos === -1) ? undefined : part.substring(spacePos + 1)
-            return { type: type as 'input' | 'button' | 'select', id, name }
-        })
-        return createInputArea(parent, params)
-    }
-    const inputs: Record<string, HTMLInputElement> = {}
-    const buttons: Record<string, HTMLButtonElement> = {}
-    const selects: Record<string, HTMLSelectElement> = {}
-    const div = createElement(parent, 'div', ['d-flex', 'gap-2', 'overflow-auto'])
-    for (const e of elements) {
-        if (e.type === 'input') {
-            const {ig, input} = createAutofillInput(e.label || e.id, '', e.initialValue || '', e.id)
-            // make input group grow to fill available space
-            ig.classList.add(`flex-shrink-0`, 'w-auto')
-            ig.style.flexGrow = (e.grow || 1).toString()
-            // ig.style.width = '0'
-            div.appendChild(ig)
-            inputs[e.id] = input
-        } else if (e.type === 'button') {
-            const btn = createButton(div, ['btn', 'btn-primary'], e.label || e.id)
-            buttons[e.id] = btn
-        } else if (e.type === 'select') {
-            const ig = createElement(div, 'div', ['input-group', 'flex-shrink-0', 'w-auto'])
-            const label = createElement(ig, 'label', ['input-group-text'], e.label || e.id, {minWidth: '100px'})
-            const select = createElement(ig, 'select', ['form-select'], '', {}, {id: e.id})
-            if (e.options) {
-                for (const option of e.options) {
-                    const optionElem = createElement(select, 'option', [], option, {}, {value: option})
-                    if (e.initialValue && e.initialValue === option) {
-                        optionElem.selected = true
-                    }
-                }
-            }
-            selects[e.id] = select
-        }
-    }
-    return { div, inputs, buttons, selects }
-}
-
-export function createDataArea(parent: Element|null, foldable: boolean, params: InputElement[]) {
-    const div = createElement(parent, 'div', ['border', 'border-light-subtle', 'mb-2'])
-    const regulatedParams = params.map(p => (typeof p === 'string')? { name: p } : p)
-    const inputArea = createElement(div, 'div', ['p-1', 'd-flex', 'gap-2', 'overflow-auto'])
-    const resultArea = createElement(div, 'div', ['mt-2', 'p-1'])
-    const inputs = {} as Record<string, HTMLInputElement>
-
-    const state = tu.createObservableState(null, {showResult: true}, s => {
-        resultArea.style.display = s.showResult ? '' : 'none'
-    })
-
-    if (foldable) {
-        const toggleBtn = createElement(inputArea, 'button', ['btn', 'btn-secondary'])
-        toggleBtn.title = 'Show/Hide Result Area'
-        toggleBtn.onclick = () => state.showResult = !state.showResult
-        state.addObserver(s => toggleBtn.replaceChildren(s.showResult ? fa('fa-chevron-up') : fa('fa-chevron-down')))
-    }
-
-    for (const p of regulatedParams) {
-        if (p.onClick) {
-            // button
-            const btn = createButton(inputArea, ['btn', 'btn-primary'], p.name, async () => {
-                if (!p.onClick) return
-                const params = Object.fromEntries(Object.entries(inputs).map(([k, v]) => [k, v.value]))
-                const r = await callAsyncFunctionWithProgress(async () => await p.onClick!(params))
-                if (r) {
-                    setContent(resultArea, r)
-                }
-                state.showResult = true
-            })
-            btn.style.whiteSpace = 'nowrap'
-        } else {
-            // input
-            const {ig, input} = createAutofillInput(p.name, '', p.initialValue || '', p.valueId || p.name)
-            // make input group grow to fill available space
-            ig.classList.add('flex-grow-1')
-            ig.style.minWidth = '200px'
-            inputArea.appendChild(ig)
-            inputs[p.valueId || p.name] = input
-        }
-    }
-    return div
-}
-
-/**
- * Given an user provided handler: create input controls, handle user interactions, and show result area.
- */
-export function createInputAction(title: string, actionName: string, valueId: string, handler: (value: string) => Promise<HTMLElement>, value?: string) {
-    const div = createElement(null, 'div', ['border', 'border-light-subtle', 'rounded'])
-    const resultArea = createElement(null, 'div', ['mt-2', 'p-1'])
-    const {ig, input, button} = createAutofillInput(title, '', '', valueId, async v => {
-        const result = await callAsyncFunctionWithProgress(() => handler(v), `${actionName}`)
-        setContent(resultArea, result)
-    }, actionName)
-    if (value) {
-        input.value = value
-        button?.click()
-    }
-    div.appendChild(ig)
-    div.appendChild(resultArea)
-    return div
-}
-
-export function createAutofillInput(title: string, placeholder: string, initialValue: string, valueId = title, handler?: (value: string) => void, btn?: string) {
-    const ig = createElement(null, 'div', ['input-group'])
-    const label = createElement(ig, 'label', ['input-group-text'], title, {minWidth: '100px'})
-    const input = createElement(ig, 'input', ['form-control'], '', {}, {placeholder})
-    const history = JSON.parse(localStorage.getItem(`input-history-${valueId}`) || '[]') as string[]
-    
-    function updateHistory(newValue: string) {
-        if (!history.includes(newValue)) {
-            history.unshift(newValue)
-            localStorage.setItem(`input-history-${valueId}`, JSON.stringify(history.slice(0, 100)))
-        }
-    }
-
-    let button : HTMLButtonElement | null = null
-    if (btn) {
-        button = createElement(ig, 'button', ['input-group-btn', 'btn', 'btn-primary'], btn)
-        button.onclick = () => {
-            if (handler) {
-                updateHistory(input.value)
-                handler(input.value)
-            }
-        }
-    }
-    input.id = valueId
-    input.value = initialValue || localStorage.getItem(`input-${valueId}`) || ''
-    label.style.cursor = 'pointer'
-    label.onclick = async () => {
-        // autofill support
-        const predefined = autofillProvider(valueId)
-        const candidates = [
-            ...predefined,
-            ...history.map(h => ({value: h, comment: 'from history'})).filter(p => !predefined.find(pp => pp.value === p.value))
-        ]
-        // add current value to candidates if not exists
-        if (!candidates.find(c => c.value === input.value) && input.value.trim() !== '') {
-            candidates.unshift({value: input.value, comment: 'current value'})
-        }
-        if (candidates.length !== 0) {
-            const r = await chooseOne(candidates)
-            if (r !== undefined) {
-                input.value = r
-                localStorage.setItem(`input-${valueId}`, input.value)
-                updateHistory(r)
-            }
-        }
-        input.focus()
-    }
-    // handle pressing enter key to trigger handler
-    input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            if (handler) {
-                updateHistory(input.value)
-                handler(input.value)
-            }
-        }
-    })
-    input.onchange = () => {
-        localStorage.setItem(`input-${valueId}`, input.value)
-    }
-    return {ig, input, button}
-}
-
-export async function chooseOne(data: (string|AnnotatedString)[]) {
-    const r = await showSelection('Please choose one item', data, {pickAndClose: true, showStatus: false, showToolbar: false})
-    return r ? r[0] : undefined
-}
-
-export type SelectionItem = AnnotatedString | string
 export type DraggableSortedContainerOption = {
     showOrder: boolean
     interactive: boolean
@@ -940,870 +651,6 @@ export class DraggableSortedContainer {
     }
 }
 
-export type SelectOption = {
-    singleSelect: boolean
-    pickAndClose: boolean
-    initialSelection: string[]
-    showOrder: boolean
-    showToolbar: boolean
-    showStatus: boolean
-
-    // when true, selected items in status bar can be reordered and removed quickly
-    // default: true
-    statusInteractive: boolean
-
-    // return `newSelection` if the new selection is valid
-    // otherwise, return a selection if checker can fix invalid selection
-    // otherwise, return an error message
-    checker: (oldSelection: string[], newSelection: string[]) => string[] | string
-
-    // used to apply custom styles to individual items
-    styleModifier: (item: string, elem: HTMLElement) => void
-
-    // dialog styles
-    dlgStyle: Partial<CSSStyleDeclaration>
-}
-
-export function showSelection(title: string, options: SelectionItem[], cfg: Partial<SelectOption> = {}) {
-    return showDialog<string[]>(title, undefined, {
-        classes: [], 
-        style: {width: '80vw', ...cfg.dlgStyle}, 
-        actions: ['OK', 'Cancel'],
-        softDismissable: true
-    }, (de, finish) => {
-        // local state
-        let selection = cfg.initialSelection || []
-        const elements = {} as Record<string, HTMLSpanElement>
-        let currentAlert = ''
-
-        // UI
-        const dc = createElement(de.contentArea, 'div', ['d-flex', 'flex-column'])
-        const statusBar = createElement(dc, 'span', ['form-control'])
-        const selectedPrefix = createElement(statusBar, 'span', ['me-2'], 'Selected: ', { color: 'blue' })
-        const selectedItems = new DraggableSortedContainer(statusBar, {
-            emptyText: '(none)',
-            showOrder: cfg.showOrder,
-            interactive: (cfg.statusInteractive ?? true) && !cfg.singleSelect,
-            removable: (cfg.statusInteractive ?? true) && !cfg.singleSelect,
-            onChange: (newSelection) => onSelectionChange(selection, newSelection)
-        })
-        const toolbar = createElement(dc, 'div', ['input-group', 'mb-4', 'mt-2'])
-        const filter = createElement(toolbar, 'input', ['form-control'], '', {}, {placeholder: 'Filter'})
-        const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☑')
-        const unSelectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☐')
-        const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'p-2'])
-        const alert = createElement(dc, 'div', ['alert', 'alert-danger', 'd-none'])
-
-        if (cfg.pickAndClose) cfg.singleSelect = true
-
-        syncDisplay(toolbar, cfg.showToolbar ?? true)
-        syncDisplay(statusBar, cfg.showStatus ?? true)
-        syncDisplay(selectAllBtn, !cfg.singleSelect)
-        syncDisplay(unSelectAllBtn, !cfg.singleSelect)
-        syncDisplay(de.footer, !cfg.pickAndClose)
-
-        function updateUI() {
-            if (!statusBar.firstChild) {
-                statusBar.appendChild(selectedPrefix)
-                statusBar.appendChild(selectedItems.root)
-            }
-            selectedItems.setStrings(selection)
-
-            for (const [value, div] of Object.entries(elements)) {
-                const isItemSelected = selection.includes(value)
-                div.classList.toggle('selected', isItemSelected)
-                //div.style.backgroundColor = isItemSelected ? 'rgba(0, 123, 255, 0.5)' : 'rgb(244, 244, 244)'
-                div.style.border = '2px solid'
-                div.style.borderColor = isItemSelected ? '#0d6efd' : '#cccccc'
-            }
-
-            alert.textContent = currentAlert
-            syncDisplay(alert, currentAlert !== '')
-        }
-
-        function onSelectionChange(oldSelection: string[], newSelection: string[]) {
-            const r = cfg.checker?.(oldSelection, newSelection)
-            if (typeof r === 'string') {
-                // invalid state
-                currentAlert = r
-                selection = newSelection
-            } else {
-                // fixed state
-                currentAlert = ''
-                selection = r || newSelection
-                if (cfg.pickAndClose && selection.length > 0) {
-                    finish(selection)
-                    return
-                }
-            }
-            updateUI()
-        }
-
-        for (const d of options.map(o => typeof o === 'string' ? { value: o } : o)) {
-            const div = createElement(main, 'div', ['rounded', 'hover-effect', 'text-center', 'p-2'], '', { cursor: 'pointer', minWidth: '100px' })
-            createElement(div, 'span', [], d.value)
-            if (d.comment) {
-                createElement(div, 'span', [], '', { border: '1px solid #cccccc', margin: '0 5px', width: '1px', height: '80%' })
-                createElement(div, 'span', ['text-muted'], d.comment)
-            }
-            elements[d.value] = div
-            cfg.styleModifier?.(d.value, div)
-            div.onclick = () => {
-                const newSelection = cfg.singleSelect ? [d.value] : (selection.includes(d.value) ? selection.filter(v => v !== d.value) : [...selection, d.value])
-                onSelectionChange(selection, newSelection)
-            }
-        }
-
-        filter.oninput = () => {
-            const v = filter.value.toLowerCase()
-            // for (const item of Array.from(main.children)) {
-            //     syncDisplay(item as HTMLElement, item.textContent?.toLowerCase().includes(v))
-            // }
-            for (const [value, elem] of Object.entries(elements)) {
-                console.log(value, v, value.toLowerCase().includes(v), elem)
-                syncDisplay(elem as HTMLElement, value.toLowerCase().includes(v))
-            }
-        }
-
-        selectAllBtn.onclick = () => onSelectionChange(selection, Object.keys(elements))
-        unSelectAllBtn.onclick = () => onSelectionChange(selection, [])
-        de.buttons['OK'].onclick = () => finish(selection)
-        de.buttons['Cancel'].onclick = () => finish()
-
-        updateUI()
-        try {
-            filter.focus({ preventScroll: true })
-        } catch {
-            filter.focus()
-        }
-    })
-}
-
-export type PropRenderOption<T extends object> = {
-    formatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement
-    style?: Partial<CSSStyleDeclaration>
-    onClick?: (item: T, prop: string, dataIndex: number) => boolean
-}
-export type ItemAction = (item: any, dataIndex: number) => void
-export type ItemActions = Record<string, ItemAction>
-export type WallRenderOption<T extends object> = RenderOption<T> & {
-    // Required: returns the image URL for a given item
-    imageUrl: (item: T, dataIndex: number) => string
-    // Fixed width of each image cell, default '200px'
-    imageWidth?: string
-    // Vertical gap between images in each column, default '6px'
-    rowGap?: string
-}
-
-export type RenderOption<T extends object> = {
-    props?: string[]
-    propOptions?: Record<string, PropRenderOption<T>>
-
-    propFormatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement | undefined
-    propStyle?: (item: T, prop: string, dataIndex: number) => Partial<CSSStyleDeclaration> | undefined
-    onPropClick?: (item: T, prop: string, dataIndex: number) => boolean|undefined
-    
-    // When used in table mode, this must return a tr element directly.
-    itemFormatter?: (item: T, dataIndex: number, props: string[]) => HTMLElement | undefined
-    onItemClick?: (item: T, dataIndex: number) => boolean|undefined
-    itemStyle?: (item: T, dataIndex: number) => Partial<CSSStyleDeclaration> | undefined
-}
-export type VisualizeConfig<T extends object> = {
-    // the default render style is 'table'
-    renderStyles: ('table' | 'tile' | 'wall')[]
-
-    showPropSelector: boolean
-    showSortButton: boolean
-    showFilter: boolean    
-
-    renderOption: RenderOption<T>
-    tableRenderOption: RenderOption<T>
-    tileRenderOption: RenderOption<T>
-    wallRenderOption: WallRenderOption<T>
-    
-    itemActions: ItemActions | ((item: T, dataIndex: number) => ItemActions)
-
-    // If not empty, raw index will be shown in the first prop with the given prop name
-    // note: this prop can be hide / sort as well
-    // default: #
-    // set it to empty string to hide raw index
-    rawIndexProp: string
-
-    // If not empty, an additional prop will be shown with the given name, which contains actions for each item
-    // note: this prop can be hide / sort as well
-    // default: (Actions)
-    // set it to empty string to hide action prop
-    actionProp: string
-
-    noDefaultActions: boolean
-
-    // if present, paging will be enabled
-    // if not present, all rows will be shown
-    pageSize: number
-
-    // if true, nested objects will be flattened using dot notation
-    // so that their properties can be shown as props
-    // e.g. { a: { b: 1 } } => prop "a.b" with value 1
-    flattenNestedObjects: boolean
-
-    // whether to hide props which as the same value for all items
-    // default: true
-    // take effect only when `props` is not provided
-    hideUniformProps: boolean
-
-    stringFoldThreshold: number
-    
-    // initial sort by settings, if not present, no sorting is applied
-    sortBy: {
-        prop: string
-        order: 'asc' | 'desc'
-    }[]
-
-    // initial filter string, if not present, no filtering is applied
-    filter: string
-
-    // item filter, used to filter items given the filter string
-    // the default filter will do a deep search on all properties of the item
-    // It's recommended to provide a custom filter for better performance, if there are many large items
-    // Custom filter will be disabled when the filter string is exception
-    itemFilter: (item: T, filter: string) => boolean | undefined
-    // If not empty, sort and prop settings will be saved to local storage with the given key
-    stateKey: string
-}
-
-export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}) {
-    if (arr.length === 0) {
-        return createElement(null, 'div', ['alert', 'alert-info', 'mb-0'], 'Data is empty.')
-    }
-
-    // helper functions
-    const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
-    const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
-    const renderStyles = cfg.renderStyles || ['table', 'tile', 'wall']
-    const rawIndexProp = cfg.rawIndexProp ?? '#'
-    const actionProp = cfg.actionProp ?? '(Actions)'
-
-    // persist state
-    const state = tu.createObservableState(cfg.stateKey || null, {
-        sortBy: (cfg.sortBy || []) as VisualizeConfig<T>['sortBy'],
-        filter: cfg.filter || '',
-        pageSize: cfg.pageSize,
-        renderStyle: renderStyles[0],
-        tableProps: undefined as string[] | undefined,
-        tileProps: undefined as string[] | undefined,
-        wallProps: undefined as string[] | undefined,
-    }, () => { })
-
-    // now paging section, which looks like 4 buttons and an edit: "<< < [8] > >>
-
-    const hideUniformProps = cfg.hideUniformProps??true
-    let allProps = tu.dataProperties(arr)
-    if (cfg.flattenNestedObjects) {
-        const props = new Set<string>()
-        tu.traverseObject(arr, -1, (p, v, t) => {
-            const path = p.slice(1).join('.')
-            if (path && v instanceof Array) {
-                props.add(path)
-                return 0
-            }
-            if (t === 'leaf') props.add(path)
-        })
-        allProps = [...props]
-    }
-
-    // get prop value
-    function getPropValue(item: T, prop: string, index: number) {
-        if (prop === rawIndexProp) {
-            return index + 1
-        }
-        if (prop === actionProp) {
-            return `action #${index + 1}`
-        }
-        if (!cfg.flattenNestedObjects) {
-            return item[prop as keyof T]
-        }
-        const parts = prop.split('.')
-        let v = item as any
-        for (const part of parts) {
-            if (v === null || v === undefined) {
-                return undefined
-            }
-            v = v[part]
-        }
-        return v
-    }
-
-    function getActiveViewRenderOption() {
-        if (state.renderStyle === 'table') return cfg.tableRenderOption
-        if (state.renderStyle === 'tile') return cfg.tileRenderOption
-        return cfg.wallRenderOption
-    }
-
-    function createActionArea(item: T, index: number) {
-        console.log('createActionArea', item, index)
-        const actions = (typeof cfg.itemActions === 'function') ? cfg.itemActions(item, index) : (cfg.itemActions || {})
-        const defaultActions = cfg.noDefaultActions ? {} : {
-            raw: () => showJsonResult(`Raw data (index: ${index})`, item)
-        }
-        const allActions = { ...defaultActions, ...actions }
-        const container = createElement(null, 'div', ['d-flex', 'gap-2'])
-        for (const [name, action] of Object.entries(allActions)) {
-            const btn = createElement(container, 'a', ['me-2'], name)
-            btn.style.cursor = 'pointer'
-            btn.onclick = () => action(item, index)
-        }
-        return container
-    }
-
-    const generalPropFormatter = (item: T, prop: string, dataIndex: number) => {
-        const value = getPropValue(item, prop, dataIndex)
-        if (typeof value === 'object' && value !== null) {
-            // return createJsonView(JSON.stringify(value, null, 2))
-            return tu.stringify(value)
-        } else if (prop === actionProp) {
-            // create action buttons
-            return createActionArea(item, dataIndex)
-        } else {
-            return `${value}`
-        }
-    }
-
-    // returns an html element for the given prop of the given item
-    function renderPropValue(item: T, prop: string, index: number) {
-        const viewOption = getActiveViewRenderOption()
-        // now render the property, try formatters until getting a non-undefined result
-        const formatterFallbackChain = [
-            viewOption?.propOptions?.[prop]?.formatter,
-            viewOption?.propFormatter,
-            cfg.renderOption?.propOptions?.[prop]?.formatter,
-            cfg.renderOption?.propFormatter,
-            generalPropFormatter
-        ]
-        let value = undefined
-        for (const formatter of formatterFallbackChain) {
-            if (!formatter) continue
-            value = formatter(item, prop, index)
-            if (value !== undefined) break
-        }
-        // wrap string with html element
-        if (typeof value === 'string') {
-            value = createFoldedString(value, cfg.stringFoldThreshold??120)
-        }
-        // value is HTML element now
-        const element = value as HTMLElement
-
-        // get style in the same way
-        const styleFallbackChain = [
-            () => viewOption?.propOptions?.[prop]?.style,
-            viewOption?.propStyle,
-            () => cfg.renderOption?.propOptions?.[prop]?.style,
-            cfg.renderOption?.propStyle
-        ]
-        const mergedStyle = {} as Partial<CSSStyleDeclaration>
-        for (const styleGetter of styleFallbackChain) {
-            if (!styleGetter) continue
-            const style = styleGetter(item, prop, index)
-            if (style !== undefined) {
-                Object.assign(mergedStyle, style)
-                break
-            }
-        }
-        
-        Object.assign(element.style, mergedStyle)
-
-        // onclick: execute onclick chain backwards until one handler returns true
-        const onClickFallbackChain = [
-            viewOption?.propOptions?.[prop]?.onClick,
-            viewOption?.onPropClick,
-            cfg.renderOption?.propOptions?.[prop]?.onClick,
-            cfg.renderOption?.onPropClick
-        ].filter(v => !!v)
-        if (onClickFallbackChain.length > 0) {
-            element.onclick = (evt) => {
-                evt.stopPropagation()
-                if (window.getSelection()?.toString()) return
-                for (const onClickHandler of onClickFallbackChain) {
-                    if (!onClickHandler) continue
-                    const handled = onClickHandler(item, prop, index)
-                    if (handled !== false) break
-                }
-            }
-            element.style.cursor = 'pointer'
-        }
-
-        return element
-    }
-
-    // properties used to construct visible props
-    // presentation props should be put before other props but after raw index prop
-    const presentationProps = cfg.renderOption?.props ?? []
-    const allPropsWithRaw = [
-        rawIndexProp,
-        ...presentationProps,
-        ...allProps.filter(p => !presentationProps.includes(p)),
-        actionProp
-    ].filter(v => !!v) as string[]
-    let meaningfulProps = allProps
-    if (hideUniformProps && arr.length > 1) {
-        meaningfulProps = allProps.filter(p => {
-            const firstValue = getPropValue(arr[0], p, 0)
-            return arr.some((item, index) => {
-                const v = getPropValue(item, p, index)
-                return JSON.stringify(v) !== JSON.stringify(firstValue)
-            })
-        })
-    }
-    const meaningfulPropsWithRaw = [
-        rawIndexProp,
-        ...presentationProps,
-        ...meaningfulProps.filter(p => !presentationProps.includes(p))
-    ].filter(v => !!v) as string[]
-
-    function getVisibleProps() {
-        const stateProps = state.renderStyle === 'table' ? state.tableProps : state.renderStyle === 'tile' ? state.tileProps : state.wallProps
-        const viewOption = getActiveViewRenderOption()
-        return stateProps || viewOption?.props || cfg.renderOption?.props || meaningfulPropsWithRaw
-    }
-
-    function renderItem(item: T, index: number) {
-        const viewOption = getActiveViewRenderOption()
-        const itemFormatterFallbackChain = [
-            viewOption?.itemFormatter,
-            cfg.renderOption?.itemFormatter
-        ].filter(v => !!v) as ((item: T, dataIndex: number, props: string[]) => HTMLElement)[]
-        for (const itemFormatter of itemFormatterFallbackChain) {
-            const r = itemFormatter(item, index, getVisibleProps())
-            if (r) return r
-        }
-    }
-
-    function getItemStyle(item: T, index: number) {
-        const viewOption = getActiveViewRenderOption()
-        const itemStyleFallbackChain = [
-            viewOption?.itemStyle,
-            cfg.renderOption?.itemStyle
-        ].filter(v => !!v) as ((item: T, dataIndex: number) => Partial<CSSStyleDeclaration>)[]
-        let style = undefined
-        for (const itemStyleGetter of itemStyleFallbackChain) {
-            style = itemStyleGetter(item, index)
-            if (style) break
-        }
-        return style
-    }
-
-    function attachItemClickHandler(item: T, index: number, element: HTMLElement) {
-        const viewOption = getActiveViewRenderOption()
-        const onItemClickFallbackChain = [
-            viewOption?.onItemClick,
-            cfg.renderOption?.onItemClick
-        ].filter(v => !!v) as ((item: T, dataIndex: number) => boolean)[]
-        if (onItemClickFallbackChain.length === 0) return
-        element.onclick = (evt) => {
-            evt.stopPropagation()
-            for (const onItemClickHandler of onItemClickFallbackChain) {
-                const handled = onItemClickHandler(item, index)
-                if (handled !== false) break
-            }
-        }
-        element.style.cursor = 'pointer'
-    }
-
-    function tableRenderer(startIndex: number, endIndex: number) {
-        const table = createElement(null, 'table', ['table', 'table-bordered', 'table-hover', 'mb-0'])
-        const tbody = createElement(table, 'tbody')
-        const sortBy = state.sortBy || []
-
-        // thead
-        const thead = createElement(table, 'thead', ['bg-light'])
-        const tr = createElement(thead, 'tr', [])
-        for (const prop of getVisibleProps()) {
-            const th = createElement(tr, 'th')
-            createElement(th, 'span', [], prop)
-            const i = sortBy.findIndex(s => s.prop === prop)
-            if (i >= 0) {
-                const s = sortBy[i]
-                createElement(th, 'span', [], toArrow(s.order))
-                if (sortBy.length > 1) {
-                    createElement(th, 'span', [], `${i + 1}`, { verticalAlign: 'super', fontSize: '0.8em' })
-                }
-            }
-
-            th.style.cursor = 'pointer'
-            th.style.userSelect = 'none'
-            th.onclick = () => {
-                const s = state.sortBy?.find(s => s.prop === prop)
-                if (s) {
-                    if (s.order === 'asc') {
-                        state.sortBy = [{ prop, order: 'desc' }]
-                    } else if (s.order === 'desc') {
-                        state.sortBy = []
-                    }
-                } else {
-                    state.sortBy = [{ prop, order: 'asc' }]
-                }
-                applySort()
-                gotoPage(0)
-            }
-        }
-
-        for (let i = startIndex; i < endIndex; i++) {
-            let tr = renderItem(data[i].item, data[i].index)
-            if (!tr) {
-                // create row in the default way
-                tr = createElement(null, 'tr', [], '', getItemStyle(data[i].item, data[i].index))
-                for (const [j, prop] of getVisibleProps().entries()) {
-                    const td = createElement(tr, 'td')
-                    const element = renderPropValue(data[i].item, prop, data[i].index)
-                    td.appendChild(element)
-                }
-            }
-            attachItemClickHandler(data[i].item, data[i].index, tr)
-            tbody.appendChild(tr)
-        }
-        return table
-    }
-
-    function tileRenderer(startIndex: number, endIndex: number) {
-        const container = createElement(null, 'div', [], '', {
-            display: 'grid',
-            gap: '10px',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))'
-        })
-
-        for (let i = startIndex; i < endIndex; i++) {
-            let card = renderItem(data[i].item, data[i].index)
-            if (!card) {
-                const item = data[i].item
-                const dataIndex = data[i].index
-                card = createElement(container, 'div', ['card', 'p-1', 'hover-effect'], '', getItemStyle(item, dataIndex))
-
-                // const cardBody = createElement(card, 'div', ['card-body', 'd-flex', 'flex-column', 'gap-2'])
-                for (const [j, prop] of getVisibleProps().entries()) {
-                    const element = renderPropValue(item, prop, dataIndex)
-                    card.appendChild(element)
-                }
-            }
-
-            attachItemClickHandler(data[i].item, data[i].index, card)
-        }
-        return container
-    }
-
-    function wallRenderer(startIndex: number, endIndex: number) {
-        const wallOption = cfg.wallRenderOption
-        const imageWidth = wallOption?.imageWidth || '200px'
-        const rowGap = wallOption?.rowGap || '6px'
-        const container = createElement(null, 'div', [], '', {
-            columnWidth: imageWidth,
-            columnGap: rowGap
-        })
-
-        for (let i = startIndex; i < endIndex; i++) {
-            const item = data[i].item
-            const dataIndex = data[i].index
-
-            const imgUrl = wallOption?.imageUrl(item, dataIndex) ?? ''
-
-            // wrapper needs relative positioning for the overlay
-            const wrapper = createElement(container, 'div', [], '', {
-                position: 'relative',
-                overflow: 'hidden',
-                lineHeight: '0',
-                marginBottom: rowGap
-            })
-            Object.assign(wrapper.style, getItemStyle(item, dataIndex) || {})
-
-            const img = createElement(wrapper, 'img', [], '', {
-                width: '100%',
-                height: 'auto',
-                display: 'block'
-            }) as HTMLImageElement
-            img.src = imgUrl
-            img.loading = 'lazy'
-
-            // semi-transparent hover overlay listing visible prop values
-            const overlay = createElement(wrapper, 'div', [], '', {
-                position: 'absolute',
-                bottom: '0',
-                left: '0',
-                right: '0',
-                background: 'rgba(0,0,0,0.65)',
-                color: '#fff',
-                padding: '4px 6px',
-                fontSize: '0.75em',
-                lineHeight: '1.4',
-                opacity: '0',
-                transition: 'opacity 0.2s',
-                overflowY: 'auto',
-                maxHeight: '60%'
-            })
-            for (const prop of getVisibleProps()) {
-                const val = getPropValue(item, prop, dataIndex)
-                if (val === undefined || val === null) continue
-                const row = createElement(overlay, 'div', [])
-                createElement(row, 'span', [], `${prop}: `, { fontWeight: 'bold', opacity: '0.75' })
-                createElement(row, 'span', [], renderPropValue(item, prop, dataIndex))
-            }
-
-            wrapper.addEventListener('mouseenter', () => { overlay.style.opacity = '1' })
-            wrapper.addEventListener('mouseleave', () => { overlay.style.opacity = '0' })
-
-            attachItemClickHandler(item, dataIndex, wrapper)
-        }
-        return container
-    }
-
-    function getRenderer() {
-        return state.renderStyle === 'table' ? tableRenderer : state.renderStyle === 'tile' ? tileRenderer : wallRenderer
-    }
-
-    // data is filtered view of arr
-    const allData = arr.map((item, index) => ({item, index}))
-    let data = allData
-    const pager = new Pager(data.length, state.pageSize || Infinity, (page) => gotoPage(page))
-    const pagerElem = pager.getElement()
-
-    // overall dom
-    const view = createElement(null, 'div', ['border', 'p-2'])
-    const toolbar = createElement(view, 'div', ['d-flex', 'gap-1', 'mb-2'])
-    const renderStyleToIndex = (s: 'table' | 'tile' | 'wall') => renderStyles.indexOf(s)
-    const indexToRenderStyle = (i: number) => renderStyles[i]
-    const enabledRenderStyleIcons = renderStyles.map(s => {
-        if (s === 'table') return fa('fa-table')
-        if (s === 'tile') return fa('fa-grip-horizontal')
-        if (s === 'wall') return fa('fa-image')
-        return document.createElement('span')
-    })
-    const viewToggle = createToggleBar(enabledRenderStyleIcons, renderStyleToIndex(state.renderStyle), (v) => {
-        const nextRenderStyle = indexToRenderStyle(v)
-        if (state.renderStyle === nextRenderStyle) return
-        state.renderStyle = nextRenderStyle
-        pager.refreshCurrentPage()
-    })
-    viewToggle.classList.add('flex-shrink-0')
-    toolbar.appendChild(viewToggle)
-    const igPropSelector = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
-    const propSelectorBtn = createElement(igPropSelector, 'button', ['btn', 'btn-outline-secondary'], fa('fa-eye'))
-    const igSort = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
-    const sortBtn = createElement(igSort, 'button', ['btn', 'btn-outline-secondary'], fa('fa-sort'))
-    const sortHint = createElement(igSort, 'span', ['input-group-text'])
-    const randomSortBtn = createButton(igSort, ['btn', 'btn-outline-secondary'], fa('fa-random'))
-    const igFiler = createElement(toolbar, 'div', ['input-group', 'flex-grow-1'])
-    const filterHint = createElement(igFiler, 'span', ['input-group-text'], fa('fa-filter'))
-    const filter = createElement(igFiler, 'input', ['form-control'], '')
-    const counts = createElement(igFiler, 'span', ['input-group-text'], '20 / 100')
-    const pagerPlaceholder = createElement(toolbar, 'div', [])
-    const optionBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-bars'))
-    const dataContainer = createElement(view, 'div')
-
-    toolbar.replaceChild(pagerElem, pagerPlaceholder)
-    filter.value = state.filter || ''
-
-    function gotoPage(page: number) {
-        // only visible rows falling into the current page are shown, all others are hidden
-        const {startIndex, endIndex} = pager.getPageRange(page)
-        console.log(`goto page ${page}, show items from ${startIndex} to ${endIndex}`)
-        dataContainer.innerHTML = ''
-        dataContainer.appendChild(getRenderer()(startIndex, endIndex))
-    }
-
-    function applyFilterAndSort() {
-        applyFilter(state.filter || '')
-        applySort()
-        pager.gotoPage(0)
-    }
-
-    function applyFilter(s: string) {
-        let hasFilterError = false
-        s = s.trim()
-        if (s === '') {
-            data = allData
-        } else {
-            const isExpr = /[><]|===?|!==?|&&|\|\||\.\w+\(/.test(s)
-            if (isExpr) {
-                // advanced filter, we compile this as a function
-                const funcCode = `with (item) { return (${s}) }`
-                console.log('compile filter function with code:', funcCode)
-                try {
-                    const filterFunc = new Function('item', funcCode) as (item: T) => boolean
-                    data = allData.filter(v => {
-                        try {
-                            return filterFunc(v.item)
-                        } catch (e) {
-                            return false
-                        }
-                    })
-                } catch (e) {
-                    console.error('invalid filter code', e)
-                    hasFilterError = true
-                    data = []
-                }
-            } else {
-                data = allData
-                const itemFilter = (item: T, filter: string) => {
-                    const r = cfg.itemFilter ? cfg.itemFilter(item, filter) : undefined
-                    if (r !== undefined) return r
-                    return tu.fuzzyFind(item, filter, false) !== null
-                }
-                for (const c of s.split(' ')) {
-                    data = data.filter(v => itemFilter(v.item, c))
-                }
-            }
-        }
-        counts.textContent = `${data.length} / ${arr.length}`
-        pager.setTotalItems(data.length)
-        filter.style.backgroundColor = hasFilterError ? '#ffcccc' : (data.length < arr.length ? '#ccffcc' : '')
-    }
-
-    const zhCollator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'base' })
-
-    function applySort() {
-        // update sort hint
-        const sortBy = state.sortBy || []
-        sortHint.textContent = `${sortBy.map(s => `${s.prop} ${toArrow(s.order)}`).join(', ')}`
-
-        // sort the table rows
-        if (sortBy.length > 0) {
-            data.sort((a, b) => {
-                for (const s of sortBy) {
-                    const aValue = getPropValue(a.item, s.prop, a.index)
-                    const bValue = getPropValue(b.item, s.prop, b.index)
-                    if (aValue === bValue) continue
-                    let ret = 0
-                    if (aValue === undefined) ret = -1
-                    else if (bValue === undefined) ret = 1
-                    else if (aValue === null) ret = -1
-                    else if (bValue === null) ret = 1
-                    else if (typeof aValue === 'number' && typeof bValue === 'number') {
-                        ret = aValue - bValue
-                    } else {
-                        ret = zhCollator.compare(`${aValue}`, `${bValue}`)
-                    }
-                    // console.log(`"${aValue}" vs "${bValue}" => ${ret}`)
-                    if (ret !== 0) {
-                        ret = s.order === 'asc' ? ret : -ret
-                        return ret
-                    }
-                }
-                return 0
-            })
-        } else {
-            data.sort((a, b) => a.index - b.index)
-        }
-    }
-
-    function syncRegionExistence() {
-        // we directly remove unneeded elements in toolbar
-        // rather than hiding them, so that toolbar looks cleaner (e.g. radius of borders)
-        
-        const showPropSelector = cfg.showPropSelector ?? true// ?? (properties.length > 1)
-        const showSortButton = cfg.showSortButton ?? true
-        const showFilter = cfg.showFilter ?? true// (arr.length > 1)
-        const showViewToggle = renderStyles.length > 1
-
-        syncExistence(viewToggle, showViewToggle)
-        syncExistence(igPropSelector, showPropSelector)
-        syncExistence(sortBtn, showSortButton)
-        syncExistence(sortHint, showSortButton)
-        syncExistence(randomSortBtn, showSortButton)
-        syncExistence(filter, showFilter)
-        syncExistence(filterHint, showFilter)
-        syncExistence(counts, showFilter)
-        syncExistence(pagerPlaceholder, !!state.pageSize)
-
-        if (toolbar.lastElementChild) {
-            (toolbar.lastElementChild as HTMLElement).classList.remove('me-2')
-        }
-    }
-
-    async function selectProps() {
-        const r = await showSelection('visible props for ' + state.renderStyle, allPropsWithRaw, {
-            initialSelection: getVisibleProps(), 
-            showOrder: true,
-            styleModifier: (item, elem) => {
-                if (item === rawIndexProp) {
-                    elem.style.fontWeight = 'bold'
-                    elem.style.borderBottom = '2px solid blue'
-                }
-            }
-        })
-        if (r === undefined) return
-
-        if (state.renderStyle === 'table') {
-            state.tableProps = r
-        } else if (state.renderStyle === 'tile') {
-            state.tileProps = r
-        } else {
-            state.wallProps = r
-        }
-        gotoPage(pager.currentPage)
-    }
-
-    sortBtn.onclick = async () => {
-        // construct all properties
-        const allOptions = allPropsWithRaw.map(p => [`${p} ${toArrow('asc')}`, `${p} ${toArrow('desc')}`]).flat()
-        const sortOptions = state.sortBy?.map(s => `${s.prop} ${toArrow(s.order)}`)
-        const checker = (oldSelection: string[], newSelection: string[]) => {
-            if (newSelection.length > oldSelection.length) {
-                // a new sort is added, we will make sure to remove old duplicates if there is
-                const item = newSelection[newSelection.length - 1]
-                const key = item.split(' ')[0]
-                return oldSelection.filter(s => s.split(' ')[0] !== key).concat([item])
-            }
-            return newSelection
-       }
-        const r = await showSelection('Sort By', allOptions, {showOrder: true, initialSelection: sortOptions, checker})
-        if (r === undefined) return
-        state.sortBy = r.map(s => {
-            const [prop, order] = s.split(' ')
-            return {prop, order: fromArrow(order) as 'asc' | 'desc'}
-        })
-        applySort()
-        gotoPage(0)
-    }
-    propSelectorBtn.onclick = () => selectProps()
-
-    randomSortBtn.onclick = () => {
-        state.sortBy = []
-        tu.shuffleArray(data)
-        sortHint.textContent = `Random`
-        gotoPage(0)
-    }
-    filter.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            const v = filter.value
-            state.filter = v
-            applyFilterAndSort()
-        }
-    })
-
-    associateDropdownActions(optionBtn, {
-        'Insights': async () => {
-            const info = tu.getDataInsights(arr)
-            console.log('data insights', info)
-            // const goodInfo = info.filter(v => v.uniqueValues.length <= 200)
-            showInDialog('Data Insights', await renderDataInsights(info))
-        },
-        'Select Props': () => selectProps(),
-        'Change Page Size': async () => {
-            const v = await prompt('Page Size', 'Enter number of items per page (enter 0 or negative number to disable paging)', `${state.pageSize || cfg.pageSize || 20}`)
-            if (v) {
-                const n = parseInt(v)
-                if (!isNaN(n)) {
-                    state.pageSize = n > 0 ? n : undefined
-                    pager.setPageSize(state.pageSize || Infinity)
-                    pager.gotoPage(0)
-                }
-            }
-        }
-    })
-
-    // logic start here
-    syncRegionExistence()
-    applyFilterAndSort()
-    return view
-}
-
 export type VisualizeObjectConfig<T extends object> = {
 }
 
@@ -1904,95 +751,6 @@ export function syncExistence(element: HTMLElement, shouldExist: boolean) {
 export function syncChildDisplay(parent: HTMLElement, childSelector: string, visible: boolean) {
     const children = parent.querySelectorAll<HTMLElement>(childSelector);
     children.forEach(child => syncDisplay(child, visible));
-}
-
-export function setContent(parent: HTMLElement, ...nodes: (string | Node)[]) {
-    parent.innerHTML = ''
-    parent.append(...nodes)
-}
-
-export class Pager {
-    toolbar: HTMLElement
-    privBtn: HTMLButtonElement
-    nextBtn: HTMLButtonElement
-    lastBtn: HTMLButtonElement
-    firstBtn: HTMLButtonElement
-    pageText: HTMLElement
-    pageSizeCtrl: HTMLElement
-    currentPage = 0
-    constructor(private totalItems: number, private pageSize: number, private onPageChange: (pageIndex: number, pageSize: number) => void) {
-        this.toolbar = createElement(null, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
-        const btnClass = ['btn', 'btn-secondary']
-        this.firstBtn = createElement(this.toolbar, 'button', btnClass, '<<')
-        this.privBtn = createElement(this.toolbar, 'button', btnClass, '<')
-        this.pageText = createElement(this.toolbar, 'button', ['btn', 'btn-secondary'], '1 / 1')
-        this.pageSizeCtrl = createElement(this.toolbar, 'span', ['btn', 'btn-secondary'], '[20]')
-        this.nextBtn = createElement(this.toolbar, 'button', btnClass, '>')
-        this.lastBtn = createElement(this.toolbar, 'button', btnClass, '>>')
-        this.firstBtn.onclick = () => this.gotoPage(0)
-        this.privBtn.onclick = () => this.gotoPage(this.currentPage - 1)
-        this.nextBtn.onclick = () => this.gotoPage(this.currentPage + 1)
-        this.lastBtn.onclick = () => this.gotoPage(Infinity)
-        this.pageText.onclick = async () => {
-            const page = await prompt('Go to Page', 'Enter page number', `${this.currentPage + 1}`)
-            if (page) {
-                this.gotoPage(Number(page) - 1)
-            }
-        }
-        this.pageSizeCtrl.onclick = async () => {
-            const size = await prompt('Page Size', 'Enter number of items per page (enter 0 or negative number to disable paging)', `${this.pageSize}`)
-            if (size) {
-                const n = parseInt(size)
-                if (!isNaN(n)) {
-                    this.setPageSize(n > 0 ? n : Infinity)
-                    this.gotoPage(0)
-                }
-            }
-        }
-        // this.gotoPage(this.currentPage)
-        this.updateUI()
-    }
-
-    setPageSize(pageSize: number) {
-        this.pageSize = pageSize
-    }
-
-    setTotalItems(totalItems: number) {
-        this.totalItems = totalItems
-    }
-
-    getPageRange(page: number) {
-        const startIndex = this.pageSize === Infinity ?0 : page * this.pageSize
-        const endIndex = Math.min(startIndex + this.pageSize, this.totalItems)
-        return { startIndex, endIndex }
-    }
-
-    private updateUI() {
-        const totalPages = Math.max(1, Math.ceil(this.totalItems / this.pageSize))
-        this.pageText.textContent = `${this.currentPage + 1} / ${totalPages}`
-        this.pageSizeCtrl.textContent = `📄 ${this.pageSize === Infinity ? '' : this.pageSize}`
-        this.privBtn.disabled = this.currentPage <= 0
-        this.firstBtn.disabled = this.currentPage <= 0
-        this.nextBtn.disabled = this.currentPage >= totalPages - 1
-        this.lastBtn.disabled = this.currentPage >= totalPages - 1
-    }
-
-    gotoPage(page: number) {
-        const totalPages = Math.max(1, Math.ceil(this.totalItems / this.pageSize))
-        if (page < 0) page = 0
-        if (page >= totalPages) page = totalPages - 1
-        this.currentPage = page
-        this.updateUI()
-        this.onPageChange(this.currentPage, this.pageSize)
-    }
-
-    refreshCurrentPage() {
-        this.gotoPage(this.currentPage)
-    }
-
-    getElement() {
-        return this.toolbar
-    }
 }
 
 export function createButtonGroup(parent: Element | null, buttons: Record<string, () => void>) {
@@ -2101,25 +859,62 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
     }
 }
 
-export function createFoldableArea(parent: Element | null, title: string, content?: HTMLElement, initiallyFolded = true) {
+export function createLoadingSpinner(parent: Element | null, size = '2rem', color = 'primary') {
+    const loadingDiv = createElement(parent, 'div', ['d-flex', 'justify-content-center', 'align-items-center', 'p-3'])
+    const spinner = createElement(loadingDiv, 'div', ['spinner-border', `text-${color}`], '', { width: size, height: size })
+    spinner.setAttribute('role', 'status')
+    const spinnerText = createElement(spinner, 'span', ['visually-hidden'], 'Loading...')
+    return loadingDiv
+}
+
+export type ContentProvider = HTMLElement | ((refresh: boolean) => HTMLElement) | ((refresh: boolean) => Promise<HTMLElement>)
+export function createFoldableArea(parent: Element | null, title: string, content?: ContentProvider, initiallyFolded = true) {
     // create a foldable area using bootstrap card
     const div = createElement(parent, 'div', ['card', 'mb-2', 'mt-2'])
     const header = createElement(div, 'div', ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'], '', {cursor: 'pointer'})
     const titleElem = createElement(header, 'span', [], title)
-    const toggleBtn = createElement(header, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'])
+    const btnGroup = createElement(header, 'div', ['btn-group'])
+    const refreshBtn = createElement(btnGroup, 'button', ['btn', 'btn-sm', 'btn-outline-secondary', 'me-1'], fa('fa-sync'))
+    const toggleBtn = createElement(btnGroup, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'])
     const body = createElement(div, 'div', ['card-body', 'p-1'])
-    if (content) {
-        body.appendChild(content)
+
+    async function reloadContent(refresh: boolean) {
+        if (!content) return
+        body.innerHTML = ''
+        if (typeof content !== 'function') {
+            body.appendChild(content)
+        } else {
+            const loadingDiv = createLoadingSpinner(body, '2rem', 'primary')
+            try {
+                const element = await content(refresh)
+                body.removeChild(loadingDiv)
+                body.appendChild(element)
+            } catch (error) {
+                console.error('Error loading foldable content:', error)
+                body.removeChild(loadingDiv)
+                body.appendChild(createElement(null, 'div', ['text-danger'], 'Error loading content'))
+            }
+        }
     }
 
     const state = tu.createObservableState(null, { folded: initiallyFolded }, s => {
         toggleBtn.replaceChildren(s.folded ? fa('fa-chevron-down') : fa('fa-chevron-up'))
         body.style.display = s.folded ? 'none' : ''
         div.style.borderColor = s.folded ? '#ccc' : '#007bff'
+        if (body.children.length === 0 && !s.folded) {
+            reloadContent(false)
+        }
+        refreshBtn.style.display = s.folded ? 'none' : ''
     })
 
     header.onclick = () => state.folded = !state.folded
-    return { div, header, body, toggleBtn }
+
+    refreshBtn.onclick = async (e) => {
+        e.stopPropagation() // prevent triggering fold/unfold
+        await reloadContent(true)
+    }
+    
+    return { div, header, body, toggleBtn, refreshBtn }
 }
 
 class CodeMirrorLoader {
@@ -2157,7 +952,9 @@ class CodeMirrorLoader {
                 json: json.json,
                 search: search.search,
                 searchKeymap: search.searchKeymap,
-                openSearchPanel: search.openSearchPanel
+                openSearchPanel: search.openSearchPanel,
+                foldGutter: lang.foldGutter,
+                foldKeymap: lang.foldKeymap
             };
         }
         return this.modules;
@@ -2176,7 +973,7 @@ export type JsonViewerOptions = {
 }
 
 export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewerOptions = {}) {
-    const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap, openSearchPanel, keymap } = await CodeMirrorLoader.getModules();
+    const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap, openSearchPanel, keymap, foldGutter, foldKeymap } = await CodeMirrorLoader.getModules();
     const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '100%', overflow: 'hidden' });
     const visulizers = [] as {
         start: number,
@@ -2206,20 +1003,20 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
         }
     }).str
 
-    // // 创建 Decoration Set
+    // // Create Decoration Set
     const commentDecorations = Decoration.set(
       visulizers.map(v => v.marker.range(v.start, v.end))
     );
 
-    // hover tooltip 扩展
+    // hover tooltip extension
     const commentTooltip = hoverTooltip((view:any, pos:number) => {
-      // 查找 pos 是否落在某个 comment 范围内
+      // Check if pos falls within any comment range
       for (const c of visulizers.filter(v => v.type === 'visualizer')) {
         if (pos >= c.start && pos <= c.end) {
           return {
             pos: c.start,
             end: c.end,
-            above: true,        // 提示框显示在上方（可改成 false 在下方）
+            above: true,        // Tooltip shows above (change to false for below)
             create: () => {
               const dom = document.createElement("div");
               const rendered = (c.render as EntityRenderer).render();
@@ -2235,19 +1032,19 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
           };
         }
       }
-      return null; // 没找到返回 null，不显示
+      return null; // Return null if not found, don't display
     });
 
-    // 点击事件处理器
+    // Click event handler
     const clickHandler = EditorView.domEventHandlers({
       click: (event: MouseEvent, view: any) => {
         const pos = view.posAtCoords({ x: event.clientX, y: event.clientY })
         if (pos === null) return false
         
-        // 查找点击位置是否在某个 visualizer 范围内
+        // Check if click position is within any visualizer range
         for (const c of visulizers) {
           if (pos >= c.start && pos <= c.end) {
-            // 找到了，显示对话框
+            // Found it, show dialog
             if (typeof c.render === 'string') {
                 showGeneralText('Full Content', c.render)
             } else {
@@ -2270,13 +1067,15 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
     const state = EditorState.create({
       doc,
       extensions: [
-        lineNumbers(),                          // 显示行号
-        syntaxHighlighting(defaultHighlightStyle), // 默认语法高亮样式
-        json(),                                 // JSON 语言支持（解析 + 高亮）
-        EditorState.readOnly.of(true),          // 状态级只读：禁止通过键盘/粘贴等修改内容
-         EditorView.decorations.of(commentDecorations), // 应用注释装饰
-         commentTooltip,                        // 保留 hover tooltip
-         clickHandler,                          // 添加点击处理器
+        lineNumbers(),                          // Show line numbers
+        foldGutter(),                           // Folding gutter on the left side
+        keymap.of(foldKeymap),                  // Folding shortcuts (Ctrl+Shift+[/])
+        syntaxHighlighting(defaultHighlightStyle), // Default syntax highlighting style
+        json(),                                 // JSON language support (parsing + highlighting)
+        EditorState.readOnly.of(true),          // State-level read-only: prevent modification via keyboard/paste
+         EditorView.decorations.of(commentDecorations), // Apply comment decorations
+         commentTooltip,                        // Keep hover tooltip
+         clickHandler,                          // Add click handler
         EditorView.theme({
                         "&": { height: "100%", maxWidth: "100%" },
                         ".cm-scroller": { overflow: "auto", maxWidth: "100%" },
@@ -2293,8 +1092,8 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
                             maxWidth: "100%"
                         }
         }),
-        search({ top: true }),                  // 搜索功能，搜索框在顶部
-        keymap.of(searchKeymap)               // 搜索相关快捷键
+        search({ top: true }),                  // Search feature, search box at the top
+        keymap.of(searchKeymap)               // Search-related shortcuts
       ]
     });
     const view = new EditorView({ state, parent });
@@ -2311,13 +1110,13 @@ export async function createCodeMirrorJsonEditor(initialText: string) {
     const state = EditorState.create({
         doc: initialText,
         extensions: [
-            lineNumbers(),                          // 显示行号
-            syntaxHighlighting(defaultHighlightStyle), // 默认语法高亮样式
-            json(),                                 // JSON 语言支持（解析 + 高亮）
+            lineNumbers(),                          // Show line numbers
+            syntaxHighlighting(defaultHighlightStyle), // Default syntax highlighting style
+            json(),                                 // JSON language support (parsing + highlighting)
             EditorView.theme({
                 "&": { height: "100%" },
                 ".cm-scroller": { overflow: "auto" },
-                ".cm-content": { whiteSpace: "pre-wrap", wordBreak: "break-word" } // 自动换行
+                ".cm-content": { whiteSpace: "pre-wrap", wordBreak: "break-word" } // Auto line wrap
             })
         ]
     });
@@ -2653,9 +1452,13 @@ export function injectStyles() {
     const style = createElement(document.head, 'style', [], '', {}, { id: styleId })
     style.textContent = `
         dialog::backdrop {
-            background: rgba(0,0,0,0.25);            /* 微暗化 */
+            background: rgba(0,0,0,0.25);            /* Slightly darken */
             backdrop-filter: blur(8px) brightness(0.9);
             -webkit-backdrop-filter: blur(8px) brightness(0.9); /* Safari */
         }
     `
 }
+
+export * from './uu-components.ts'
+export * from './uu-input.ts'
+export * from './uu-visualize-array.ts'

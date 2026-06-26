@@ -149,6 +149,24 @@ export async function hash(str: string, algo: AlgorithmIdentifier = 'SHA-256'): 
     return Array.from(new Uint8Array(arr)).map(b => b.toString(16).padStart(2, '0')).join('')
 }
 
+/** Generate a consistent color from a string
+ * 
+ * @param str the string to convert to color
+ * @param saturation HSL saturation value (0-100)
+ * @param lightness HSL lightness value (0-100)
+ * @returns HSL color string
+ * 
+ * @example
+ * ```typescript
+ * const color = stringToColor('user-123') // 'hsl(235, 70%, 60%)'
+ * ```
+ */
+export function stringToColor(str: string, saturation = 70, lightness = 60): string {
+    const hash = simpleHash(str)
+    const hue = hash % 360
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`
+}
+
 export function toFileSystemCompatibleName(name: string): string {
     // 1. Remove leading and trailing spaces
     name = name.trim()
@@ -473,7 +491,7 @@ export function createObservableState<T extends object>(stateKey: string|null, i
     const proxy = new Proxy(internalState, {
         set(target, prop: string | symbol, value: any) {
             if (prop === 'addObserver') {
-                return false; // 防止覆盖 addObserver
+                return false; // Prevent overriding addObserver
             }
             if (typeof prop === 'string' && prop in target) {
                 if ((target as any)[prop] !== value) {
@@ -481,7 +499,7 @@ export function createObservableState<T extends object>(stateKey: string|null, i
                     observers.forEach(cb => cb(proxy as any));
                 }
             } else {
-                // 允许新增属性（可选）
+                // Allow adding new properties (optional)
                 (target as any)[prop] = value;
                 observers.forEach(cb => cb(proxy as any));
             }
@@ -504,29 +522,29 @@ export function createObservableState<T extends object>(stateKey: string|null, i
 }
 
 export function createState<T extends object>(object: T, properties: (keyof T)[], stateKey?: string): Pick<T, typeof properties[number]> {
-    // 内部存储的状态对象
+    // Internally stored state object
     const internalState: Partial<T> = {};
 
-    // 初始化 internalState，只包含指定的属性
+    // Initialize internalState, only including specified properties
     properties.forEach((prop) => {
         if (prop in object) {
             internalState[prop] = object[prop];
         }
     });
 
-    // 定义代理对象
+    // Define proxy object
     const state = new Proxy(internalState, {
         get(target: Partial<T>, prop: string | symbol, receiver: any) {
-            // 将 prop 转换为 keyof T 类型，并检查是否在 properties 中
+            // Convert prop to keyof T type and check if it's in properties
             const key = prop as keyof T;
             if (properties.includes(key)) {
                 return target[key];
             }
             throw new Error(`Property '${String(prop)}' is not managed by this state`);
-            // return undefined; // 未指定的属性返回 undefined
+            // return undefined; // Return undefined for unspecified properties
         },
         set(target: Partial<T>, prop: string | symbol, value: any) {
-            // 将 prop 转换为 keyof T 类型，并检查是否在 properties 中
+            // Convert prop to keyof T type and check if it's in properties
             const key = prop as keyof T;
             if (properties.includes(key)) {
                 target[key] = value;
@@ -537,7 +555,7 @@ export function createState<T extends object>(object: T, properties: (keyof T)[]
         }
     }) as Pick<T, typeof properties[number]>;
 
-    // 加载状态
+    // Load state
     function loadState() {
         if (!stateKey) return;
         const stored = localStorage.getItem(stateKey);
@@ -551,7 +569,7 @@ export function createState<T extends object>(object: T, properties: (keyof T)[]
         }
     }
 
-    // 保存状态
+    // Save state
     function saveState() {
         if (!stateKey) return;
         const persistState: Partial<T> = {};
@@ -561,7 +579,7 @@ export function createState<T extends object>(object: T, properties: (keyof T)[]
         localStorage.setItem(stateKey, JSON.stringify(persistState));
     }
 
-    // 加载初始状态
+    // Load initial state
     loadState();
 
     return state;
@@ -573,14 +591,14 @@ export function createState<T extends object>(object: T, properties: (keyof T)[]
 export function segmentByRegex(text: string, hc: [RegExp, string][]): {content: string, category: string}[] {
     const matches: { index: number; length: number; content: string; category: string }[] = [];
 
-    // 收集所有匹配项，按照优先级从高到低处理
+    // Collect all matches, process by priority from high to low
     for (const [re, category] of hc) {
         for (const match of text.matchAll(re)) {
             if (match.index !== undefined) {
                 const matchStart = match.index;
                 const matchEnd = matchStart + match[0].length;
 
-                // 检查是否与已有匹配项重叠
+                // Check if it overlaps with existing matches
                 let overlap = false;
                 for (const existingMatch of matches) {
                     const existingStart = existingMatch.index;
@@ -591,7 +609,7 @@ export function segmentByRegex(text: string, hc: [RegExp, string][]): {content: 
                     }
                 }
 
-                // 如果没有重叠，添加到匹配项列表
+                // If no overlap, add to matches list
                 if (!overlap) {
                     matches.push({ index: match.index, length: match[0].length, content: match[0], category });
                 }
@@ -599,7 +617,7 @@ export function segmentByRegex(text: string, hc: [RegExp, string][]): {content: 
         }
     }
 
-    // 按 `index` 从小到大排序，确保匹配顺序正确
+    // Sort by `index` from small to large to ensure correct matching order
     matches.sort((a, b) => a.index - b.index);
     
     // run through the text and create pieces
@@ -637,7 +655,7 @@ export function segmentJson(text: string): JsonSegment[] {
 export function getJsonRegexps(): [RegExp, string][] {
     return [
         [/"[^"]+":/g, 'key'],
-        [/"(?:[^"\\]|\\.)*"/g, 'string'], // 支持转义的字符串匹配
+        [/"(?:[^"\\]|\\.)*"/g, 'string'], // Support escaped string matching
         [/\d+/g, 'number'],
         [/true/g, 'true'],
         [/false/g, 'false'],

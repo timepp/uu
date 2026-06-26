@@ -27,10 +27,10 @@ export class CachedCaller {
     constructor(private storage: CacheStorage) {
     }
     /**
-     * 调用异步函数并缓存结果
-     * @param func 要执行的异步函数
-     * @param args 函数参数
-     * @returns 函数执行结果（从缓存或新执行）
+     * Call async function and cache result
+     * @param func The async function to execute
+     * @param args Function arguments
+     * @returns Function execution result (from cache or new execution)
      */
     async call<
         T extends (...args: never[]) => Promise<unknown>
@@ -40,13 +40,13 @@ export class CachedCaller {
     ): Promise<Awaited<ReturnType<T>>> {
         console.log(`Calling function ${func.name} with cache enabled...`);
 
-        // 生成缓存键
+        // Generate cache key
         const cacheKey = {
             func: func.name || "anonymous",
             args: args,
         };
 
-        // 生成 hash 作为文件名
+        // Generate hash as filename
         const encoder = new TextEncoder();
         const data = encoder.encode(JSON.stringify(cacheKey));
         const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -56,7 +56,7 @@ export class CachedCaller {
 
         const location = [func.name || "anonymous", hash];
 
-        // 检查缓存是否存在
+        // Check if cache exists
         const cached = await this.storage.getItem(location);
         if (cached) {
             const cacheData = JSON.parse(cached) as { hitCount: number; data: Awaited<ReturnType<T>> };
@@ -66,7 +66,7 @@ export class CachedCaller {
             return cacheData.data;
         }
 
-        // 执行函数
+        // Execute function
         const result = (await func(...args)) as Awaited<ReturnType<T>>;
 
         const cacheData = {
