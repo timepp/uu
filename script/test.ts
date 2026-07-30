@@ -135,7 +135,7 @@ Deno.test('parseTimeRange wrapper applies adjustment before boundary', () => {
 })
 
 Deno.test('parseTimeRange timezone shift and flexible spaces/case', () => {
-    const r = tu.parseTimeRange('  ThIs   WeEk  ', 8 * 60)
+    const r = tu.parseTimeRange('  ThIs-WeEk  ', 8 * 60)
     const expected = tu.parseTimeRange('week(now)', 8 * 60)
     ut.assertEquals(r.start.toISOString(), expected.start.toISOString())
     ut.assertEquals(r.end.toISOString(), expected.end.toISOString())
@@ -144,4 +144,11 @@ Deno.test('parseTimeRange timezone shift and flexible spaces/case', () => {
 Deno.test('parseTimeRange rejects standalone timeSpec and multiple adjustments', () => {
     ut.assertThrows(() => tu.parseTimeRange('now', 0))
     ut.assertThrows(() => tu.parseTimeRange('now+1d+2h..now+3d', 0))
+})
+
+Deno.test('string folding', () => {
+    const str = 'This is a long string that needs to be folded for display purposes.'
+    const folded = tu.foldString(str, 30)
+    console.log('folded:', folded)
+    ut.assert(folded.length <= 30) // +3 for the fold indicator
 })

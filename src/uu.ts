@@ -230,6 +230,8 @@ export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>, hin
     }
 }
 
+export const withUI = callAsyncFunctionWithProgress
+
 // show information dialog, content is normal text, dialog no longer fix height
 export function showInfo(title: string, content: string) {
     const dialog = createElement(document.body, 'dialog', [])
@@ -931,13 +933,13 @@ class CodeMirrorLoader {
             const deps = `?deps=@codemirror/state@${stateVer}`;
 
             const [
-                state, view, lang, json, search
+                state, view, lang, json, search,
             ] = await callAsyncFunctionWithProgress(() => Promise.all([
-                import(`https://esm.sh/@codemirror/state@${stateVer}`),
-                import(`https://esm.sh/@codemirror/view${deps}`),
-                import(`https://esm.sh/@codemirror/language${deps}`),
-                import(`https://esm.sh/@codemirror/lang-json${deps}`),
-                import(`https://esm.sh/@codemirror/search${deps}`)
+                import(`https://esm.sh/@codemirror/state@6.5.3`),
+                import(`https://esm.sh/@codemirror/view?deps=@codemirror/state@6.5.3`),
+                import(`https://esm.sh/@codemirror/language?deps=@codemirror/state@6.5.3`),
+                import(`https://esm.sh/@codemirror/lang-json?deps=@codemirror/state@6.5.3`),
+                import(`https://esm.sh/@codemirror/search?deps=@codemirror/state@6.5.3`)
             ]));
 
             this.modules = {

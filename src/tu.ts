@@ -6,7 +6,7 @@
 export * from './tu-datetime.ts'
 export * from './tu-cache.ts'
 
-export function formatFloat(n: number, digits = 2, mininumDigits = 0) {
+export function formatFloat(n: number, digits = 2, mininumDigits = 0): string {
     return n.toLocaleString(undefined, { 
         minimumFractionDigits: mininumDigits, 
         maximumFractionDigits: digits,
@@ -42,7 +42,7 @@ export function trimPrefix(str: string, prefix: string): string {
 
 // This is helpful when you want to console.log a url and keep the full url visible
 // (otherwise the browser will render the url as a link and shortens it)
-export function trimHttps(url: string) {
+export function trimHttps(url: string): string {
     return trimPrefix(url, 'https:')
 }
 
@@ -73,7 +73,7 @@ export function trimEmptyLines(str: string, ...locations: ('head' | 'tail' | 'mi
 
 // get a number for string folding, so that "blabla...x more chars..." is just at desired length
 // returns x, and the inditor string '... x more chars...'
-export function getStringFoldingIndicator(fullStringLength: number, desiredLength: number) {
+export function getStringFoldingIndicator(fullStringLength: number, desiredLength: number): { foldedLength: number, unfoldedLength: number, foldIndicator: string } {
     const ls = '...'
     const rs = ' more chars...'
     // fullStringLength - desiredLength = x - (ls + rs).length - number of digits in x
@@ -93,6 +93,18 @@ export function getStringFoldingIndicator(fullStringLength: number, desiredLengt
     }
 }
 
+export function foldString(str: string, maxLength: number): string {
+    if (str.length <= maxLength) {
+        return str;
+    }
+    const f = getStringFoldingIndicator(str.length, maxLength);
+    const l1 = f.unfoldedLength / 2;
+    const l2 = f.unfoldedLength - l1;
+    // put the fold indicator in the middle of the string
+    const start = str.slice(0, l1);
+    const end = str.slice(str.length - l2);
+    return `${start}${f.foldIndicator}${end}`;
+}
 
 export function indentTextWithSpaces(text: string, spaces: number): string {
     const indent = ' '.repeat(spaces);
@@ -217,7 +229,7 @@ export function traverseObject(obj: any, maxDepth: number, callback: (path: stri
 }
 
 // fuzzy find first matching keyword in object (deep)
-export function fuzzyFind(obj: object, keyword: string, caseSensitive = true) {
+export function fuzzyFind(obj: object, keyword: string, caseSensitive = true): string[] | null {
     let path = null as string[] | null
     traverseObject(obj, -1, (p, v, t) => {
         if (t === 'leaf' && v !== null && v !== undefined) {
@@ -236,7 +248,7 @@ export function fuzzyFind(obj: object, keyword: string, caseSensitive = true) {
     return path
 }
 
-export function stringify(obj: any, space?: number | string, compact = false, maxStrLen = Infinity, maxArrSize = Infinity) {
+export function stringify(obj: any, space?: number | string, compact = false, maxStrLen = Infinity, maxArrSize = Infinity): string {
     if (maxStrLen === Infinity && maxArrSize === Infinity && compact === false) {
         // use native JSON.stringify directly whenever possible
         try {
@@ -249,7 +261,7 @@ export function stringify(obj: any, space?: number | string, compact = false, ma
 }
 
 export type SafeStringifyCallback = (path: string[], value: any, startPos: number, endPos: number, isTrimmed: boolean) => void
-export function safeStringify(obj: any, space: number | string | undefined, maxStrLen = Infinity, maxArrSize = Infinity, compact = true, callback?: SafeStringifyCallback) {
+export function safeStringify(obj: any, space: number | string | undefined, maxStrLen = Infinity, maxArrSize = Infinity, compact = true, callback?: SafeStringifyCallback): { str: string, circularRefs: number, trimmedStrings: number, trimmedArrays: number } {
     const ssc = createSsContext()
     const str = safeStringifyInternal(obj, [], [], 0, typeof space === 'number' ? ' '.repeat(space) : space, compact, maxStrLen, maxArrSize, ssc, callback)
     return {str,...ssc}
@@ -371,7 +383,7 @@ function safeStringifyInternal(obj: any, parents: object[], path: string[], pos:
 }
 
 // extract json object from a mixed text
-export function extractJsonObjects(text: string) {
+export function extractJsonObjects(text: string): { obj: any, startPos: number, endPos: number }[] {
     let startPos = 0
     const results = []
     while (startPos < text.length) {
@@ -386,7 +398,7 @@ export function extractJsonObjects(text: string) {
     return results
 }
 
-export function extractJsonObject(text: string) {
+export function extractJsonObject(text: string): { obj: any, startPos: number, endPos: number } | null {
     text = text.trim()
     const stack = []
     let startPos = -1
@@ -704,7 +716,7 @@ export function decodeJwt(token: string): { raw: string, ti: TokenInfo, isExpire
     }
 }
 
-export function derivedUrl(oldUrl: string, paramsToAdd: Record<string, string>, paramsToRemove?: RegExp) {
+export function derivedUrl(oldUrl: string, paramsToAdd: Record<string, string>, paramsToRemove?: RegExp): string {
     const url = new URL(oldUrl)
     if (paramsToRemove) {
         const keys = [...url.searchParams.keys()]
@@ -720,7 +732,7 @@ export function derivedUrl(oldUrl: string, paramsToAdd: Record<string, string>, 
     return url.toString()
 }
 
-export function derivedCurrentUrl(paramsToAdd: Record<string, string>, paramsToRemove?: RegExp) {
+export function derivedCurrentUrl(paramsToAdd: Record<string, string>, paramsToRemove?: RegExp): string {
     return derivedUrl(window.location.href, paramsToAdd, paramsToRemove)
 }
 
@@ -738,7 +750,7 @@ export type DataPropStat = {
         count: number
     }[]
 }
-export function getDataInsights(arr: object[]) {
+export function getDataInsights(arr: object[]): DataPropStat[] {
     const pvm: Record<string, Record<any, number>> = {}
     function getOrCreate(obj: any, prop: string) {
         if (!obj[prop]) obj[prop] = {}

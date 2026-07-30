@@ -14,10 +14,11 @@ export function setAutofillProvider(provider: AutofillProvider) {
 export type InputElement = {
     id: string
     name: string
-    type: 'single-line-string' | 'number' | 'multi-line-string' | 'date' | 'single-select' | 'multi-select' | 'single-picker' | 'multi-picker'
+    type: 'single-line-string' | 'number' | 'multi-line-string' | 'date' | 'single-select' | 'multi-select' | 'single-picker' | 'multi-picker' | 'custom'
     selectOptions?: string[]
     defaultValue?: string | string[]
     initialValue?: string | string[]
+    customInput?: (currentValue: string) => Promise<string>
 }
 
 export type InputElementOld = string | {
@@ -27,9 +28,58 @@ export type InputElementOld = string | {
     onClick?: (params: Record<string, string>) => HTMLElement | Promise<HTMLElement> | void
 }
 
+type InputHistory = {
+    // panel history
+    panelHistory: {
+        value: string
+        timestamp: number
+    }[]
+    // element history
+    elementHistory: Record<string, {
+        value: string
+        timestamp: number
+    }[]>
+}
 
-export function createInputPanel(parent: HTMLElement | null, elements: InputElement[], style: 'table' | 'bar' = 'table') {
+export function createInputPanel(parent: HTMLElement | null, elements: InputElement[], style: 'table' | 'bar' = 'table', name = '') {
+    const appendHistory = (arr: { value: string, timestamp: number }[], value: string, maxSize: number) => {
+        // remove existing entry first
+        const existingIndex = arr.findIndex(entry => entry.value === value)
+        if (existingIndex !== -1) {
+            arr.splice(existingIndex, 1)
+        }
+        // append new entry
+        if (arr.length < maxSize && value) {
+            arr.push({ value, timestamp: Date.now() })
+        }
+    }
+    const loadInputHistory = () => {
+        if (name) {
+            const historyStr = localStorage.getItem(`input-history-${name}`)
+            if (historyStr) {
+                try {
+                    return JSON.parse(historyStr) as InputHistory
+                } catch {
+                    console.warn('Failed to parse input history for', name)
+                }
+            }
+        }
+        return { panelHistory: [], elementHistory: {} } as InputHistory
+    }
+    const history = loadInputHistory()
+    const saveInputHistory = (values: Record<string, string | string[]>) => {
+        const pa = JSON.stringify(values)
+        appendHistory(history.panelHistory, pa, 20)
+        for (const key in values) {
+            const ea = JSON.stringify(values[key])
+            appendHistory(history.elementHistory[key] = history.elementHistory[key] || [], ea, 20)
+        }
+        if (name) {
+            localStorage.setItem(`input-history-${name}`, JSON.stringify(history))
+        }
+    }
     const valueFetchers: Record<string, () => string | string[]> = {}
+    const valueSetters: Record<string, (value: any) => void> = {}
     const createInputControl = (parent: HTMLElement, element: InputElement) => {
         const initialVal = (element.initialValue || element.defaultValue) as string
         const initialArr = (element.initialValue || element.defaultValue) as string[]
@@ -40,6 +90,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                     const input = uu.createElement(parent, 'input', ['form-control']) as HTMLInputElement
                     input.value = initialVal
                     valueFetchers[element.id] = () => input.value
+                    valueSetters[element.id] = v => input.value = v
                     break
                 }
             case 'date':
@@ -48,6 +99,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                     input.type = 'date'
                     input.value = initialVal
                     valueFetchers[element.id] = () => input.value
+                    valueSetters[element.id] = v => input.value = v
                     break
                 }
             case 'multi-line-string':
@@ -56,6 +108,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                     textarea.rows = 4
                     textarea.value = initialVal
                     valueFetchers[element.id] = () => textarea.value
+                    valueSetters[element.id] = v => textarea.value = v
                     break
                 }
             case 'single-select':
@@ -67,12 +120,14 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                     })
                     select.value = initialVal
                     valueFetchers[element.id] = () => select.value
+                    valueSetters[element.id] = v => select.value = v
                     break
                 }
             case 'multi-select':
                 {
                     const selector = uc.createSelector(parent, element.selectOptions || [], () => {}, true, initialArr)
                     valueFetchers[element.id] = () => selector.getSelected()
+                    valueSetters[element.id] = v => selector.setSelected(Array.isArray(v) ? v : [])
                     break
                 }
             case 'single-picker':
@@ -92,6 +147,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                         }
                     }
                     valueFetchers[element.id] = () => input.value
+                    valueSetters[element.id] = v => input.value = v
                     break
                 }
             case 'multi-picker':
@@ -112,12 +168,122 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                         }
                     }
                     valueFetchers[element.id] = () => input.value ? input.value.split(',').map(s => s.trim()).filter(s => s.length > 0) : []
+                    valueSetters[element.id] = v => input.value = Array.isArray(v) ? v.join(', ') : ''
                     break
+                }
+            case 'custom':
+                {
+                    const input = uu.createElement(parent, 'span', ['form-control'])
+                    input.textContent = initialVal
+                    input.style.cursor = 'pointer'
+                    input.onclick = async () => {
+                        if (element.customInput) {
+                            const newValue = await element.customInput(input.textContent || '')
+                            if (newValue !== undefined) {
+                                input.textContent = newValue
+                            }
+                        }
+                    }
+                    valueFetchers[element.id] = () => input.textContent || ''
+                    valueSetters[element.id] = v => input.textContent = v
                 }
         }
     }
 
-    // create a table style input panel
+    const applyPanelHistory = (value: string) => {
+        try {
+            const values = JSON.parse(value) as Record<string, string | string[]>
+            for (const key in values) {
+                if (valueSetters[key]) {
+                    valueSetters[key](values[key])
+                }
+            }
+        } catch {
+            console.warn('Failed to parse panel history value:', value)
+        }
+    }
+
+    const applyElementHistory = (key: string, value: string) => {
+        if (valueSetters[key]) {
+            try {
+                const parsedValue = JSON.parse(value) as string | string[]
+                valueSetters[key](parsedValue)
+            } catch {
+                console.warn('Failed to parse element history value for', key, ':', value)
+            }
+        }
+    }
+
+    const pickHistory = async (key: string) => {
+        const result = await uu.showDialog<boolean>(`History for ${key}`, undefined, {
+            style: { width: '60vw' },
+            actions: ['Cancel']
+        }, (elements, finish) => {
+            // Section 1: Element-specific history
+            if (history.elementHistory[key] && history.elementHistory[key].length > 0) {
+                const section1Title = uu.createElement(elements.contentArea, 'h6', ['mt-2'], `History for ${key}`)
+                const section1 = uu.createElement(elements.contentArea, 'div', ['list-group', 'mb-3'])
+                
+                history.elementHistory[key].slice().reverse().forEach((entry, index) => {
+                    const item = uu.createElement(section1, 'a', ['list-group-item', 'list-group-item-action'])
+                    item.style.cursor = 'pointer'
+                    
+                    const header = uu.createElement(item, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
+                    uu.createElement(header, 'span', ['text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
+                    
+                    const valuePreview = uu.createElement(item, 'div', ['mt-1'])
+                    let displayText = ''
+                    try {
+                        const parsedValue = JSON.parse(entry.value)
+                        displayText = Array.isArray(parsedValue) ? parsedValue.join(', ') : String(parsedValue)
+                    } catch {
+                        displayText = entry.value
+                    }
+                    valuePreview.appendChild(uu.createFoldedString(displayText, 120))
+                    
+                    item.onclick = () => {
+                        applyElementHistory(key, entry.value)
+                        finish(true)
+                    }
+                })
+            }
+            
+            // Section 2: Panel-wide history
+            if (history.panelHistory.length > 0) {
+                const section2Title = uu.createElement(elements.contentArea, 'h6', ['mt-3'], 'Full Panel History')
+                const section2 = uu.createElement(elements.contentArea, 'div', ['list-group'])
+                
+                history.panelHistory.slice().reverse().forEach((entry, index) => {
+                    const item = uu.createElement(section2, 'a', ['list-group-item', 'list-group-item-action'])
+                    item.style.cursor = 'pointer'
+                    
+                    const header = uu.createElement(item, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
+                    uu.createElement(header, 'span', ['text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
+                    
+                    const valuePreview = uu.createElement(item, 'div', ['mt-1', 'small'])
+                    let displayText = ''
+                    try {
+                        const parsedValue = JSON.parse(entry.value) as Record<string, any>
+                        displayText = Object.entries(parsedValue).map(([k, v]) => {
+                            const displayValue = Array.isArray(v) ? v.join(', ') : String(v)
+                            return `${k}: ${displayValue}`
+                        }).join(' | ')
+                    } catch {
+                        displayText = entry.value
+                    }
+                    valuePreview.appendChild(uu.createFoldedString(displayText, 150))
+                    
+                    item.onclick = () => {
+                        applyPanelHistory(entry.value)
+                        finish(true)
+                    }
+                })
+            }
+            
+            elements.buttons['Cancel']?.addEventListener('click', () => finish())
+        })
+    }
+
     let element: HTMLElement | null = null
     if (style === 'table') {
         const table = uu.createElement(parent, 'table', ['table', 'table-bordered', 'table-hover'])
@@ -129,6 +295,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
             nameCell.style.whiteSpace = 'nowrap'
             nameCell.style.verticalAlign = 'middle'
             nameCell.style.backgroundColor = '#f8f9fa'
+            nameCell.onclick = () => pickHistory(element.id)
             const valueCell = uu.createElement(row, 'td')
             createInputControl(valueCell, element)
         })
@@ -136,11 +303,16 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
     } else if (style === 'bar') {
         const div = uu.createElement(parent, 'div', ['d-flex', 'gap-2', 'overflow-auto'])
         elements.forEach(element => {
-            const ig = uu.createElement(div, 'div', ['input-group', 'flex-shrink-0', 'w-auto'])
+            const ig = uu.createElement(div, 'div', ['input-group', 'flex-grow-1'])
             const label = uu.createElement(ig, 'span', ['input-group-text'], element.name, { minWidth: '100px' })
+            label.onclick = () => pickHistory(element.id)
             createInputControl(ig, element)
         })
         element = div
+    }
+
+    if (history.panelHistory.length > 0) {
+        applyPanelHistory(history.panelHistory[history.panelHistory.length - 1].value)
     }
 
     const getValues = () => {
@@ -148,6 +320,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
         elements.forEach((element) => {
             values[element.id] = valueFetchers[element.id]?.()
         })
+        saveInputHistory(values)
         return values
     }
     return {
@@ -169,7 +342,7 @@ export async function showInputDlg(title: string, elements: InputElement[]) {
 }
 
 export type FieldEditOption = {
-    type?: 'single-line-string' | 'number' | 'multi-line-string' | 'date' | 'single-select' | 'multi-select' | 'single-picker' | 'multi-picker'
+    type?: 'single-line-string' | 'number' | 'multi-line-string' | 'date' | 'single-select' | 'multi-select' | 'single-picker' | 'multi-picker' | 'custom'
     selectOptions?: string[]
     displayName?: string
 }
@@ -229,7 +402,7 @@ function parseValue(value: string | string[], originalValue: any): any {
  * @param style display style ('table' or 'bar')
  * @returns an object containing the html element and a function to get the current values
  */
-export function createInputArea<T extends object>(parent: HTMLElement | null, obj: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, style: 'table' | 'bar' = 'table') {
+export function createInputArea<T extends object>(parent: HTMLElement | null, obj: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, style: 'table' | 'bar' = 'table', name = '') {
     const elements: InputElement[] = []
     
     for (const key in obj) {
@@ -247,7 +420,7 @@ export function createInputArea<T extends object>(parent: HTMLElement | null, ob
         })
     }
 
-    const panel = createInputPanel(parent, elements, style)
+    const panel = createInputPanel(parent, elements, style, name)
     const getValues = () => {
         const values = panel.getValues()
         const parsedValues = {...obj}
@@ -430,7 +603,7 @@ export function createInputAreaOld(parent: Element|null, elements: string | Inpu
     return { div, inputs, buttons, selects }
 }
 
-export function createDataArea(parent: Element|null, foldable: boolean, params: InputElementOld[]) {
+export function createDataAreaOld(parent: Element|null, foldable: boolean, params: InputElementOld[]) {
     const div = createElement(parent, 'div', ['border', 'border-light-subtle', 'mb-2'])
     const regulatedParams = params.map(p => (typeof p === 'string')? { name: p } : p)
     const inputArea = createElement(div, 'div', ['p-1', 'd-flex', 'gap-2', 'overflow-auto'])

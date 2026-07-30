@@ -1,6 +1,7 @@
 import * as tu from './tu.ts'
 import { createCheckBtn, createElement, stringToColor } from './uu.ts'
-import { prompt } from './uu-input.ts'
+import { prompt, createInputArea } from './uu-input.ts'
+import * as uu from './uu.ts'
 
 /**
  * Create a horizontal bar showing proportions of different parts
@@ -86,6 +87,11 @@ export function createSelector(parent: HTMLElement | null, options: string[], on
         return btn
     })
     const getSelected = () => btns.filter(b => b.checkbox.checked).map(b => b.checkbox.value)
+    const setSelected = (values: string[]) => {
+        btns.forEach(btn => {
+            btn.checkbox.checked = values.includes(btn.checkbox.value)
+        })
+    }
     btns.forEach(btn => {
         btn.checkbox.addEventListener('change', () => {
             const selected = getSelected()
@@ -103,7 +109,8 @@ export function createSelector(parent: HTMLElement | null, options: string[], on
 
     return {
         element: div,
-        getSelected
+        getSelected,
+        setSelected
     }
 }
 
@@ -189,4 +196,44 @@ export class Pager {
     getElement() {
         return this.toolbar
     }
+}
+
+export function createDataArea<T extends object>(parent: HTMLElement | null, title: string, params: T, fieldOptions: Partial<Record<keyof T, uu.FieldEditOption>> = {}, renderer: (params: T) => Promise<HTMLElement>) {
+    const div = createElement(parent, 'div', ['d-flex', 'flex-column', 'border', 'border-light-subtle', 'p-2'])
+    // div.style.backgroundColor = tu.stringToColor(title, 100, 97)
+    const ia = createInputArea(div, params, fieldOptions, 'bar')
+    const contentDiv = createElement(div, 'div', ['mt-2'])
+
+    const renderBtn = createElement(ia.element, 'button', ['btn', 'btn-primary'], `${title}`)
+    renderBtn.style.whiteSpace = 'nowrap'
+    renderBtn.style.flexShrink = '0'
+
+    const showHideBtn = createElement(ia.element, 'button', ['btn', 'btn-outline-secondary'], '')
+    showHideBtn.style.whiteSpace = 'nowrap'
+    showHideBtn.style.flexShrink = '0'
+    // Initially hide the show/hide button until content is rendered
+    showHideBtn.style.display = 'none'
+
+    const state = tu.createObservableState(null, {showData: false}, s => {
+        contentDiv.style.display = s.showData ? 'block' : 'none'
+        //toggleBtn.replaceChildren(s.folded ? fa('fa-chevron-down') : fa('fa-chevron-up'))
+        showHideBtn.replaceChildren(s.showData ? uu.fa('fa-chevron-down') : uu.fa('fa-chevron-right'))
+        uu.syncClass(div, 'highlight', s.showData)
+    })
+
+    showHideBtn.onclick = () => {
+        state.showData = !state.showData
+    }
+
+    renderBtn.onclick = async () => {
+        state.showData = true
+        contentDiv.innerHTML = 'Loading...'
+        const content = await renderer(ia.getValues())
+        contentDiv.replaceChildren(content)
+        // force show data if render is called
+        // show the show/hide button once content is rendered
+        showHideBtn.style.display = 'inline-block'
+    }
+
+    return div
 }

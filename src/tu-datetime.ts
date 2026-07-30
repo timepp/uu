@@ -82,7 +82,7 @@ export function parseDate(s: string) : Date {
  *     480: for UTC-8
  *     This parameter only brings difference when the output is expect to be day/week/month/year boundary (e.g. today, this week)
  */
-export function parseTimeRange(s: string, timeZoneOffset?: number) {
+export function parseTimeRange(s: string, timeZoneOffset?: number): { start: Date, end: Date } {
     const input = s.trim()
     if (!input) {
         throw new Error('Time range string is empty')
@@ -339,7 +339,7 @@ export type TimeUnit = 'day' | 'hour' | 'minute' | 'second' | 'month' | 'year'
  * @example adjustTimeUtc(new Date('2025-01-31T12:00:00Z'), 1, 'month') // 2025-02-28T12:00:00Z (clamped)
  * @example adjustTimeUtc(new Date('2024-02-29T12:00:00Z'), 1, 'year') // 2025-02-28T12:00:00Z (clamped)
  */
-export function adjustTimeUtc(base: Date, amount: number, unit: TimeUnit) {
+export function adjustTimeUtc(base: Date, amount: number, unit: TimeUnit): Date {
     function addMonthsClampedUtc(base: Date, deltaMonths: number) {
         const year = base.getUTCFullYear()
         const month0 = base.getUTCMonth()
@@ -386,7 +386,7 @@ function ulc(t: Date, converter: (t: Date) => Date, timeZoneOffset?: number) {
     return new Date(converted.getTime() + offsetMinutes * 60 * 1000)
 }
 
-export function adjustTime(base: Date, amount: number, unit: TimeUnit, timeZoneOffset?: number) {
+export function adjustTime(base: Date, amount: number, unit: TimeUnit, timeZoneOffset?: number): Date {
     const offsetMinutes = timeZoneOffset ?? base.getTimezoneOffset()
     const baseUtc = new Date(base.getTime() - offsetMinutes * 60 * 1000)
     const adjustedUtc = adjustTimeUtc(baseUtc, amount, unit)
