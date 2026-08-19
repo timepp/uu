@@ -311,7 +311,7 @@ export function createLargeJsonView(content: string) {
 // If the handler returns true, the dialog will be closed
 export type ButtonAction = () => boolean|void|Promise<boolean|void>
 
-export interface DialogOptions<T> {
+export interface DialogOptions {
     classes?: string[]
     style?: Partial<CSSStyleDeclaration>
     softDismissable?: boolean // default: true
@@ -330,7 +330,7 @@ export type DialogElements = {
 export function showDialog<T>(
     title: string, 
     content: string | HTMLElement | undefined = undefined, 
-    options: DialogOptions<T> = {},
+    options: DialogOptions = {},
     onCreate?: (elements: DialogElements, finisher: (value?: T) => void) => void
 ) {
     const dialog = createElement(document.body, 'dialog', options.classes || [], '', {
@@ -446,7 +446,7 @@ export function showDialog<T>(
 }
 
 export function showInDialog(title: string, content: string|HTMLElement, actions: string[] | Record<string, ButtonAction> = ['Close']) {
-    return showDialog<string>(title, content, {
+    return showDialog(title, content, {
         actions,
         softDismissable: false
     })
@@ -1204,14 +1204,16 @@ export function guessDataType(data: string | string[]) : DataType {
     } else {
         const types = data.map(guessDataType)
         const stat = tu.groupBy(types, t => t)
-        if (stat[0][1].length / data.length >= 0.8) {
+        if (stat.length > 0 && stat[0][1].length / data.length >= 0.8) {
             return stat[0][0] as 'integer' | 'float' | 'boolean' | 'date' | 'general'
         }
         return 'general'
     }
 }
 
-export async function renderDataInsights(info: tu.DataPropStat[]) {
+export type DataInsightValueClickCallback = (propertyName: string, propertyValue: string) => void
+
+export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValueClick?: DataInsightValueClickCallback) {
     const div = createElement(null, 'div')
     // bar chart for selected prop, y axis: count, x axis: unique values / bins
     // configurable:
@@ -1234,9 +1236,20 @@ export async function renderDataInsights(info: tu.DataPropStat[]) {
     const propGroup = createElement(controls, 'div', [])
     createElement(propGroup, 'label', ['form-label', 'mb-1'], 'Property')
     const propSelect = createElement(propGroup, 'select', ['form-select']) as HTMLSelectElement
-    for (const stat of info) {
-        createElement(propSelect, 'option', [], stat.propName, {}, { value: stat.propName })
+    const sortedProps = info.map(stat => stat.propName).sort((a, b) => a.localeCompare(b))
+    for (const propName of sortedProps) {
+        createElement(propSelect, 'option', [], propName, {}, { value: propName })
     }
+
+    const chartTypeGroup = createElement(controls, 'div', [])
+    createElement(chartTypeGroup, 'label', ['form-label', 'mb-1'], 'Chart type')
+    const chartTypeSelect = createElement(chartTypeGroup, 'select', ['form-select']) as HTMLSelectElement
+    createElement(chartTypeSelect, 'option', [], 'Bar chart', {}, { value: 'bar' })
+    createElement(chartTypeSelect, 'option', [], 'Line chart', {}, { value: 'line' })
+    createElement(chartTypeSelect, 'option', [], 'Pie chart', {}, { value: 'pie' })
+    createElement(chartTypeSelect, 'option', [], 'Doughnut chart', {}, { value: 'doughnut' })
+    createElement(chartTypeSelect, 'option', [], 'Polar area chart', {}, { value: 'polarArea' })
+    createElement(chartTypeSelect, 'option', [], 'Text Summary', {}, { value: 'text' })
 
     const sortGroup = createElement(controls, 'div', [])
     createElement(sortGroup, 'label', ['form-label', 'mb-1'], 'Sort by')
@@ -1404,22 +1417,43 @@ export async function renderDataInsights(info: tu.DataPropStat[]) {
         subtitle.textContent = `${chartValues.length} categories${chartValues.length !== beforeCountFilter ? ` (filtered from ${beforeCountFilter})` : ''}`
 
         chartBody.replaceChildren()
+        if (currentChart && typeof currentChart.destroy === 'function') {
+            currentChart.destroy()
+            currentChart = null
+        }
         if (chartValues.length === 0) {
             createElement(chartBody, 'div', ['text-muted'], 'No values to display with current filters.')
             return
         }
 
-        if (currentChart && typeof currentChart.destroy === 'function') {
-            currentChart.destroy()
-            currentChart = null
+        if (chartTypeSelect.value === 'text') {
+            const summary = createElement(chartBody, 'div', ['d-flex', 'flex-wrap', 'gap-1'])
+            for (const item of chartValues) {
+                const value = item.value || '(empty)'
+                const entry = createElement(summary, 'span', ['border', 'rounded', 'p-1', 'hover-effect'], ``, {
+                    cursor: onPropertyValueClick ? 'pointer' : 'default'
+                })
+                createElement(entry, 'span', ['fw-bold'], value, {color: getStringColor(`${value}`, 100, 30)})
+                createElement(entry, 'span', ['text-muted'], ` (${item.count})`)
+                entry.onclick = () => onPropertyValueClick?.(stat.propName, item.value)
+            }
+            return
         }
 
         const width = `${Math.max(500, chartValues.length * 55)}px`
         const { chart } = await createChart(chartBody, width, '420px', {
-            type: 'bar',
+            type: chartTypeSelect.value,
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                onClick: (_event: unknown, elements: { index: number }[]) => {
+                    const item = chartValues[elements[0]?.index]
+                    if (item) onPropertyValueClick?.(stat.propName, item.value)
+                },
+                onHover: (event: { native?: MouseEvent }, elements: unknown[]) => {
+                    const target = event.native?.target as HTMLElement | undefined
+                    if (target) target.style.cursor = elements.length > 0 ? 'pointer' : 'default'
+                },
                 plugins: {
                     legend: { display: false }
                 }
@@ -1437,6 +1471,7 @@ export async function renderDataInsights(info: tu.DataPropStat[]) {
     }
 
     propSelect.onchange = render
+    chartTypeSelect.onchange = render
     sortSelect.onchange = render
     hideBelowInput.oninput = render
     hideAboveInput.oninput = render

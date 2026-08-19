@@ -750,7 +750,7 @@ export type DataPropStat = {
         count: number
     }[]
 }
-export function getDataInsights(arr: object[]): DataPropStat[] {
+export function getPropStat(arr: object[]) {
     const pvm: Record<string, Record<any, number>> = {}
     function getOrCreate(obj: any, prop: string) {
         if (!obj[prop]) obj[prop] = {}

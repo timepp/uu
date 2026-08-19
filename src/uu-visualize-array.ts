@@ -11,7 +11,7 @@ import {
     syncExistence, 
     createButton, 
     associateDropdownActions, 
-    showInDialog, 
+    showDialog, 
     renderDataInsights, 
     prompt
 } from './uu.ts'
@@ -109,6 +109,7 @@ export type VisualizeConfig<T extends object> = {
 
     // Optional: load more data when user clicks on the total count
     loadMore: () => Promise<T[]>
+    onPropertyValueClick: (prop: string, value: string) => void
 }
 
 export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}) {
@@ -739,11 +740,17 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     })
 
     associateDropdownActions(optionBtn, {
-        'Insights': async () => {
-            const info = tu.getDataInsights(arr)
-            console.log('data insights', info)
+        'Charts': async () => {
+            const info = tu.getPropStat(arr)
+            console.log('prop stat', info)
             // const goodInfo = info.filter(v => v.uniqueValues.length <= 200)
-            showInDialog('Data Insights', await renderDataInsights(info))
+            const content = await renderDataInsights(info, cfg.onPropertyValueClick)
+            showDialog<string>('Charts', content, {
+                style: {
+                    minWidth: '90vw',
+                    minHeight: '90vh',
+                }
+            })
         },
         'Select Props': () => selectProps(),
         'Change Page Size': async () => {
