@@ -1,24 +1,28 @@
+// tslint-ignore-file no-explicit-any
+// deno-lint-ignore-file no-explicit-any
 // tu: a set of utility functions
-/// get time as YYYY-MM-DD HH:mm:ss
-/// timeZoneOffset is in minutes, e.g. 
-//     -480: for UTC+8
-//     480: for UTC-8
-//     0: for UTC
-//     undefined: for local device timezone (so the result can be different on different devices)
-export function formatTime(d, timeZoneOffset) {
-    const t = d.getTime();
-    const date = new Date(t - (timeZoneOffset ?? d.getTimezoneOffset()) * 60 * 1000);
-    return date.toISOString().slice(0, 19).replace('T', ' ');
-}
-export function formatDate(d, timeZoneOffset) {
-    return formatTime(d, timeZoneOffset).slice(0, 10);
-}
+export * from './tu-datetime.js';
+export * from './tu-cache.js';
 export function formatFloat(n, digits = 2, mininumDigits = 0) {
     return n.toLocaleString(undefined, {
         minimumFractionDigits: mininumDigits,
         maximumFractionDigits: digits,
         useGrouping: false,
     });
+}
+export function formatFileSize(size) {
+    if (size < 1024) {
+        return size + ' B';
+    }
+    else if (size < 1024 * 1024) {
+        return (size / 1024).toFixed(2) + ' KB';
+    }
+    else if (size < 1024 * 1024 * 1024) {
+        return (size / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+    else {
+        return (size / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
 }
 export function trimSuffix(str, suffix) {
     if (str.endsWith(suffix)) {
@@ -31,6 +35,11 @@ export function trimPrefix(str, prefix) {
         return str.slice(prefix.length);
     }
     return str;
+}
+// This is helpful when you want to console.log a url and keep the full url visible
+// (otherwise the browser will render the url as a link and shortens it)
+export function trimHttps(url) {
+    return trimPrefix(url, 'https:');
 }
 export function trimEmptyLines(str, ...locations) {
     let lines = str.split('\n');
@@ -51,6 +60,38 @@ export function trimEmptyLines(str, ...locations) {
         lines = lines.filter(line => line.trim() !== '');
     }
     return lines.join('\n');
+}
+// get a number for string folding, so that "blabla...x more chars..." is just at desired length
+// returns x, and the inditor string '... x more chars...'
+export function getStringFoldingIndicator(fullStringLength, desiredLength) {
+    const ls = '...';
+    const rs = ' more chars...';
+    // fullStringLength - desiredLength = x - (ls + rs).length - number of digits in x
+    // we iterate on the digits of x, to find the correct x
+    let x = fullStringLength - desiredLength + ls.length + rs.length + 1;
+    for (let digits = 1; digits <= 10; digits++) {
+        x = fullStringLength - desiredLength + ls.length + rs.length + digits;
+        if (`${x}`.length === digits) {
+            break;
+        }
+    }
+    return {
+        foldedLength: x,
+        unfoldedLength: fullStringLength - x,
+        foldIndicator: `${ls}${x}${rs}`
+    };
+}
+export function foldString(str, maxLength) {
+    if (str.length <= maxLength) {
+        return str;
+    }
+    const f = getStringFoldingIndicator(str.length, maxLength);
+    const l1 = f.unfoldedLength / 2;
+    const l2 = f.unfoldedLength - l1;
+    // put the fold indicator in the middle of the string
+    const start = str.slice(0, l1);
+    const end = str.slice(str.length - l2);
+    return `${start}${f.foldIndicator}${end}`;
 }
 export function indentTextWithSpaces(text, spaces) {
     const indent = ' '.repeat(spaces);
@@ -86,15 +127,12 @@ export function unIndentTextWithSpaces(text, spaces) {
     }).join('\n');
 }
 export function simpleHash(s) {
-    let hash = 0;
-    if (s.length === 0)
-        return hash;
+    let hash = 2166136261;
     for (let i = 0; i < s.length; i++) {
-        hash = (hash << 5) - hash;
-        hash = hash + s.charCodeAt(i);
-        hash = hash & hash;
+        hash ^= s.charCodeAt(i);
+        hash = Math.imul(hash, 16777619);
     }
-    return hash;
+    return hash >>> 0;
 }
 /** Hash a string using the Web Crypto API
  *
@@ -105,6 +143,23 @@ export function simpleHash(s) {
 export async function hash(str, algo = 'SHA-256') {
     const arr = await crypto.subtle.digest(algo, new TextEncoder().encode(str));
     return Array.from(new Uint8Array(arr)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+/** Generate a consistent color from a string
+ *
+ * @param str the string to convert to color
+ * @param saturation HSL saturation value (0-100)
+ * @param lightness HSL lightness value (0-100)
+ * @returns HSL color string
+ *
+ * @example
+ * ```typescript
+ * const color = stringToColor('user-123') // 'hsl(235, 70%, 60%)'
+ * ```
+ */
+export function stringToColor(str, saturation = 70, lightness = 60) {
+    const hash = simpleHash(str);
+    const hue = hash % 360;
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 export function toFileSystemCompatibleName(name) {
     // 1. Remove leading and trailing spaces
@@ -118,51 +173,269 @@ export function toFileSystemCompatibleName(name) {
     }
     return name;
 }
-function traverseObjectInternal(obj, maxDepth, callback, path, seenObjects) {
+function traverseObjectInternal(obj, maxDepth, callback, path, parents) {
     if (typeof obj !== 'object' || obj === null) {
-        callback(path, obj, 'leaf');
-        return;
+        return callback(path, obj, 'leaf');
     }
-    if (seenObjects.has(obj)) {
-        callback(path, obj, 'loop');
+    if (parents.includes(obj)) {
+        return callback(path, obj, 'loop');
     }
     else {
-        seenObjects.add(obj);
-        callback(path, obj, 'object');
+        {
+            const ret = callback(path, obj, 'object');
+            if (ret === 0)
+                return ret; // stop traversing sub-properties
+            if (ret === -1)
+                return ret; // stop all traversing
+        }
         if (maxDepth >= 0 && path.length >= maxDepth)
             return;
+        const newParents = [...parents, obj];
         for (const key in obj) {
-            traverseObjectInternal(obj[key], maxDepth, callback, [...path, key], seenObjects);
+            const ret = traverseObjectInternal(obj[key], maxDepth, callback, [...path, key], newParents);
+            if (ret === -1)
+                return ret; // stop all traversing
         }
     }
 }
+/**
+ * Recursively traverse an object and its properties.
+ * @param obj The object to traverse.
+ * @param maxDepth Maximum depth to traverse. Use -1 for unlimited depth.
+ * @param callback Return values: void/1 to continue, 0 to stop traversing sub-properties, -1 to stop all traversing.
+ */
 export function traverseObject(obj, maxDepth, callback) {
-    const seenObjects = new WeakSet();
-    traverseObjectInternal(obj, maxDepth, callback, [], seenObjects);
+    traverseObjectInternal(obj, maxDepth, callback, [], []);
 }
-// used in json.stringify
-export function getStringifyReplacer(limit = {}) {
-    const seen = new WeakMap();
-    return (key, value) => {
-        // circular detection
-        if (typeof value === "object" && value !== null) {
-            const previousKey = seen.get(value);
-            if (previousKey) {
-                return `<<circular ref to ${previousKey}>>`;
+// fuzzy find first matching keyword in object (deep)
+export function fuzzyFind(obj, keyword, caseSensitive = true) {
+    let path = null;
+    traverseObject(obj, -1, (p, v, t) => {
+        if (t === 'leaf' && v !== null && v !== undefined) {
+            if (typeof v === 'number') {
+                if (`${v}` === keyword) {
+                    path = p;
+                    return -1;
+                }
             }
-            seen.set(value, key);
+            else if (caseSensitive ? `${v}`.includes(keyword) : `${v}`.toLowerCase().includes(keyword.toLowerCase())) {
+                path = p;
+                return -1;
+            }
         }
-        // string length limit
-        if (typeof value === 'string' && limit.maxStringLength && value.length > limit.maxStringLength) {
-            return `${value.slice(0, limit.maxStringLength - 12)} …${value.length - limit.maxStringLength + 12} more chars…`;
+    });
+    return path;
+}
+export function stringify(obj, space, compact = false, maxStrLen = Infinity, maxArrSize = Infinity) {
+    if (maxStrLen === Infinity && maxArrSize === Infinity && compact === false) {
+        // use native JSON.stringify directly whenever possible
+        try {
+            return JSON.stringify(obj, null, space);
         }
-        // array size limit
-        // maxArraySize 10 => <9 items> -> <10 items> -> <9 items> ... 2 more items ...
-        if (Array.isArray(value) && limit.maxArraySize && value.length > limit.maxArraySize) {
-            return value.slice(0, limit.maxArraySize - 1).concat(`…${value.length - limit.maxArraySize + 1} more items…`);
+        catch (e) {
+            // ignore since we will do safe fallback below
         }
-        return value;
+    }
+    return safeStringify(obj, space, maxStrLen, maxArrSize, compact).str;
+}
+export function safeStringify(obj, space, maxStrLen = Infinity, maxArrSize = Infinity, compact = true, callback) {
+    const ssc = createSsContext();
+    const str = safeStringifyInternal(obj, [], [], 0, typeof space === 'number' ? ' '.repeat(space) : space, compact, maxStrLen, maxArrSize, ssc, callback);
+    return { str, ...ssc };
+}
+function createSsContext() {
+    return {
+        circularRefs: 0,
+        trimmedStrings: 0,
+        trimmedArrays: 0,
     };
+}
+function safeStringifyInternal(obj, parents, path, pos, space, compact, maxStrLen, maxArrSize, ssc, callback) {
+    // when space is given, user usually wants pretty printing
+    // we then add additional spaces in few places for better readability
+    // const subtleSpacer = space === undefined ? '' : ' '
+    // FIXME: we have to sacrify compact layout here to support callback with position info
+    // The thing is that in order to do compact layout we need to calulate child elements first,
+    // however, we cannot know the positions of each child elements before we collect all of them.
+    // Thus this function is not used now
+    // function compose(arr: string[], open: string, close: string) {
+    //     if (arr.length === 0) return `${open}${close}`
+    //     const shouldCompact = compact && arr.reduce((a, b) => a + b.length, 0) < 60 && arr.every(v => !v.includes('\n'))
+    //     if (space === undefined || shouldCompact) {
+    //         return `${open}${arr.join(',' + subtleSpacer)}${close}`
+    //     }
+    //     const indent = space?.repeat(parents.length)
+    //     const inner = arr.map(v => indent + space + v).join(',\n')
+    //     return `${open}\n${inner}\n${indent}${close}`
+    // }
+    let isTrimmed = false;
+    let str = '';
+    if (obj === null) {
+        str = 'null';
+    }
+    else if (typeof obj === 'number' || typeof obj === 'boolean') {
+        str = String(obj);
+    }
+    else if (typeof obj === 'string') {
+        let v = obj;
+        if (obj.length > maxStrLen) {
+            const f = getStringFoldingIndicator(obj.length, maxStrLen);
+            v = obj.slice(0, f.unfoldedLength) + f.foldIndicator;
+            isTrimmed = true;
+            ssc.trimmedStrings++;
+        }
+        str = JSON.stringify(v);
+    }
+    else {
+        // object or array
+        // circular ref detection
+        const index = parents.indexOf(obj);
+        if (index !== -1) {
+            ssc.circularRefs++;
+            str = `"<<circular ref to ${index === 0 ? 'the root object' : 'parent level ' + index}>>"`;
+        }
+        else {
+            const np = [...parents, obj];
+            const indent = (space ?? '').repeat(parents.length);
+            const prefix = indent + (space ?? '');
+            if (Array.isArray(obj)) {
+                let arr = obj;
+                if (obj.length > maxArrSize) {
+                    isTrimmed = true;
+                    ssc.trimmedArrays++;
+                    arr = obj.slice(0, maxArrSize - 1);
+                    arr.push(`…${obj.length - maxArrSize + 1} more items…`);
+                }
+                const parts = ['['];
+                let p = pos + 1;
+                for (let i = 0; i < arr.length; i++) {
+                    parts.push(`\n` + prefix);
+                    p += 1 + prefix.length;
+                    const itemStr = safeStringifyInternal(arr[i], np, [...path, `${i}`], p, space, compact, maxStrLen, maxArrSize, ssc, callback);
+                    parts.push(itemStr);
+                    p += itemStr.length;
+                    if (i < arr.length - 1) {
+                        parts.push(',');
+                        p += 1;
+                    }
+                }
+                if (arr.length > 0) {
+                    parts.push('\n' + indent);
+                    p += 1 + indent.length;
+                }
+                parts.push(']');
+                str = parts.join('');
+            }
+            else if (typeof obj === 'object') {
+                const parts = ['{'];
+                let p = pos + 1;
+                for (const [key, value] of Object.entries(obj)) {
+                    parts.push(`\n` + prefix);
+                    p += 1 + prefix.length;
+                    const keyStr = JSON.stringify(key);
+                    parts.push(keyStr + ': ');
+                    p += keyStr.length + 2;
+                    const valueStr = safeStringifyInternal(value, np, [...path, key], p, space, compact, maxStrLen, maxArrSize, ssc, callback);
+                    parts.push(valueStr);
+                    p += valueStr.length;
+                    parts.push(',');
+                    p += 1;
+                }
+                // we now need to remove the last comma if any property exists
+                if (parts.length > 1) {
+                    parts[parts.length - 1] = '\n' + indent;
+                    p += indent.length;
+                }
+                parts.push('}');
+                str = parts.join('');
+            }
+            else {
+                str = `${obj}`;
+            }
+        }
+    }
+    if (callback) {
+        callback(path, obj, pos, pos + str.length, isTrimmed);
+    }
+    return str;
+}
+// extract json object from a mixed text
+export function extractJsonObjects(text) {
+    let startPos = 0;
+    const results = [];
+    while (startPos < text.length) {
+        const res = extractJsonObject(text.slice(startPos));
+        if (res) {
+            results.push(res.obj);
+            startPos += res.endPos;
+        }
+        else {
+            break;
+        }
+    }
+    return results;
+}
+export function extractJsonObject(text) {
+    text = text.trim();
+    const stack = [];
+    let startPos = -1;
+    let inString = false;
+    let escapeNext = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (startPos === -1 && (ch === '{' || ch === '[')) {
+            startPos = i;
+            stack.push(ch);
+            continue;
+        }
+        if (startPos === -1)
+            continue;
+        if (inString) {
+            if (escapeNext) {
+                escapeNext = false;
+            }
+            else if (ch === '\\') {
+                escapeNext = true;
+            }
+            else if (ch === '"') {
+                inString = false;
+            }
+            continue;
+        }
+        else {
+            if (ch === '"') {
+                inString = true;
+                continue;
+            }
+        }
+        if (ch === '{' || ch === '[') {
+            stack.push(ch);
+        }
+        else if (ch === '}' || ch === ']') {
+            if (stack.length > 0) {
+                const last = stack[stack.length - 1];
+                if ((ch === '}' && last === '{') || (ch === ']' && last === '[')) {
+                    stack.pop();
+                    if (stack.length === 0) {
+                        try {
+                            return {
+                                obj: JSON.parse(text.substring(startPos, i + 1)),
+                                startPos,
+                                endPos: i + 1,
+                            };
+                        }
+                        catch (e) {
+                            return null;
+                        }
+                    }
+                }
+                else {
+                    return null;
+                }
+            }
+        }
+    }
+    return null;
 }
 export function dataProperties(arr) {
     const propSet = new Set();
@@ -187,28 +460,79 @@ export function safeExecute(fn, defaultValue) {
         }
     }
 }
+// create an advanced object, where 
+// 1. observers will be called when any property changes
+//    - onChange will be called immediately when created
+//    - substantial observers can be added using addObserver method, which will also be called immediately when added
+// 2. state will be persisted to localStorage if stateKey is given
+export function createObservableState(stateKey, initialState, onChange) {
+    function loadState() {
+        if (!stateKey)
+            return;
+        const stored = localStorage.getItem(stateKey);
+        return stored ? JSON.parse(stored) : {};
+    }
+    function saveState(s) {
+        if (!stateKey)
+            return;
+        localStorage.setItem(stateKey, JSON.stringify(s));
+    }
+    const observers = [onChange];
+    const internalState = { ...initialState, ...loadState() };
+    const proxy = new Proxy(internalState, {
+        set(target, prop, value) {
+            if (prop === 'addObserver') {
+                return false; // Prevent overriding addObserver
+            }
+            if (typeof prop === 'string' && prop in target) {
+                if (target[prop] !== value) {
+                    target[prop] = value;
+                    observers.forEach(cb => cb(proxy));
+                }
+            }
+            else {
+                // Allow adding new properties (optional)
+                target[prop] = value;
+                observers.forEach(cb => cb(proxy));
+            }
+            saveState(proxy);
+            return true;
+        },
+        get(target, prop) {
+            if (prop === 'addObserver') {
+                return (cb) => {
+                    observers.push(cb);
+                    cb(proxy);
+                };
+            }
+            return target[prop];
+        }
+    });
+    observers.forEach(cb => cb(proxy));
+    return proxy;
+}
 export function createState(object, properties, stateKey) {
-    // 内部存储的状态对象
+    // Internally stored state object
     const internalState = {};
-    // 初始化 internalState，只包含指定的属性
+    // Initialize internalState, only including specified properties
     properties.forEach((prop) => {
         if (prop in object) {
             internalState[prop] = object[prop];
         }
     });
-    // 定义代理对象
+    // Define proxy object
     const state = new Proxy(internalState, {
         get(target, prop, receiver) {
-            // 将 prop 转换为 keyof T 类型，并检查是否在 properties 中
+            // Convert prop to keyof T type and check if it's in properties
             const key = prop;
             if (properties.includes(key)) {
                 return target[key];
             }
             throw new Error(`Property '${String(prop)}' is not managed by this state`);
-            // return undefined; // 未指定的属性返回 undefined
+            // return undefined; // Return undefined for unspecified properties
         },
         set(target, prop, value) {
-            // 将 prop 转换为 keyof T 类型，并检查是否在 properties 中
+            // Convert prop to keyof T type and check if it's in properties
             const key = prop;
             if (properties.includes(key)) {
                 target[key] = value;
@@ -218,7 +542,7 @@ export function createState(object, properties, stateKey) {
             throw new Error(`Property '${String(prop)}' is not managed by this state`);
         }
     });
-    // 加载状态
+    // Load state
     function loadState() {
         if (!stateKey)
             return;
@@ -232,7 +556,7 @@ export function createState(object, properties, stateKey) {
             });
         }
     }
-    // 保存状态
+    // Save state
     function saveState() {
         if (!stateKey)
             return;
@@ -242,7 +566,7 @@ export function createState(object, properties, stateKey) {
         });
         localStorage.setItem(stateKey, JSON.stringify(persistState));
     }
-    // 加载初始状态
+    // Load initial state
     loadState();
     return state;
 }
@@ -251,13 +575,13 @@ export function createState(object, properties, stateKey) {
 /// return: {content, category}[] that covers the whole text
 export function segmentByRegex(text, hc) {
     const matches = [];
-    // 收集所有匹配项，按照优先级从高到低处理
+    // Collect all matches, process by priority from high to low
     for (const [re, category] of hc) {
         for (const match of text.matchAll(re)) {
             if (match.index !== undefined) {
                 const matchStart = match.index;
-                const matchEnd = matchStart + match.length;
-                // 检查是否与已有匹配项重叠
+                const matchEnd = matchStart + match[0].length;
+                // Check if it overlaps with existing matches
                 let overlap = false;
                 for (const existingMatch of matches) {
                     const existingStart = existingMatch.index;
@@ -267,16 +591,15 @@ export function segmentByRegex(text, hc) {
                         break;
                     }
                 }
-                // 如果没有重叠，添加到匹配项列表
+                // If no overlap, add to matches list
                 if (!overlap) {
                     matches.push({ index: match.index, length: match[0].length, content: match[0], category });
                 }
             }
         }
     }
-    // 按 `index` 从小到大排序，确保匹配顺序正确
+    // Sort by `index` from small to large to ensure correct matching order
     matches.sort((a, b) => a.index - b.index);
-    console.log(matches);
     // run through the text and create pieces
     const pieces = [];
     let lastIndex = 0;
@@ -293,64 +616,19 @@ export function segmentByRegex(text, hc) {
     }
     return pieces;
 }
-/// highlight json text with the following constructs:
-/// - key: "key":
-/// - string: "string"
-/// - number: 123
-/// - boolean: true/false
-/// - null: null
-/// - punctuation: {, }, [, ], :, ,
 export function segmentJson(text) {
-    return segmentByRegex(text, [
+    return segmentByRegex(text, getJsonRegexps());
+}
+export function getJsonRegexps() {
+    return [
         [/"[^"]+":/g, 'key'],
-        [/"(?:[^"\\]|\\.)*"/g, 'string'],
+        [/"(?:[^"\\]|\\.)*"/g, 'string'], // Support escaped string matching
         [/\d+/g, 'number'],
         [/true/g, 'true'],
         [/false/g, 'false'],
         [/null/g, 'null'],
         [/[{}[\]:,]/g, 'punctuation'],
-    ]);
-}
-/** get the date boundaries for a given date and type
- *  @example getDateBoundaries(new Date(), 'week', 1) // get the next week boundaries
- *  @example getDateBoundaries(new Date(), 'week', -1) // get the last week boundaries
- *  @example getDateBoundaries(new Date(), 'month', 0) // get current month boundaries
- */
-export function getDateBoundaries(t, type, offset = 0) {
-    const start = new Date(t);
-    const end = new Date(t);
-    switch (type) {
-        case 'week':
-            const day = start.getDay();
-            start.setDate(start.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
-            end.setDate(start.getDate() + 6);
-            break;
-        case 'month':
-            start.setMonth(start.getMonth() + offset, 1);
-            end.setMonth(start.getMonth() + 1, 0);
-            break;
-        case 'day':
-            start.setDate(start.getDate() + offset);
-            end.setDate(start.getDate());
-            break;
-        case 'year':
-            start.setFullYear(start.getFullYear() + offset, 0, 1);
-            end.setFullYear(start.getFullYear(), 11, 31);
-            break;
-    }
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
-    return { start, end };
-}
-/** This function fixes the bug in Date that when time part it's not given, it
-    will construct UTC date instead of local date.
-    @see https://www.google.com/search?q=date-only+forms+are+interpreted+as+a+UTC+time
-*/
-export function parseDate(s) {
-    if (!s.includes(':')) {
-        s = s + 'T00:00:00';
-    }
-    return new Date(s);
+    ];
 }
 /** replace html template
  *  this function replace the following with the corresponding value in the replacements object:
@@ -398,4 +676,80 @@ export function derivedUrl(oldUrl, paramsToAdd, paramsToRemove) {
 }
 export function derivedCurrentUrl(paramsToAdd, paramsToRemove) {
     return derivedUrl(window.location.href, paramsToAdd, paramsToRemove);
+}
+export function shuffleArray(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
+export function getDataInsights(arr) {
+    const pvm = {};
+    function getOrCreate(obj, prop) {
+        if (!obj[prop])
+            obj[prop] = {};
+        return obj[prop];
+    }
+    function inc(obj, prop) {
+        const props = (typeof prop === 'object') ? JSON.stringify(prop) : prop;
+        obj[props] = (obj[props] || 0) + 1;
+    }
+    for (const item of arr) {
+        for (const prop in item) {
+            const value = item[prop];
+            let pp = getOrCreate(pvm, prop);
+            if (Array.isArray(value)) {
+                const arr = value;
+                for (const v of arr) {
+                    inc(pp, v);
+                }
+            }
+            else {
+                inc(pp, value);
+            }
+        }
+    }
+    // convert pvm to PropStat[]
+    const stats = [];
+    for (const prop in pvm) {
+        const pp = pvm[prop];
+        const uniqueValues = [];
+        for (const value in pp) {
+            uniqueValues.push({ value: value, count: pp[value] });
+        }
+        uniqueValues.sort((a, b) => b.count - a.count);
+        stats.push({ propName: prop, uniqueValues: uniqueValues });
+    }
+    function isGoodStat(stat) {
+        // if (stat.uniqueValues.length < 2) return false
+        // const n = stat.uniqueValues.length
+        // const an = stat.uniqueValues.filter(v => v.count > 1).length
+        // const m = stat.uniqueValues[0].count
+        // if (m <= 10 && an / n < 0.1) return false
+        if (stat.uniqueValues.length > 200)
+            return false;
+        return true;
+    }
+    // const goodStats = stats.filter(isGoodStat)
+    const goodStats = stats;
+    goodStats.sort((a, b) => a.uniqueValues.length - b.uniqueValues.length);
+    return goodStats;
+    // return stats.filter(isGoodStat).sort((a, b) => a.uniqueValues.length - b.uniqueValues.length);
+}
+export function findIndexes(s, sub) {
+    const indexes = [];
+    let startIndex = 0;
+    while (true) {
+        const index = s.indexOf(sub, startIndex);
+        if (index === -1)
+            break;
+        indexes.push(index);
+        startIndex = index + sub.length;
+    }
+    return indexes;
+}
+export function groupBy(arr, keyFunc) {
+    const groupMap = Object.groupBy(arr, keyFunc);
+    // sort occurrences by counts descending
+    return Object.entries(groupMap).sort((a, b) => b[1].length - a[1].length);
 }

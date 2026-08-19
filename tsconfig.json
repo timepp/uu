@@ -3,11 +3,13 @@
     "target": "esnext",
     "module": "esnext",
     "declaration": true, // 生成类型声明文件 (.d.ts)
+    "rootDir": "./src",
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"],

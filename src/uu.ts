@@ -564,7 +564,7 @@ export class DraggableSortedContainer {
     }
 
     private render() {
-        this.root.innerHTML = ''
+        this.root.replaceChildren()
 
         if (this.items.length === 0) {
             createElement(this.root, 'span', ['text-muted'], this.cfg.emptyText || '(none)')
@@ -882,7 +882,7 @@ export function createFoldableArea(parent: Element | null, title: string, conten
 
     async function reloadContent(refresh: boolean) {
         if (!content) return
-        body.innerHTML = ''
+        body.replaceChildren()
         if (typeof content !== 'function') {
             body.appendChild(content)
         } else {
@@ -1403,7 +1403,7 @@ export async function renderDataInsights(info: tu.DataPropStat[]) {
         title.textContent = `Group by "${stat.propName}"`
         subtitle.textContent = `${chartValues.length} categories${chartValues.length !== beforeCountFilter ? ` (filtered from ${beforeCountFilter})` : ''}`
 
-        chartBody.innerHTML = ''
+        chartBody.replaceChildren()
         if (chartValues.length === 0) {
             createElement(chartBody, 'div', ['text-muted'], 'No values to display with current filters.')
             return

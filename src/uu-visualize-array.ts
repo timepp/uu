@@ -559,7 +559,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         // only visible rows falling into the current page are shown, all others are hidden
         const {startIndex, endIndex} = pager.getPageRange(page)
         console.log(`goto page ${page}, show items from ${startIndex} to ${endIndex}`)
-        dataContainer.innerHTML = ''
+        dataContainer.replaceChildren()
         dataContainer.appendChild(getRenderer()(startIndex, endIndex))
     }
 
@@ -614,7 +614,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const zhCollator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'base' })
 
     function updateCountsDisplay() {
-        counts.innerHTML = ''
+        counts.replaceChildren()
         createElement(counts, 'span', [], `${data.length} / ${arr.length}`)
     }
 

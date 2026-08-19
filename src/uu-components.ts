@@ -227,7 +227,7 @@ export function createDataArea<T extends object>(parent: HTMLElement | null, tit
 
     renderBtn.onclick = async () => {
         state.showData = true
-        contentDiv.innerHTML = 'Loading...'
+        contentDiv.textContent = 'Loading...'
         const content = await renderer(ia.getValues())
         contentDiv.replaceChildren(content)
         // force show data if render is called
