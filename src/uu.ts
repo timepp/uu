@@ -1498,4 +1498,5 @@ export function injectStyles() {
 
 export * from './uu-components.ts'
 export * from './uu-input.ts'
+export * from './uu-propfilter.ts'
 export * from './uu-visualize-array.ts'
