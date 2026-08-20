@@ -1261,11 +1261,11 @@ export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValu
     const binLabel = createElement(binGroup, 'label', ['form-label', 'mb-1'], 'Bin size')
     const binInput = createElement(binGroup, 'input', ['form-control'], '', {}, {
         type: 'number',
-        min: 1,
-        step: 1,
-        value: 1
+        step: 'any',
+        value: 0
     }) as HTMLInputElement
     const dateBinSelect = createElement(binGroup, 'select', ['form-select'], '', { display: 'none' }) as HTMLSelectElement
+    createElement(dateBinSelect, 'option', [], 'Original', {}, { value: 'original' })
     createElement(dateBinSelect, 'option', [], 'Minute', {}, { value: 'minute' })
     createElement(dateBinSelect, 'option', [], 'Hour', {}, { value: 'hour' })
     createElement(dateBinSelect, 'option', [], 'Day', {}, { value: 'day' })
@@ -1335,22 +1335,46 @@ export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValu
         return d
     }
 
+    function decimalPlaces(n: number) {
+        const s = `${n}`
+        const match = s.match(/(?:\.(\d+))?(?:e-(\d+))?$/i)
+        return (match?.[1]?.length || 0) + Number(match?.[2] || 0)
+    }
+
+    function roundToDecimalPlaces(n: number, places: number) {
+        const factor = 10 ** places
+        return Math.round((n + Number.EPSILON) * factor) / factor
+    }
+
     function aggregateNumeric(values: { value: string, count: number }[], unit: number) {
+        if (!Number.isFinite(unit) || unit <= 0) {
+            return values.map(v => {
+                return {...v, _sortValue: Number(v.value)}
+            })
+        }
+        const places = decimalPlaces(unit)
         const map = new Map<number, number>()
         for (const item of values) {
             const n = Number(item.value)
             if (!Number.isFinite(n)) continue
-            const bucket = Math.floor(n / unit) * unit
+            const bucket = roundToDecimalPlaces(Math.floor(n / unit) * unit, places)
             map.set(bucket, (map.get(bucket) || 0) + item.count)
         }
         return [...map.entries()].map(([bucket, count]) => ({
-            value: unit === 1 ? `${bucket}` : `${bucket} ~ ${bucket + unit}`,
+            value: unit === 1 ? `${bucket}` : `${bucket} ~ ${roundToDecimalPlaces(bucket + unit, places)}`,
             count,
             _sortValue: bucket,
         }))
     }
 
-    function aggregateDate(values: { value: string, count: number }[], unit: 'minute' | 'hour' | 'day' | 'month' | 'year') {
+    function aggregateDate(values: { value: string, count: number }[], unit: 'original' | 'minute' | 'hour' | 'day' | 'month' | 'year') {
+        if (unit === 'original') {
+            // original means use the raw values
+            return values.map(v => {
+                return {...v, _sortValue: new Date(v.value).getTime()}
+            })
+        }
+
         const map = new Map<number, number>()
         for (const item of values) {
             const dt = new Date(item.value)
@@ -1373,24 +1397,18 @@ export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValu
         let values = [...stat.uniqueValues]
 
         const dataType = guessDataType(stat.uniqueValues.map(v => v.value || ''))
-        const useHistogram = dataType === 'integer' || dataType === 'float' || dataType === 'date'
-        // binGroup.style.display = useHistogram ? '' : 'none'
-        const isDate = dataType === 'date'
-        binInput.disabled = !useHistogram || isDate
-        dateBinSelect.disabled = !isDate
-        binInput.style.display = isDate ? 'none' : ''
-        dateBinSelect.style.display = isDate ? '' : 'none'
-        binLabel.textContent = isDate ? 'Date bin size' : 'Bin size'
+        const getValueColor = (dataType === 'colorName') ? (v: string) => v : (v: string) => getStringColor(`${v}`, 100, 40)
+        binLabel.textContent = dataType === 'date' ? 'Date bin size' : 'Bin size'
+        syncDisplay(dateBinSelect, dataType === 'date')
+        syncDisplay(binInput, dataType === 'integer' || dataType === 'float')
 
         let chartValues: ({ value: string, count: number, _sortValue?: number })[] = values
-        const unit = Math.max(1, Number(binInput.value) || 1)
-        if (useHistogram) {
-            if (isDate) {
-                const dateUnit = (dateBinSelect.value || 'day') as 'minute' | 'hour' | 'day' | 'month' | 'year'
-                chartValues = aggregateDate(values, dateUnit)
-            } else if (values.every(v => isFiniteNumberString(v.value))) {
-                chartValues = aggregateNumeric(values, unit)
-            }
+        const unit = Number(binInput.value)
+        if (dataType === 'date') {
+            const dateUnit = (dateBinSelect.value || 'day') as 'original' | 'minute' | 'hour' | 'day' | 'month' | 'year'
+            chartValues = aggregateDate(values, dateUnit)
+        } else if (dataType === 'integer' || dataType === 'float') {
+            chartValues = aggregateNumeric(values, unit)
         }
 
         const beforeCountFilter = chartValues.length
@@ -1433,7 +1451,7 @@ export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValu
                 const entry = createElement(summary, 'span', ['border', 'rounded', 'p-1', 'hover-effect'], ``, {
                     cursor: onPropertyValueClick ? 'pointer' : 'default'
                 })
-                createElement(entry, 'span', ['fw-bold'], value, {color: getStringColor(`${value}`, 100, 30)})
+                createElement(entry, 'span', ['fw-bold'], value, {color: getValueColor(value)})
                 createElement(entry, 'span', ['text-muted'], ` (${item.count})`)
                 entry.onclick = () => onPropertyValueClick?.(stat.propName, item.value)
             }
@@ -1463,7 +1481,7 @@ export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValu
                 datasets: [{
                     label: stat.propName,
                     data: chartValues.map(uv => uv.count),
-                    backgroundColor: chartValues.map(uv => getStringColor(`${uv.value}`, 100, 80)),
+                    backgroundColor: chartValues.map(uv => getValueColor(uv.value)),
                 }]
             }
         })
