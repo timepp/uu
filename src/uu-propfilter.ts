@@ -1,16 +1,13 @@
-import { createElement, showDialog } from './uu.ts'
+import * as tu from './tu.ts'
+import { createElement, showDialog, showSelection } from './uu.ts'
 
 export type PropertyFilterState = {
+    properties: string[]
     filters: Record<string, string[]>
 }
 
-export type PropertyFilterProperty<T extends object> = string | {
-    name: string
-    getValues?: (item: T) => unknown | unknown[]
-}
-
 export type PropertyFilterOptions<T extends object> = {
-    properties: PropertyFilterProperty<T>[]
+    valueGetters?: Partial<Record<keyof T | string, (item: T) => unknown | unknown[]>>
     maxInlineValues?: number
     onChange?: (filter: PropertyFilter<T>) => void | Promise<void>
 }
@@ -87,30 +84,34 @@ function injectPropertyFilterStyles() {
 }
 
 function loadState(stateKey: string): PropertyFilterState {
-    if (!stateKey) return { filters: {} }
+    if (!stateKey) return { properties: [], filters: {} }
     try {
         const parsed = JSON.parse(localStorage.getItem(stateKey) || '{}')
-        return { filters: parsed.filters || {} }
+        const filters = parsed.filters || {}
+        const properties = parsed.properties || Object.keys(filters).filter(property => filters[property]?.length > 0)
+        return { properties, filters }
     } catch {
-        return { filters: {} }
+        return { properties: [], filters: {} }
     }
 }
 
 export class PropertyFilter<T extends object> {
     root: HTMLDivElement
     private items: T[]
-    private properties: NormalizedProperty<T>[]
+    private availablePropertyNames: string[]
     private state: PropertyFilterState
     private maxInlineValues: number
     private onChange?: (filter: PropertyFilter<T>) => void | Promise<void>
+    private valueGetters: Partial<Record<keyof T | string, (item: T) => unknown | unknown[]>>
 
-    constructor(parent: Element | null, items: T[], private stateKey: string, options: PropertyFilterOptions<T>) {
+    constructor(parent: Element | null, items: T[], private stateKey: string, options: PropertyFilterOptions<T> = {}) {
         injectPropertyFilterStyles()
         this.items = items
-        this.properties = options.properties.map(property => this.normalizeProperty(property))
+        this.availablePropertyNames = tu.dataProperties(items)
         this.state = loadState(stateKey)
         this.maxInlineValues = options.maxInlineValues ?? 20
         this.onChange = options.onChange
+        this.valueGetters = options.valueGetters || {}
         this.root = createElement(parent, 'div', ['property-filters'])
         this.cleanupState()
         this.render()
@@ -118,6 +119,8 @@ export class PropertyFilter<T extends object> {
 
     setItems(items: T[]) {
         this.items = items
+        const propertyNames = tu.dataProperties(items)
+        this.availablePropertyNames = [...new Set([...this.availablePropertyNames, ...propertyNames])]
         this.render()
     }
 
@@ -126,8 +129,8 @@ export class PropertyFilter<T extends object> {
     }
 
     getSummary() {
-        return this.properties
-            .map(property => [property.name, this.getSelectedValues(property.name)] as const)
+        return this.state.properties
+            .map(property => [property, this.getSelectedValues(property)] as const)
             .filter(([, values]) => values.length > 0)
             .map(([property, values]) => `${property}: ${values.join('+')}`)
     }
@@ -136,21 +139,17 @@ export class PropertyFilter<T extends object> {
         return this.state
     }
 
-    private normalizeProperty(property: PropertyFilterProperty<T>): NormalizedProperty<T> {
-        if (typeof property === 'string') {
-            return {
-                name: property,
-                getValues: item => normalizeValues(item[property as keyof T] as unknown)
-            }
-        }
+    private normalizeProperty(property: string): NormalizedProperty<T> {
+        const getValues = this.valueGetters[property]
         return {
-            name: property.name,
-            getValues: item => normalizeValues(property.getValues ? property.getValues(item) : item[property.name as keyof T] as unknown)
+            name: property,
+            getValues: item => normalizeValues(getValues ? getValues(item) : item[property as keyof T] as unknown)
         }
     }
 
     private cleanupState() {
-        const knownProperties = new Set(this.properties.map(property => property.name))
+        const knownProperties = new Set(this.availablePropertyNames)
+        this.state.properties = this.state.properties.filter(property => knownProperties.has(property))
         for (const property of Object.keys(this.state.filters)) {
             if (!knownProperties.has(property)) delete this.state.filters[property]
         }
@@ -173,7 +172,7 @@ export class PropertyFilter<T extends object> {
 
     private applyFiltersExcept(items: T[], skippedProperty?: string) {
         return items.filter(item => {
-            return this.properties.every(property => {
+            return this.state.properties.map(property => this.normalizeProperty(property)).every(property => {
                 if (property.name === skippedProperty) return true
                 return this.propertyMatches(item, property, this.getSelectedValues(property.name))
             })
@@ -196,6 +195,22 @@ export class PropertyFilter<T extends object> {
     private async emitChange() {
         this.saveState()
         await this.onChange?.(this)
+    }
+
+    private async selectProperties() {
+        const properties = await showSelection('Select Filter Properties', this.availablePropertyNames, {
+            initialSelection: this.state.properties,
+            showOrder: true
+        })
+        if (properties === undefined) return
+
+        const selected = new Set(properties)
+        for (const property of Object.keys(this.state.filters)) {
+            if (!selected.has(property)) delete this.state.filters[property]
+        }
+        this.state.properties = properties
+        this.render()
+        await this.emitChange()
     }
 
     private clearProperty(propertyName: string) {
@@ -256,9 +271,18 @@ export class PropertyFilter<T extends object> {
     render() {
         this.root.replaceChildren()
         this.cleanupState()
-        for (const property of this.properties) {
+        if (this.state.properties.length === 0) {
+            const selectButton = createElement(this.root, 'button', ['btn', 'btn-outline-secondary'], 'Select Filter Properties')
+            selectButton.onclick = () => this.selectProperties()
+            return
+        }
+
+        for (const propertyName of this.state.properties) {
+            const property = this.normalizeProperty(propertyName)
             const row = createElement(this.root, 'div', ['property-filter-row', 'd-flex', 'align-items-start', 'mb-1'])
-            createElement(row, 'div', ['property-filter-name', 'me-2'], property.name)
+            const propertyNameElement = createElement(row, 'div', ['property-filter-name', 'me-2'], property.name, { cursor: 'pointer' })
+            propertyNameElement.title = 'Select and reorder filter properties'
+            propertyNameElement.onclick = () => this.selectProperties()
             const valuesArea = createElement(row, 'div', ['property-filter-values', 'd-flex', 'flex-wrap'])
             this.renderValues(valuesArea, property, this.allPropertyValues(property), this.maxInlineValues)
         }
