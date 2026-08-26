@@ -389,7 +389,11 @@
     }
   },
   "redirects": {
+    "https://esm.sh/@codemirror/lang-json?deps=@codemirror/state@6.5.3": "https://esm.sh/@codemirror/lang-json@6.0.2?deps=@codemirror/state@6.5.3",
+    "https://esm.sh/@codemirror/language?deps=@codemirror/state@6.5.3": "https://esm.sh/@codemirror/language@6.12.4?deps=@codemirror/state@6.5.3",
+    "https://esm.sh/@codemirror/search?deps=@codemirror/state@6.5.3": "https://esm.sh/@codemirror/search@6.7.1?deps=@codemirror/state@6.5.3",
     "https://esm.sh/@codemirror/state": "https://esm.sh/@codemirror/state@6.5.2",
+    "https://esm.sh/@codemirror/view?deps=@codemirror/state@6.5.3": "https://esm.sh/@codemirror/view@6.43.9?deps=@codemirror/state@6.5.3",
     "https://esm.sh/@kurkle/color@^0.3.0?target=denonext": "https://esm.sh/@kurkle/color@0.3.4?target=denonext",
     "https://esm.sh/@marijn/find-cluster-break@^1.0.0?target=denonext": "https://esm.sh/@marijn/find-cluster-break@1.0.2?target=denonext",
     "https://esm.sh/@types/linkify-it@~5.0.0/index.d.ts": "https://esm.sh/@types/linkify-it@5.0.0/index.d.ts",
@@ -405,8 +409,13 @@
     "https://esm.sh/uc.micro@^2.1.0?target=denonext": "https://esm.sh/uc.micro@2.1.0?target=denonext"
   },
   "remote": {
+    "https://esm.sh/@codemirror/lang-json@6.0.2?deps=@codemirror/state@6.5.3": "e8c208956a5b20631e0c58247fd8dc6ce0403b063a678d0dad5d6ac192de26c0",
+    "https://esm.sh/@codemirror/language@6.12.4?deps=@codemirror/state@6.5.3": "39a4e53e849257f6b151f0574f13f50e4145d99c9f0e0e501e551bfe92c29586",
+    "https://esm.sh/@codemirror/search@6.7.1?deps=@codemirror/state@6.5.3": "6445f8ebe55e9f9866f2a734bfc7d1838715d668fbbf78d7459892d0a99869d4",
     "https://esm.sh/@codemirror/state@6.5.2": "5d520d5844bce685ffb0626a8d4fd5e7b36dc90690fc06f1bab9fdbc0705b288",
     "https://esm.sh/@codemirror/state@6.5.2/denonext/state.mjs": "0efddb91efcb829864093367ff88b3c401e2f21dcae5bc570ab388032c67614f",
+    "https://esm.sh/@codemirror/state@6.5.3": "701ab7a48adb966990f78084a89148f58c454f20eb774fb4df4eb32692984c2c",
+    "https://esm.sh/@codemirror/view@6.43.9?deps=@codemirror/state@6.5.3": "46b11ad2ecef2b38af33ea734b84f523f1fc8df05bf91e3d2376f72b7b70b403",
     "https://esm.sh/@kurkle/color@0.3.4/denonext/color.mjs": "38c242a4379368af5ba7eeb039ec0b363f19c6bf10125c41cbbeca4e434712b7",
     "https://esm.sh/@kurkle/color@0.3.4?target=denonext": "756f17db2e10b8626b07ffac559769636bfc6ae67fb3a54f33e49ac14521f49d",
     "https://esm.sh/@marijn/find-cluster-break@1.0.2/denonext/find-cluster-break.mjs": "740e4a2ff6fbcd7f619e556d06b4ab21bfafc6c69472ee84999739c3e26c9e46",
@@ -433,6 +442,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:typescript@^7.0.2",
         "npm:vite@^6.3.5"
       ]
     }

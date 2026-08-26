@@ -17,6 +17,8 @@ type NormalizedProperty<T extends object> = {
     getValues: (item: T) => string[]
 }
 
+type PropertyValueSort = 'count' | 'value-asc' | 'value-desc'
+
 function arraylize<T>(value: T | T[]) {
     return value instanceof Array ? value : [value]
 }
@@ -59,6 +61,8 @@ function injectPropertyFilterStyles() {
             font-weight: 600;
             color: #555;
             padding-top: 5px;
+            cursor: pointer;
+            align-self: stretch;
         }
         .property-filter-value {
             border: 1px solid #CCCCCC;
@@ -183,11 +187,13 @@ export class PropertyFilter<T extends object> {
         return sortedKeysByCount(countValues(this.items, property))
     }
 
-    private sortPropertyValues(values: string[], selectedValues: string[], counts: Record<string, number>) {
+    private sortPropertyValues(values: string[], selectedValues: string[], counts: Record<string, number>, sort: PropertyValueSort = 'count') {
         return [...values].sort((a, b) => {
             const aSelected = selectedValues.includes(a)
             const bSelected = selectedValues.includes(b)
             if (aSelected !== bSelected) return aSelected ? -1 : 1
+            if (sort === 'value-asc') return a.localeCompare(b)
+            if (sort === 'value-desc') return b.localeCompare(a)
             return (counts[b] || 0) - (counts[a] || 0) || a.localeCompare(b)
         })
     }
@@ -227,13 +233,20 @@ export class PropertyFilter<T extends object> {
         }
     }
 
-    private renderValues(container: HTMLElement, property: NormalizedProperty<T>, values: string[], limit?: number) {
+    private renderValues(
+        container: HTMLElement,
+        property: NormalizedProperty<T>,
+        values: string[],
+        limit?: number,
+        sort: PropertyValueSort = 'count',
+        onSelectionChange?: () => void,
+    ) {
         container.replaceChildren()
 
         const selectedValues = this.getSelectedValues(property.name)
         const countItems = this.applyFiltersExcept(this.items, property.name)
         const counts = countValues(countItems, property)
-        const sortedValues = this.sortPropertyValues(values, selectedValues, counts)
+        const sortedValues = this.sortPropertyValues(values, selectedValues, counts, sort)
         const nonZeroValues = sortedValues.filter(value => (counts[value] || 0) > 0)
         const visibleValues = limit ? nonZeroValues.slice(0, limit) : nonZeroValues
 
@@ -242,6 +255,7 @@ export class PropertyFilter<T extends object> {
         allButton.onclick = async () => {
             this.clearProperty(property.name)
             this.render()
+            onSelectionChange?.()
             await this.emitChange()
         }
 
@@ -251,6 +265,7 @@ export class PropertyFilter<T extends object> {
             button.onclick = async () => {
                 this.toggleValue(property.name, value)
                 this.render()
+                onSelectionChange?.()
                 await this.emitChange()
             }
         }
@@ -263,7 +278,30 @@ export class PropertyFilter<T extends object> {
 
     private showAllValuesDialog(property: NormalizedProperty<T>, values: string[]) {
         const content = createElement(null, 'div', ['property-filter-dialog'])
-        const render = () => this.renderValues(content, property, values)
+        const toolbar = createElement(content, 'div', ['btn-group', 'mb-2'])
+        const valuesArea = createElement(content, 'div')
+        const countButton = createElement(toolbar, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], 'Sort by Count')
+        const valueAscButton = createElement(toolbar, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], 'Sort by Value (Asc)')
+        const valueDescButton = createElement(toolbar, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], 'Sort by Value (Desc)')
+        let sort: PropertyValueSort = 'count'
+        const render = (): void => {
+            countButton.classList.toggle('active', sort === 'count')
+            valueAscButton.classList.toggle('active', sort === 'value-asc')
+            valueDescButton.classList.toggle('active', sort === 'value-desc')
+            this.renderValues(valuesArea, property, values, undefined, sort, render)
+        }
+        countButton.onclick = () => {
+            sort = 'count'
+            render()
+        }
+        valueAscButton.onclick = () => {
+            sort = 'value-asc'
+            render()
+        }
+        valueDescButton.onclick = () => {
+            sort = 'value-desc'
+            render()
+        }
         render()
         showDialog(`Filter ${property.name}`, content, { actions: ['Close'] })
     }
@@ -280,7 +318,7 @@ export class PropertyFilter<T extends object> {
         for (const propertyName of this.state.properties) {
             const property = this.normalizeProperty(propertyName)
             const row = createElement(this.root, 'div', ['property-filter-row', 'd-flex', 'align-items-start', 'mb-1'])
-            const propertyNameElement = createElement(row, 'div', ['property-filter-name', 'me-2'], property.name, { cursor: 'pointer' })
+            const propertyNameElement = createElement(row, 'div', ['property-filter-name', 'me-2'], property.name)
             propertyNameElement.title = 'Select and reorder filter properties'
             propertyNameElement.onclick = () => this.selectProperties()
             const valuesArea = createElement(row, 'div', ['property-filter-values', 'd-flex', 'flex-wrap'])
