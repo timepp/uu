@@ -121,6 +121,12 @@ export class PropertyFilter<T extends object> {
         this.render()
     }
 
+    reset() {
+        this.state.filters = {}
+        this.saveState()
+        this.render()
+    }
+
     setItems(items: T[]) {
         this.items = items
         const propertyNames = tu.dataProperties(items)
