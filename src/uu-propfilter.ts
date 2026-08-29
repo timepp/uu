@@ -193,11 +193,17 @@ export class PropertyFilter<T extends object> {
         return sortedKeysByCount(countValues(this.items, property))
     }
 
-    private sortPropertyValues(values: string[], selectedValues: string[], counts: Record<string, number>, sort: PropertyValueSort = 'count') {
+    private sortPropertyValues(
+        values: string[],
+        selectedValues: string[],
+        counts: Record<string, number>,
+        sort: PropertyValueSort = 'count',
+        selectedFirst = true,
+    ) {
         return [...values].sort((a, b) => {
             const aSelected = selectedValues.includes(a)
             const bSelected = selectedValues.includes(b)
-            if (aSelected !== bSelected) return aSelected ? -1 : 1
+            if (selectedFirst && aSelected !== bSelected) return aSelected ? -1 : 1
             if (sort === 'value-asc') return a.localeCompare(b)
             if (sort === 'value-desc') return b.localeCompare(a)
             return (counts[b] || 0) - (counts[a] || 0) || a.localeCompare(b)
@@ -210,7 +216,11 @@ export class PropertyFilter<T extends object> {
     }
 
     private async selectProperties() {
-        const properties = await showSelection('Select Filter Properties', this.availablePropertyNames, {
+        const propertyOptions = this.availablePropertyNames.map(propertyName => ({
+            value: propertyName,
+            comment: `${this.allPropertyValues(this.normalizeProperty(propertyName)).length}`
+        }))
+        const properties = await showSelection('Select Filter Properties', propertyOptions, {
             initialSelection: this.state.properties,
             showOrder: true
         })
@@ -246,13 +256,14 @@ export class PropertyFilter<T extends object> {
         limit?: number,
         sort: PropertyValueSort = 'count',
         onSelectionChange?: () => void,
+        selectedFirst = true,
     ) {
         container.replaceChildren()
 
         const selectedValues = this.getSelectedValues(property.name)
         const countItems = this.applyFiltersExcept(this.items, property.name)
         const counts = countValues(countItems, property)
-        const sortedValues = this.sortPropertyValues(values, selectedValues, counts, sort)
+        const sortedValues = this.sortPropertyValues(values, selectedValues, counts, sort, selectedFirst)
         const nonZeroValues = sortedValues.filter(value => (counts[value] || 0) > 0)
         const visibleValues = limit ? nonZeroValues.slice(0, limit) : nonZeroValues
 
@@ -294,7 +305,7 @@ export class PropertyFilter<T extends object> {
             countButton.classList.toggle('active', sort === 'count')
             valueAscButton.classList.toggle('active', sort === 'value-asc')
             valueDescButton.classList.toggle('active', sort === 'value-desc')
-            this.renderValues(valuesArea, property, values, undefined, sort, render)
+            this.renderValues(valuesArea, property, values, undefined, sort, render, false)
         }
         countButton.onclick = () => {
             sort = 'count'
