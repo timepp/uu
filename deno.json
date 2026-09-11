@@ -1,9 +1,11 @@
 {
   "name": "@timepp/uu",
-  "version": "1.0.7",
+  "version": "1.0.9",
   "license": "MIT",
   "exports": {
-    ".": "./src/tu.ts"
+    ".": "./src/uu.ts",
+    "./tu": "./src/tu.ts",
+    "./deno": "./src/tu-deno.ts"
   },
   "compilerOptions": {
     "lib": [

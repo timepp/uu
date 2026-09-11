@@ -683,7 +683,7 @@ export function shuffleArray(array) {
         [array[i], array[j]] = [array[j], array[i]];
     }
 }
-export function getDataInsights(arr) {
+export function getPropStat(arr) {
     const pvm = {};
     function getOrCreate(obj, prop) {
         if (!obj[prop])

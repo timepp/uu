@@ -108,6 +108,6 @@ export type DataPropStat = {
         count: number;
     }[];
 };
-export declare function getDataInsights(arr: object[]): DataPropStat[];
+export declare function getPropStat(arr: object[]): DataPropStat[];
 export declare function findIndexes(s: string, sub: string): number[];
 export declare function groupBy<T>(arr: T[], keyFunc: (item: T) => string): [string, T[]][];

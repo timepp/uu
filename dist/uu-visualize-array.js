@@ -1,5 +1,5 @@
 import * as tu from './tu.js';
-import { createElement, showJsonResult, createFoldedString, Pager, fa, createToggleBar, showSelection, syncExistence, createButton, associateDropdownActions, showInDialog, renderDataInsights, prompt } from './uu.js';
+import { createElement, showJsonResult, createFoldedString, Pager, fa, createToggleBar, showSelection, syncExistence, createButton, associateDropdownActions, showDialog, renderDataInsights, prompt } from './uu.js';
 export function visualizeArray(arr, cfg = {}) {
     if (arr.length === 0) {
         return createElement(null, 'div', ['alert', 'alert-info', 'mb-0'], 'Data is empty.');
@@ -612,11 +612,17 @@ export function visualizeArray(arr, cfg = {}) {
         }
     });
     associateDropdownActions(optionBtn, {
-        'Insights': async () => {
-            const info = tu.getDataInsights(arr);
-            console.log('data insights', info);
+        'Charts': async () => {
+            const info = tu.getPropStat(arr);
+            console.log('prop stat', info);
             // const goodInfo = info.filter(v => v.uniqueValues.length <= 200)
-            showInDialog('Data Insights', await renderDataInsights(info));
+            const content = await renderDataInsights(info, cfg.onPropertyValueClick);
+            showDialog('Charts', content, {
+                style: {
+                    minWidth: '90vw',
+                    minHeight: '90vh',
+                }
+            });
         },
         'Select Props': () => selectProps(),
         'Change Page Size': async () => {

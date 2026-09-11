@@ -40,7 +40,7 @@ export declare function highlightText(text: string, rules: [RegExp, string][]): 
 export declare function createJsonView(content: string, customColors?: [RegExp, string][]): HTMLPreElement;
 export declare function createLargeJsonView(content: string): HTMLPreElement;
 export type ButtonAction = () => boolean | void | Promise<boolean | void>;
-export interface DialogOptions<T> {
+export interface DialogOptions {
     classes?: string[];
     style?: Partial<CSSStyleDeclaration>;
     softDismissable?: boolean;
@@ -54,8 +54,8 @@ export type DialogElements = {
     footer: HTMLDivElement;
     buttons: Record<string, HTMLButtonElement>;
 };
-export declare function showDialog<T>(title: string, content?: string | HTMLElement | undefined, options?: DialogOptions<T>, onCreate?: (elements: DialogElements, finisher: (value?: T) => void) => void): Promise<T | undefined>;
-export declare function showInDialog(title: string, content: string | HTMLElement, actions?: string[] | Record<string, ButtonAction>): Promise<string | undefined>;
+export declare function showDialog<T>(title: string, content?: string | HTMLElement | undefined, options?: DialogOptions, onCreate?: (elements: DialogElements, finisher: (value?: T) => void) => void): Promise<T | undefined>;
+export declare function showInDialog(title: string, content: string | HTMLElement, actions?: string[] | Record<string, ButtonAction>): Promise<unknown>;
 export type InformationExtractor = (obj: object) => HTMLElement | Promise<HTMLElement>;
 export declare function setInformationExtractor(extractor: InformationExtractor): void;
 export type EntityParser = (path: string[], value: any) => EntityRenderer | undefined;
@@ -133,8 +133,10 @@ export declare function createChart(parent: HTMLElement, width: string, height: 
 }>;
 export type DataType = 'integer' | 'float' | 'boolean' | 'date' | 'colorName' | 'general';
 export declare function guessDataType(data: string | string[]): DataType;
-export declare function renderDataInsights(info: tu.DataPropStat[]): Promise<HTMLDivElement>;
+export type DataInsightValueClickCallback = (propertyName: string, propertyValue: string) => void;
+export declare function renderDataInsights(info: tu.DataPropStat[], onPropertyValueClick?: DataInsightValueClickCallback): Promise<HTMLDivElement>;
 export declare function injectStyles(): void;
 export * from './uu-components.ts';
 export * from './uu-input.ts';
+export * from './uu-propfilter.ts';
 export * from './uu-visualize-array.ts';

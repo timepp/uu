@@ -45,5 +45,6 @@ export type VisualizeConfig<T extends object> = {
     itemFilter: (item: T, filter: string) => boolean | undefined;
     stateKey: string;
     loadMore: () => Promise<T[]>;
+    onPropertyValueClick: (prop: string, value: string) => void;
 };
 export declare function visualizeArray<T extends object>(arr: T[], cfg?: Partial<VisualizeConfig<T>>): HTMLDivElement;

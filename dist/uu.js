@@ -1055,13 +1055,13 @@ export function guessDataType(data) {
     else {
         const types = data.map(guessDataType);
         const stat = tu.groupBy(types, t => t);
-        if (stat[0][1].length / data.length >= 0.8) {
+        if (stat.length > 0 && stat[0][1].length / data.length >= 0.8) {
             return stat[0][0];
         }
         return 'general';
     }
 }
-export async function renderDataInsights(info) {
+export async function renderDataInsights(info, onPropertyValueClick) {
     const div = createElement(null, 'div');
     // bar chart for selected prop, y axis: count, x axis: unique values / bins
     // configurable:
@@ -1082,9 +1082,19 @@ export async function renderDataInsights(info) {
     const propGroup = createElement(controls, 'div', []);
     createElement(propGroup, 'label', ['form-label', 'mb-1'], 'Property');
     const propSelect = createElement(propGroup, 'select', ['form-select']);
-    for (const stat of info) {
-        createElement(propSelect, 'option', [], stat.propName, {}, { value: stat.propName });
+    const sortedProps = info.map(stat => stat.propName).sort((a, b) => a.localeCompare(b));
+    for (const propName of sortedProps) {
+        createElement(propSelect, 'option', [], propName, {}, { value: propName });
     }
+    const chartTypeGroup = createElement(controls, 'div', []);
+    createElement(chartTypeGroup, 'label', ['form-label', 'mb-1'], 'Chart type');
+    const chartTypeSelect = createElement(chartTypeGroup, 'select', ['form-select']);
+    createElement(chartTypeSelect, 'option', [], 'Bar chart', {}, { value: 'bar' });
+    createElement(chartTypeSelect, 'option', [], 'Line chart', {}, { value: 'line' });
+    createElement(chartTypeSelect, 'option', [], 'Pie chart', {}, { value: 'pie' });
+    createElement(chartTypeSelect, 'option', [], 'Doughnut chart', {}, { value: 'doughnut' });
+    createElement(chartTypeSelect, 'option', [], 'Polar area chart', {}, { value: 'polarArea' });
+    createElement(chartTypeSelect, 'option', [], 'Text Summary', {}, { value: 'text' });
     const sortGroup = createElement(controls, 'div', []);
     createElement(sortGroup, 'label', ['form-label', 'mb-1'], 'Sort by');
     const sortSelect = createElement(sortGroup, 'select', ['form-select']);
@@ -1094,11 +1104,11 @@ export async function renderDataInsights(info) {
     const binLabel = createElement(binGroup, 'label', ['form-label', 'mb-1'], 'Bin size');
     const binInput = createElement(binGroup, 'input', ['form-control'], '', {}, {
         type: 'number',
-        min: 1,
-        step: 1,
-        value: 1
+        step: 'any',
+        value: 0
     });
     const dateBinSelect = createElement(binGroup, 'select', ['form-select'], '', { display: 'none' });
+    createElement(dateBinSelect, 'option', [], 'Original', {}, { value: 'original' });
     createElement(dateBinSelect, 'option', [], 'Minute', {}, { value: 'minute' });
     createElement(dateBinSelect, 'option', [], 'Hour', {}, { value: 'hour' });
     createElement(dateBinSelect, 'option', [], 'Day', {}, { value: 'day' });
@@ -1168,22 +1178,43 @@ export async function renderDataInsights(info) {
         d.setMonth(0);
         return d;
     }
+    function decimalPlaces(n) {
+        const s = `${n}`;
+        const match = s.match(/(?:\.(\d+))?(?:e-(\d+))?$/i);
+        return (match?.[1]?.length || 0) + Number(match?.[2] || 0);
+    }
+    function roundToDecimalPlaces(n, places) {
+        const factor = 10 ** places;
+        return Math.round((n + Number.EPSILON) * factor) / factor;
+    }
     function aggregateNumeric(values, unit) {
+        if (!Number.isFinite(unit) || unit <= 0) {
+            return values.map(v => {
+                return { ...v, _sortValue: Number(v.value) };
+            });
+        }
+        const places = decimalPlaces(unit);
         const map = new Map();
         for (const item of values) {
             const n = Number(item.value);
             if (!Number.isFinite(n))
                 continue;
-            const bucket = Math.floor(n / unit) * unit;
+            const bucket = roundToDecimalPlaces(Math.floor(n / unit) * unit, places);
             map.set(bucket, (map.get(bucket) || 0) + item.count);
         }
         return [...map.entries()].map(([bucket, count]) => ({
-            value: unit === 1 ? `${bucket}` : `${bucket} ~ ${bucket + unit}`,
+            value: unit === 1 ? `${bucket}` : `${bucket} ~ ${roundToDecimalPlaces(bucket + unit, places)}`,
             count,
             _sortValue: bucket,
         }));
     }
     function aggregateDate(values, unit) {
+        if (unit === 'original') {
+            // original means use the raw values
+            return values.map(v => {
+                return { ...v, _sortValue: new Date(v.value).getTime() };
+            });
+        }
         const map = new Map();
         for (const item of values) {
             const dt = new Date(item.value);
@@ -1205,24 +1236,18 @@ export async function renderDataInsights(info) {
             return;
         let values = [...stat.uniqueValues];
         const dataType = guessDataType(stat.uniqueValues.map(v => v.value || ''));
-        const useHistogram = dataType === 'integer' || dataType === 'float' || dataType === 'date';
-        // binGroup.style.display = useHistogram ? '' : 'none'
-        const isDate = dataType === 'date';
-        binInput.disabled = !useHistogram || isDate;
-        dateBinSelect.disabled = !isDate;
-        binInput.style.display = isDate ? 'none' : '';
-        dateBinSelect.style.display = isDate ? '' : 'none';
-        binLabel.textContent = isDate ? 'Date bin size' : 'Bin size';
+        const getValueColor = (dataType === 'colorName') ? (v) => v : (v) => getStringColor(`${v}`, 100, 40);
+        binLabel.textContent = dataType === 'date' ? 'Date bin size' : 'Bin size';
+        syncDisplay(dateBinSelect, dataType === 'date');
+        syncDisplay(binInput, dataType === 'integer' || dataType === 'float');
         let chartValues = values;
-        const unit = Math.max(1, Number(binInput.value) || 1);
-        if (useHistogram) {
-            if (isDate) {
-                const dateUnit = (dateBinSelect.value || 'day');
-                chartValues = aggregateDate(values, dateUnit);
-            }
-            else if (values.every(v => isFiniteNumberString(v.value))) {
-                chartValues = aggregateNumeric(values, unit);
-            }
+        const unit = Number(binInput.value);
+        if (dataType === 'date') {
+            const dateUnit = (dateBinSelect.value || 'day');
+            chartValues = aggregateDate(values, dateUnit);
+        }
+        else if (dataType === 'integer' || dataType === 'float') {
+            chartValues = aggregateNumeric(values, unit);
         }
         const beforeCountFilter = chartValues.length;
         const hideBelow = Number(hideBelowInput.value);
@@ -1247,20 +1272,43 @@ export async function renderDataInsights(info) {
         title.textContent = `Group by "${stat.propName}"`;
         subtitle.textContent = `${chartValues.length} categories${chartValues.length !== beforeCountFilter ? ` (filtered from ${beforeCountFilter})` : ''}`;
         chartBody.replaceChildren();
-        if (chartValues.length === 0) {
-            createElement(chartBody, 'div', ['text-muted'], 'No values to display with current filters.');
-            return;
-        }
         if (currentChart && typeof currentChart.destroy === 'function') {
             currentChart.destroy();
             currentChart = null;
         }
+        if (chartValues.length === 0) {
+            createElement(chartBody, 'div', ['text-muted'], 'No values to display with current filters.');
+            return;
+        }
+        if (chartTypeSelect.value === 'text') {
+            const summary = createElement(chartBody, 'div', ['d-flex', 'flex-wrap', 'gap-1']);
+            for (const item of chartValues) {
+                const value = item.value || '(empty)';
+                const entry = createElement(summary, 'span', ['border', 'rounded', 'p-1', 'hover-effect'], ``, {
+                    cursor: onPropertyValueClick ? 'pointer' : 'default'
+                });
+                createElement(entry, 'span', ['fw-bold'], value, { color: getValueColor(value) });
+                createElement(entry, 'span', ['text-muted'], ` (${item.count})`);
+                entry.onclick = () => onPropertyValueClick?.(stat.propName, item.value);
+            }
+            return;
+        }
         const width = `${Math.max(500, chartValues.length * 55)}px`;
         const { chart } = await createChart(chartBody, width, '420px', {
-            type: 'bar',
+            type: chartTypeSelect.value,
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                onClick: (_event, elements) => {
+                    const item = chartValues[elements[0]?.index];
+                    if (item)
+                        onPropertyValueClick?.(stat.propName, item.value);
+                },
+                onHover: (event, elements) => {
+                    const target = event.native?.target;
+                    if (target)
+                        target.style.cursor = elements.length > 0 ? 'pointer' : 'default';
+                },
                 plugins: {
                     legend: { display: false }
                 }
@@ -1270,13 +1318,14 @@ export async function renderDataInsights(info) {
                 datasets: [{
                         label: stat.propName,
                         data: chartValues.map(uv => uv.count),
-                        backgroundColor: chartValues.map(uv => getStringColor(`${uv.value}`, 100, 80)),
+                        backgroundColor: chartValues.map(uv => getValueColor(uv.value)),
                     }]
             }
         });
         currentChart = chart;
     }
     propSelect.onchange = render;
+    chartTypeSelect.onchange = render;
     sortSelect.onchange = render;
     hideBelowInput.oninput = render;
     hideAboveInput.oninput = render;
@@ -1300,4 +1349,5 @@ export function injectStyles() {
 }
 export * from './uu-components.js';
 export * from './uu-input.js';
+export * from './uu-propfilter.js';
 export * from './uu-visualize-array.js';
