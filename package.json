@@ -10,7 +10,8 @@
   },
   "scripts": {
     "test": "deno test",
-    "build": "npx tsc --noCheck",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && npx tsc --noCheck",
     "build:bundle": "esbuild src/uu.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/uu.bundle.js",
     "build:all": "npm run build && npm run build:bundle",
     "prepublishOnly": "npm run build:all",
