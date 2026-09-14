@@ -1,11 +1,14 @@
 // Centralizes lazy loading and caching for optional UI dependencies. JavaScript
 // modules are resolved by the package manager; Font Awesome remains configurable
 // so consumers can use an existing stylesheet or load one from a CDN.
+import { registerModule, registerModuleValue, setDependencyState } from './uu-runtime-state.ts'
+
 export const fontAwesomeVersion = '6.4.0'
 
 let codeMirrorModulesPromise: Promise<any> | undefined
 export function loadCodeMirrorModules() {
     if (!codeMirrorModulesPromise) {
+        setDependencyState('codemirror', 'loading')
         codeMirrorModulesPromise = Promise.all([
             import('@codemirror/state'),
             import('@codemirror/view'),
@@ -28,6 +31,10 @@ export function loadCodeMirrorModules() {
             foldGutter: language.foldGutter,
             foldKeymap: language.foldKeymap
         }))
+        codeMirrorModulesPromise.then(
+            () => setDependencyState('codemirror', 'ready'),
+            error => setDependencyState('codemirror', 'error', error)
+        )
         codeMirrorModulesPromise.catch(() => {
             codeMirrorModulesPromise = undefined
         })
@@ -38,7 +45,12 @@ export function loadCodeMirrorModules() {
 let markdownItModulePromise: Promise<any> | undefined
 export function loadMarkdownIt() {
     if (!markdownItModulePromise) {
+        setDependencyState('markdown-it', 'loading')
         markdownItModulePromise = import('markdown-it')
+        markdownItModulePromise.then(
+            () => setDependencyState('markdown-it', 'ready'),
+            error => setDependencyState('markdown-it', 'error', error)
+        )
         markdownItModulePromise.catch(() => {
             markdownItModulePromise = undefined
         })
@@ -49,7 +61,12 @@ export function loadMarkdownIt() {
 let chartJsModulePromise: Promise<any> | undefined
 export function loadChartJs() {
     if (!chartJsModulePromise) {
+        setDependencyState('chart.js', 'loading')
         chartJsModulePromise = import('chart.js/auto')
+        chartJsModulePromise.then(
+            () => setDependencyState('chart.js', 'ready'),
+            error => setDependencyState('chart.js', 'error', error)
+        )
         chartJsModulePromise.catch(() => {
             chartJsModulePromise = undefined
         })
@@ -76,3 +93,11 @@ export function loadFontAwesomeStylesheet(cdnUrl = `https://cdnjs.cloudflare.com
     document.head.appendChild(link)
     return link
 }
+
+registerModule('uu-dependencies')
+registerModuleValue('uu-dependencies', 'codeMirrorModulesPromise', () => codeMirrorModulesPromise)
+registerModuleValue('uu-dependencies', 'markdownItModulePromise', () => markdownItModulePromise)
+registerModuleValue('uu-dependencies', 'chartJsModulePromise', () => chartJsModulePromise)
+setDependencyState('codemirror', 'idle')
+setDependencyState('markdown-it', 'idle')
+setDependencyState('chart.js', 'idle')

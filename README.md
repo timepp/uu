@@ -27,6 +27,23 @@ enableFontAwesome('https://example.com/font-awesome/css/all.min.css')
 Importing `uu.ts` itself has no browser side effects. `enableFontAwesome()`
 remains available for explicit early initialization.
 
+### Runtime state
+
+In browser environments, UU exposes a non-enumerable runtime diagnostics
+registry at `window.timepp_uu_state`. It tracks module-level mutable values,
+lazy dependency status, UU-managed styles and special DOM nodes, and every
+localStorage key accessed through UU:
+
+```typescript
+console.log(window.timepp_uu_state)
+console.log(window.timepp_uu_state.snapshot())
+```
+
+Module values are live read-only getters. DOM resources use weak references and
+transient entries are removed with their nodes. `snapshot()` returns a
+JSON-serializable point-in-time view, including current values for tracked
+localStorage keys.
+
 ### Without a package installation
 
 Run `npm run build:bundle` to produce `dist/uu.bundle.js`. This self-contained
@@ -73,6 +90,7 @@ auto-managed `node_modules` directory without modifying the host lock file.
 - `src/uu-pager.ts`, `src/uu-components.ts`: paging and composed UI components
 - `src/uu-data-insights.ts`, `src/uu-object.ts`, `src/uu-visualize-array.ts`: data visualization APIs
 - `src/uu-download.ts`, `src/uu-fontawesome.ts`: browser integration APIs
+- `src/uu-runtime-state.ts`: browser runtime diagnostics registry
 - `dist`: artifacts for npm
 - `script/increase-ver.ts`: script to increase version number
 - `script/test.ts`: script for cli test

@@ -3,6 +3,8 @@
 
 // tu: a set of utility functions
 
+import { readLocalStorage, writeLocalStorage } from './uu-runtime-state.ts'
+
 export * from './tu-datetime.ts'
 export * from './tu-cache.ts'
 
@@ -489,12 +491,12 @@ export function safeExecute<T>(fn: () => T, defaultValue: T | ((e: unknown) => T
 export function createObservableState<T extends object>(stateKey: string|null, initialState: T, onChange: (s: T) => void): T & { addObserver: (cb: (s: T) => void) => void } {
     function loadState() {
         if (!stateKey) return;
-        const stored = localStorage.getItem(stateKey)
+        const stored = readLocalStorage(stateKey, 'tu.createObservableState')
         return stored ? JSON.parse(stored) : {}
     }
     function saveState(s: T) {
         if (!stateKey) return;
-        localStorage.setItem(stateKey, JSON.stringify(s))
+        writeLocalStorage(stateKey, JSON.stringify(s), 'tu.createObservableState')
     }
 
     const observers: ((s: T) => void)[] = [onChange];
@@ -570,7 +572,7 @@ export function createState<T extends object>(object: T, properties: (keyof T)[]
     // Load state
     function loadState() {
         if (!stateKey) return;
-        const stored = localStorage.getItem(stateKey);
+        const stored = readLocalStorage(stateKey, 'tu.createState');
         if (stored) {
             const parsed = JSON.parse(stored);
             properties.forEach((prop) => {
@@ -588,7 +590,7 @@ export function createState<T extends object>(object: T, properties: (keyof T)[]
         properties.forEach((prop) => {
             persistState[prop] = internalState[prop];
         });
-        localStorage.setItem(stateKey, JSON.stringify(persistState));
+        writeLocalStorage(stateKey, JSON.stringify(persistState), 'tu.createState');
     }
 
     // Load initial state

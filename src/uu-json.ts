@@ -4,6 +4,7 @@ import { showDialog, showInDialog, type ButtonAction } from './uu-dialog.ts'
 import { createElement } from './uu-dom.ts'
 import { triggerDownload } from './uu-download.ts'
 import { callAsyncFunctionWithProgress } from './uu-progress.ts'
+import { registerModule, registerModuleValue } from './uu-runtime-state.ts'
 
 export type EntityRenderer = {
     anchorStyle: string,
@@ -19,6 +20,10 @@ export type EntityParser = (path: string[], value: any) => EntityRenderer|undefi
 
 let informationExtractor: InformationExtractor | null = null
 let globalEntityParser: EntityParser | null = null
+
+registerModule('uu-json')
+registerModuleValue('uu-json', 'informationExtractor', () => informationExtractor)
+registerModuleValue('uu-json', 'globalEntityParser', () => globalEntityParser)
 
 export function setInformationExtractor(extractor: InformationExtractor) {
     informationExtractor = extractor

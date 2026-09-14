@@ -1,4 +1,5 @@
 import { createButton, createElement } from './uu-dom.ts'
+import { registerDomResource, registerModule, unregisterDomResource } from './uu-runtime-state.ts'
 
 export async function asyncGet<T>(fn: () => T) {
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -13,6 +14,7 @@ export function asyncCallFunctionWithProgress(fn: () => void, hint = 'Please wai
 
 export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>, hint = 'Please wait...'): Promise<T> {
     const dialog = createElement(document.body, 'dialog')
+    const runtimeId = registerDomResource(dialog, 'uu-progress', 'progress-dialog')
     const content = createElement(dialog, 'div', [], '', { textAlign: 'center' })
     createElement(content, 'h4', ['m-2', 'text-center'], hint)
     const spinner = createElement(content, 'div', ['spinner-border', 'text-primary'])
@@ -21,6 +23,7 @@ export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>, hin
         const result = await fn()
         dialog.close()
         dialog.remove()
+        unregisterDomResource(runtimeId)
         return result
     } catch (error) {
         spinner.remove()
@@ -35,9 +38,12 @@ export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>, hin
         createButton(buttons, ['btn', 'btn-primary'], 'Close', () => {
             dialog.close()
             dialog.remove()
+            unregisterDomResource(runtimeId)
         })
         throw error
     }
 }
 
 export const withUI = callAsyncFunctionWithProgress
+
+registerModule('uu-progress')

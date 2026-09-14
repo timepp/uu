@@ -2,6 +2,7 @@ import * as tu from './tu.ts'
 import { createElement } from './uu-dom.ts'
 import { showDialog } from './uu-dialog.ts'
 import { showSelection } from './uu-selection.ts'
+import { readLocalStorage, registerDomResource, registerModule, writeLocalStorage } from './uu-runtime-state.ts'
 
 export type PropertyFilterState = {
     properties: string[]
@@ -47,7 +48,11 @@ function sortedKeysByCount(counts: Record<string, number>) {
 
 function injectPropertyFilterStyles() {
     const styleId = 'uu-property-filter-styles'
-    if (document.getElementById(styleId)) return
+    const existing = document.getElementById(styleId)
+    if (existing) {
+        registerDomResource(existing, 'uu-propfilter', 'style', `#${styleId}`, 'property-filter-styles')
+        return
+    }
     const style = createElement(document.head, 'style', [], '', {}, { id: styleId })
     style.textContent = `
         .property-filters {
@@ -87,12 +92,13 @@ function injectPropertyFilterStyles() {
             overflow: auto;
         }
     `
+    registerDomResource(style, 'uu-propfilter', 'style', `#${styleId}`, 'property-filter-styles')
 }
 
 function loadState(stateKey: string): PropertyFilterState {
     if (!stateKey) return { properties: [], filters: {} }
     try {
-        const parsed = JSON.parse(localStorage.getItem(stateKey) || '{}')
+        const parsed = JSON.parse(readLocalStorage(stateKey, 'uu-propfilter') || '{}')
         const filters = parsed.filters || {}
         const properties = parsed.properties || Object.keys(filters).filter(property => filters[property]?.length > 0)
         return { properties, filters }
@@ -169,7 +175,7 @@ export class PropertyFilter<T extends object> {
 
     private saveState() {
         if (!this.stateKey) return
-        localStorage.setItem(this.stateKey, JSON.stringify(this.state))
+        writeLocalStorage(this.stateKey, JSON.stringify(this.state), 'uu-propfilter')
     }
 
     private getSelectedValues(propertyName: string) {
@@ -345,3 +351,5 @@ export class PropertyFilter<T extends object> {
         }
     }
 }
+
+registerModule('uu-propfilter')

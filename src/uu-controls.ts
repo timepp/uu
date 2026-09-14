@@ -1,5 +1,6 @@
 import { createObservableState, stringToColor } from './tu.ts'
 import { createCheckBtn, createElement, createLoadingSpinner, fa } from './uu-dom.ts'
+import { registerDomResource, registerModule, unregisterDomResource } from './uu-runtime-state.ts'
 
 export function createSelector(parent: HTMLElement | null, options: string[], onChange: (value: string[]) => void, multiSelect = false, initialValue: string[] = []) {
     const div = createElement(parent, 'div', ['d-flex', 'flex-wrap', 'gap-1'])
@@ -42,6 +43,7 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
         if (element.dropdown) return
         const container = element.closest('dialog') || document.body
         const dropdown = createElement(container, 'div', ['dropdown-menu', 'show'], '', { position: 'fixed', zIndex: '1050' })
+        const runtimeId = registerDomResource(dropdown, 'uu-controls', 'dropdown')
         const rect = element.getBoundingClientRect()
         container.appendChild(dropdown)
         let left = rect.left
@@ -61,6 +63,7 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
         function closeDropdown() {
             element.dropdown?.remove()
             delete element.dropdown
+            unregisterDomResource(runtimeId)
             document.removeEventListener('click', closeDropdown)
         }
         setTimeout(() => document.addEventListener('click', closeDropdown), 0)
@@ -106,3 +109,5 @@ export function createFoldableArea(parent: Element | null, title: string, conten
     }
     return { div, header, body, toggleBtn: toggleButton, refreshBtn: refreshButton }
 }
+
+registerModule('uu-controls')

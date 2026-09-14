@@ -5,6 +5,7 @@ import { callAsyncFunctionWithProgress } from './uu-progress.ts'
 import { createFoldedString } from './uu-text.ts'
 import { chooseOne, showSelection } from './uu-selection.ts'
 import { createSelector } from './uu-controls.ts'
+import { readLocalStorage, registerModule, registerModuleValue, writeLocalStorage } from './uu-runtime-state.ts'
 
 export type AutofillProvider = (category: string) => AnnotatedString[]
 
@@ -58,7 +59,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
     }
     const loadInputHistory = () => {
         if (name) {
-            const historyStr = localStorage.getItem(`input-history-${name}`)
+            const historyStr = readLocalStorage(`input-history-${name}`, 'uu-input')
             if (historyStr) {
                 try {
                     return JSON.parse(historyStr) as InputHistory
@@ -78,7 +79,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
             appendHistory(history.elementHistory[key] = history.elementHistory[key] || [], ea, 20)
         }
         if (name) {
-            localStorage.setItem(`input-history-${name}`, JSON.stringify(history))
+            writeLocalStorage(`input-history-${name}`, JSON.stringify(history), 'uu-input')
         }
     }
     const valueFetchers: Record<string, () => string | string[]> = {}
@@ -673,12 +674,14 @@ export function createAutofillInput(title: string, placeholder: string, initialV
     const ig = createElement(null, 'div', ['input-group'])
     const label = createElement(ig, 'label', ['input-group-text'], title, {minWidth: '100px'})
     const input = createElement(ig, 'input', ['form-control'], '', {}, {placeholder})
-    const history = JSON.parse(localStorage.getItem(`input-history-${valueId}`) || '[]') as string[]
+    const historyKey = `input-history-${valueId}`
+    const valueKey = `input-${valueId}`
+    const history = JSON.parse(readLocalStorage(historyKey, 'uu-input') || '[]') as string[]
     
     function updateHistory(newValue: string) {
         if (!history.includes(newValue)) {
             history.unshift(newValue)
-            localStorage.setItem(`input-history-${valueId}`, JSON.stringify(history.slice(0, 100)))
+            writeLocalStorage(historyKey, JSON.stringify(history.slice(0, 100)), 'uu-input')
         }
     }
 
@@ -693,7 +696,7 @@ export function createAutofillInput(title: string, placeholder: string, initialV
         }
     }
     input.id = valueId
-    input.value = initialValue || localStorage.getItem(`input-${valueId}`) || ''
+    input.value = initialValue || readLocalStorage(valueKey, 'uu-input') || ''
     label.style.cursor = 'pointer'
     label.onclick = async () => {
         // autofill support
@@ -710,7 +713,7 @@ export function createAutofillInput(title: string, placeholder: string, initialV
             const r = await chooseOne(candidates)
             if (r !== undefined) {
                 input.value = r
-                localStorage.setItem(`input-${valueId}`, input.value)
+                writeLocalStorage(valueKey, input.value, 'uu-input')
                 updateHistory(r)
             }
         }
@@ -726,8 +729,11 @@ export function createAutofillInput(title: string, placeholder: string, initialV
         }
     })
     input.onchange = () => {
-        localStorage.setItem(`input-${valueId}`, input.value)
+        writeLocalStorage(valueKey, input.value, 'uu-input')
     }
     return {ig, input, button}
 }
+
+registerModule('uu-input')
+registerModuleValue('uu-input', 'autofillProvider', () => autofillProvider)
 

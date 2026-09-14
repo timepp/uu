@@ -1,8 +1,13 @@
 import { createElement } from './uu-dom.ts'
+import { registerDomResource, registerModule, unregisterDomResource } from './uu-runtime-state.ts'
 
 function ensureDialogStyles() {
     const styleId = 'uu-common-styles'
-    if (document.getElementById(styleId)) return
+    const existing = document.getElementById(styleId)
+    if (existing) {
+        registerDomResource(existing, 'uu-dialog', 'style', `#${styleId}`, 'dialog-styles')
+        return
+    }
     const style = createElement(document.head, 'style', [], '', {}, { id: styleId })
     style.textContent = `
         dialog::backdrop {
@@ -11,6 +16,7 @@ function ensureDialogStyles() {
             -webkit-backdrop-filter: blur(8px) brightness(0.9);
         }
     `
+    registerDomResource(style, 'uu-dialog', 'style', `#${styleId}`, 'dialog-styles')
 }
 
 export type ButtonAction = () => boolean|void|Promise<boolean|void>
@@ -36,6 +42,7 @@ export function showDialog<T>(title: string, content: string | HTMLElement | und
     const dialog = createElement(document.body, 'dialog', options.classes || [], '', {
         padding: '0', display: 'flex', flexDirection: 'column', resize: 'both', ...(options.style || {})
     })
+    const runtimeId = registerDomResource(dialog, 'uu-dialog', 'dialog')
     const header = createElement(dialog, 'div', ['d-flex', 'justify-content-between', 'align-items-center', 'p-2', 'border-bottom', 'mb-2'])
     header.style.backgroundColor = '#005cf030'
     createElement(header, 'h4', ['m-0', 'ms-2'], title)
@@ -45,6 +52,7 @@ export function showDialog<T>(title: string, content: string | HTMLElement | und
     const finish = (value?: T) => {
         dialog.close()
         dialog.remove()
+        unregisterDomResource(runtimeId)
         resolver(value)
     }
     dialog.addEventListener('cancel', () => finish())
@@ -99,3 +107,5 @@ export function showInfo(title: string, content: string) {
     const main = createElement(null, 'pre', [], content, { maxWidth: '800px' })
     return showDialog(title, main, { actions: ['Close'] })
 }
+
+registerModule('uu-dialog')
