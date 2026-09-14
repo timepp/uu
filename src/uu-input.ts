@@ -1,7 +1,10 @@
-import * as uu from './uu.ts'
 import * as tu from './tu.ts'
-import { fa, DraggableSortedContainer, createElement, AnnotatedString, showDialog, syncDisplay, createButton, callAsyncFunctionWithProgress } from './uu.ts'
-import * as uc from './uu-components.ts'
+import { fa, createElement, type AnnotatedString, createButton } from './uu-dom.ts'
+import { showDialog } from './uu-dialog.ts'
+import { callAsyncFunctionWithProgress } from './uu-progress.ts'
+import { createFoldedString } from './uu-text.ts'
+import { chooseOne, showSelection } from './uu-selection.ts'
+import { createSelector } from './uu-controls.ts'
 
 export type AutofillProvider = (category: string) => AnnotatedString[]
 
@@ -87,7 +90,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
             case 'single-line-string':
             case 'number':
                 {
-                    const input = uu.createElement(parent, 'input', ['form-control']) as HTMLInputElement
+                    const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
                     input.value = initialVal
                     valueFetchers[element.id] = () => input.value
                     valueSetters[element.id] = v => input.value = v
@@ -95,7 +98,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'date':
                 {
-                    const input = uu.createElement(parent, 'input', ['form-control']) as HTMLInputElement
+                    const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
                     input.type = 'date'
                     input.value = initialVal
                     valueFetchers[element.id] = () => input.value
@@ -104,7 +107,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'multi-line-string':
                 {
-                    const textarea = uu.createElement(parent, 'textarea', ['form-control']) as HTMLTextAreaElement
+                    const textarea = createElement(parent, 'textarea', ['form-control']) as HTMLTextAreaElement
                     textarea.rows = 4
                     textarea.value = initialVal
                     valueFetchers[element.id] = () => textarea.value
@@ -113,9 +116,9 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'single-select':
                 {
-                    const select = uu.createElement(parent, 'select', ['form-select']) as HTMLSelectElement
+                    const select = createElement(parent, 'select', ['form-select']) as HTMLSelectElement
                     element.selectOptions?.forEach(option => {
-                        const opt = uu.createElement(select, 'option', [], option) as HTMLOptionElement
+                        const opt = createElement(select, 'option', [], option) as HTMLOptionElement
                         opt.value = option
                     })
                     select.value = initialVal
@@ -125,20 +128,20 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'multi-select':
                 {
-                    const selector = uc.createSelector(parent, element.selectOptions || [], () => {}, true, initialArr)
+                    const selector = createSelector(parent, element.selectOptions || [], () => {}, true, initialArr)
                     valueFetchers[element.id] = () => selector.getSelected()
                     valueSetters[element.id] = v => selector.setSelected(Array.isArray(v) ? v : [])
                     break
                 }
             case 'single-picker':
                 {
-                    const input = uu.createElement(parent, 'input', ['form-control']) as HTMLInputElement
+                    const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
                     input.value = initialVal
                     input.readOnly = true
                     input.placeholder = 'Click to select...'
                     input.style.cursor = 'pointer'
                     input.onclick = async () => {
-                        const selected = await uu.showSelection(`Select ${element.name}`, (element.selectOptions || []).map(o => ({ name: o, value: o })), {
+                        const selected = await showSelection(`Select ${element.name}`, (element.selectOptions || []).map(value => ({ value })), {
                              singleSelect: true,
                              initialSelection: [input.value]
                         })
@@ -152,14 +155,14 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'multi-picker':
                 {
-                    const input = uu.createElement(parent, 'input', ['form-control']) as HTMLInputElement
+                    const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
                     input.value = initialArr.join(', ')
                     input.readOnly = true
                     input.placeholder = 'Click to select...'
                     input.style.cursor = 'pointer'
                     input.onclick = async () => {
                         const currentValues = input.value ? input.value.split(',').map(s => s.trim()) : []
-                        const selected = await uu.showSelection(`Select ${element.name}`, (element.selectOptions || []).map(o => ({ name: o, value: o })), {
+                        const selected = await showSelection(`Select ${element.name}`, (element.selectOptions || []).map(value => ({ value })), {
                              singleSelect: false,
                              initialSelection: currentValues
                         })
@@ -173,7 +176,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'custom':
                 {
-                    const input = uu.createElement(parent, 'span', ['form-control'])
+                    const input = createElement(parent, 'span', ['form-control'])
                     input.textContent = initialVal
                     input.style.cursor = 'pointer'
                     input.onclick = async () => {
@@ -215,23 +218,23 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
     }
 
     const pickHistory = async (key: string) => {
-        const result = await uu.showDialog<boolean>(`History for ${key}`, undefined, {
+        const result = await showDialog<boolean>(`History for ${key}`, undefined, {
             style: { width: '60vw' },
             actions: ['Cancel']
         }, (elements, finish) => {
             // Section 1: Element-specific history
             if (history.elementHistory[key] && history.elementHistory[key].length > 0) {
-                const section1Title = uu.createElement(elements.contentArea, 'h6', ['mt-2'], `History for ${key}`)
-                const section1 = uu.createElement(elements.contentArea, 'div', ['list-group', 'mb-3'])
+                const section1Title = createElement(elements.contentArea, 'h6', ['mt-2'], `History for ${key}`)
+                const section1 = createElement(elements.contentArea, 'div', ['list-group', 'mb-3'])
                 
                 history.elementHistory[key].slice().reverse().forEach((entry, index) => {
-                    const item = uu.createElement(section1, 'a', ['list-group-item', 'list-group-item-action'])
+                    const item = createElement(section1, 'a', ['list-group-item', 'list-group-item-action'])
                     item.style.cursor = 'pointer'
                     
-                    const header = uu.createElement(item, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
-                    uu.createElement(header, 'span', ['text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
+                    const header = createElement(item, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
+                    createElement(header, 'span', ['text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
                     
-                    const valuePreview = uu.createElement(item, 'div', ['mt-1'])
+                    const valuePreview = createElement(item, 'div', ['mt-1'])
                     let displayText = ''
                     try {
                         const parsedValue = JSON.parse(entry.value)
@@ -239,7 +242,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                     } catch {
                         displayText = entry.value
                     }
-                    valuePreview.appendChild(uu.createFoldedString(displayText, 120))
+                    valuePreview.appendChild(createFoldedString(displayText, 120))
                     
                     item.onclick = () => {
                         applyElementHistory(key, entry.value)
@@ -250,17 +253,17 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
             
             // Section 2: Panel-wide history
             if (history.panelHistory.length > 0) {
-                const section2Title = uu.createElement(elements.contentArea, 'h6', ['mt-3'], 'Full Panel History')
-                const section2 = uu.createElement(elements.contentArea, 'div', ['list-group'])
+                const section2Title = createElement(elements.contentArea, 'h6', ['mt-3'], 'Full Panel History')
+                const section2 = createElement(elements.contentArea, 'div', ['list-group'])
                 
                 history.panelHistory.slice().reverse().forEach((entry, index) => {
-                    const item = uu.createElement(section2, 'a', ['list-group-item', 'list-group-item-action'])
+                    const item = createElement(section2, 'a', ['list-group-item', 'list-group-item-action'])
                     item.style.cursor = 'pointer'
                     
-                    const header = uu.createElement(item, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
-                    uu.createElement(header, 'span', ['text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
+                    const header = createElement(item, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
+                    createElement(header, 'span', ['text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
                     
-                    const valuePreview = uu.createElement(item, 'div', ['mt-1', 'small'])
+                    const valuePreview = createElement(item, 'div', ['mt-1', 'small'])
                     let displayText = ''
                     try {
                         const parsedValue = JSON.parse(entry.value) as Record<string, any>
@@ -271,7 +274,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                     } catch {
                         displayText = entry.value
                     }
-                    valuePreview.appendChild(uu.createFoldedString(displayText, 150))
+                    valuePreview.appendChild(createFoldedString(displayText, 150))
                     
                     item.onclick = () => {
                         applyPanelHistory(entry.value)
@@ -286,25 +289,25 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
 
     let element: HTMLElement | null = null
     if (style === 'table') {
-        const table = uu.createElement(parent, 'table', ['table', 'table-bordered', 'table-hover'])
-        const tbody = uu.createElement(table, 'tbody')
+        const table = createElement(parent, 'table', ['table', 'table-bordered', 'table-hover'])
+        const tbody = createElement(table, 'tbody')
         elements.forEach(element => {
-            const row = uu.createElement(tbody, 'tr')
-            const nameCell = uu.createElement(row, 'td')
+            const row = createElement(tbody, 'tr')
+            const nameCell = createElement(row, 'td')
             nameCell.textContent = element.name
             nameCell.style.whiteSpace = 'nowrap'
             nameCell.style.verticalAlign = 'middle'
             nameCell.style.backgroundColor = '#f8f9fa'
             nameCell.onclick = () => pickHistory(element.id)
-            const valueCell = uu.createElement(row, 'td')
+            const valueCell = createElement(row, 'td')
             createInputControl(valueCell, element)
         })
         element = table
     } else if (style === 'bar') {
-        const div = uu.createElement(parent, 'div', ['d-flex', 'gap-2', 'overflow-auto'])
+        const div = createElement(parent, 'div', ['d-flex', 'gap-2', 'overflow-auto'])
         elements.forEach(element => {
-            const ig = uu.createElement(div, 'div', ['input-group', 'flex-grow-1'])
-            const label = uu.createElement(ig, 'span', ['input-group-text'], element.name, { minWidth: '100px' })
+            const ig = createElement(div, 'div', ['input-group', 'flex-grow-1'])
+            const label = createElement(ig, 'span', ['input-group-text'], element.name, { minWidth: '100px' })
             label.onclick = () => pickHistory(element.id)
             createInputControl(ig, element)
         })
@@ -332,7 +335,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
 export async function showInputDlg(title: string, elements: InputElement[]) {
     const panel = createInputPanel(null, elements)
     panel.element.style.minWidth = '50vw'
-    const result = await uu.showDialog(title, panel.element, {
+    const result = await showDialog(title, panel.element, {
         actions: ['Cancel', 'OK'],
     })
     if (result === 'OK') {
@@ -440,7 +443,7 @@ export async function showInputDialog<T extends object>(title: string, obj: T, f
     const panel = createInputArea(null, obj, fieldOptions, 'table')
     panel.element.style.minWidth = '50vw'
     
-    const result = await uu.showDialog(title, panel.element, {
+    const result = await showDialog(title, panel.element, {
         actions: ['Cancel', 'OK'],
         softDismissable: false
     })
@@ -728,146 +731,3 @@ export function createAutofillInput(title: string, placeholder: string, initialV
     return {ig, input, button}
 }
 
-export async function chooseOne(data: (string|AnnotatedString)[]) {
-    const r = await showSelection('Please choose one item', data, {pickAndClose: true, showStatus: false, showToolbar: false})
-    return r ? r[0] : undefined
-}
-
-
-export type SelectOption = {
-    singleSelect: boolean
-    pickAndClose: boolean
-    initialSelection: string[]
-    showOrder: boolean
-    showToolbar: boolean
-    showStatus: boolean
-
-    // when true, selected items in status bar can be reordered and removed quickly
-    // default: true
-    statusInteractive: boolean
-
-    // return `newSelection` if the new selection is valid
-    // otherwise, return a selection if checker can fix invalid selection
-    // otherwise, return an error message
-    checker: (oldSelection: string[], newSelection: string[]) => string[] | string
-
-    // used to apply custom styles to individual items
-    styleModifier: (item: string, elem: HTMLElement) => void
-
-    // dialog styles
-    dlgStyle: Partial<CSSStyleDeclaration>
-}
-export type SelectionItem = AnnotatedString | string
-export function showSelection(title: string, options: SelectionItem[], cfg: Partial<SelectOption> = {}) {
-    return showDialog<string[]>(title, undefined, {
-        classes: [], 
-        style: {width: '80vw', ...cfg.dlgStyle}, 
-        actions: ['OK', 'Cancel'],
-        softDismissable: true
-    }, (de, finish) => {
-        // local state
-        let selection = cfg.initialSelection || []
-        const elements = {} as Record<string, HTMLSpanElement>
-        let currentAlert = ''
-
-        // UI
-        const dc = createElement(de.contentArea, 'div', ['d-flex', 'flex-column'])
-        const statusBar = createElement(dc, 'span', ['form-control'])
-        const selectedPrefix = createElement(statusBar, 'span', ['me-2'], 'Selected: ', { color: 'blue' })
-        const selectedItems = new DraggableSortedContainer(statusBar, {
-            emptyText: '(none)',
-            showOrder: cfg.showOrder,
-            interactive: (cfg.statusInteractive ?? true) && !cfg.singleSelect,
-            removable: (cfg.statusInteractive ?? true) && !cfg.singleSelect,
-            onChange: (newSelection) => onSelectionChange(selection, newSelection)
-        })
-        const toolbar = createElement(dc, 'div', ['input-group', 'mb-4', 'mt-2'])
-        const filter = createElement(toolbar, 'input', ['form-control'], '', {}, {placeholder: 'Filter'})
-        const selectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☑')
-        const unSelectAllBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☐')
-        const main = createElement(dc, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'p-2'])
-        const alert = createElement(dc, 'div', ['alert', 'alert-danger', 'd-none'])
-
-        if (cfg.pickAndClose) cfg.singleSelect = true
-
-        syncDisplay(toolbar, cfg.showToolbar ?? true)
-        syncDisplay(statusBar, cfg.showStatus ?? true)
-        syncDisplay(selectAllBtn, !cfg.singleSelect)
-        syncDisplay(unSelectAllBtn, !cfg.singleSelect)
-        syncDisplay(de.footer, !cfg.pickAndClose)
-
-        function updateUI() {
-            if (!statusBar.firstChild) {
-                statusBar.appendChild(selectedPrefix)
-                statusBar.appendChild(selectedItems.root)
-            }
-            selectedItems.setStrings(selection)
-
-            for (const [value, div] of Object.entries(elements)) {
-                const isItemSelected = selection.includes(value)
-                div.classList.toggle('selected', isItemSelected)
-                //div.style.backgroundColor = isItemSelected ? 'rgba(0, 123, 255, 0.5)' : 'rgb(244, 244, 244)'
-                div.style.border = '2px solid'
-                div.style.borderColor = isItemSelected ? '#0d6efd' : '#cccccc'
-            }
-
-            alert.textContent = currentAlert
-            syncDisplay(alert, currentAlert !== '')
-        }
-
-        function onSelectionChange(oldSelection: string[], newSelection: string[]) {
-            const r = cfg.checker?.(oldSelection, newSelection)
-            if (typeof r === 'string') {
-                // invalid state
-                currentAlert = r
-                selection = newSelection
-            } else {
-                // fixed state
-                currentAlert = ''
-                selection = r || newSelection
-                if (cfg.pickAndClose && selection.length > 0) {
-                    finish(selection)
-                    return
-                }
-            }
-            updateUI()
-        }
-
-        for (const d of options.map(o => typeof o === 'string' ? { value: o } : o)) {
-            const div = createElement(main, 'div', ['rounded', 'hover-effect', 'text-center', 'p-2'], '', { cursor: 'pointer', minWidth: '100px' })
-            createElement(div, 'span', [], d.value)
-            if (d.comment) {
-                createElement(div, 'span', [], '', { border: '1px solid #cccccc', margin: '0 5px', width: '1px', height: '80%' })
-                createElement(div, 'span', ['text-muted'], d.comment)
-            }
-            elements[d.value] = div
-            cfg.styleModifier?.(d.value, div)
-            div.onclick = () => {
-                const newSelection = cfg.singleSelect ? [d.value] : (selection.includes(d.value) ? selection.filter(v => v !== d.value) : [...selection, d.value])
-                onSelectionChange(selection, newSelection)
-            }
-        }
-
-        filter.oninput = () => {
-            const v = filter.value.toLowerCase()
-            // for (const item of Array.from(main.children)) {
-            //     syncDisplay(item as HTMLElement, item.textContent?.toLowerCase().includes(v))
-            // }
-            for (const [value, elem] of Object.entries(elements)) {
-                syncDisplay(elem as HTMLElement, value.toLowerCase().includes(v))
-            }
-        }
-
-        selectAllBtn.onclick = () => onSelectionChange(selection, Object.keys(elements))
-        unSelectAllBtn.onclick = () => onSelectionChange(selection, [])
-        de.buttons['OK'].onclick = () => finish(selection)
-        de.buttons['Cancel'].onclick = () => finish()
-
-        updateUI()
-        try {
-            filter.focus({ preventScroll: true })
-        } catch {
-            filter.focus()
-        }
-    })
-}

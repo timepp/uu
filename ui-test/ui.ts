@@ -1,5 +1,7 @@
 import * as uu from '../src/uu.ts'
 
+uu.enableFontAwesome()
+
 const str = uu.stringify(window)
 const newWindow = JSON.parse(str)
 

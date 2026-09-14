@@ -2,19 +2,19 @@
 import * as tu from './tu.ts'
 import { 
     createElement, 
-    showJsonResult, 
-    createFoldedString, 
-    Pager, 
     fa, 
     createToggleBar, 
-    showSelection, 
     syncExistence, 
-    createButton, 
-    associateDropdownActions, 
-    showDialog, 
-    renderDataInsights, 
-    prompt
-} from './uu.ts'
+    createButton
+} from './uu-dom.ts'
+import { showJsonResult } from './uu-json.ts'
+import { createFoldedString } from './uu-text.ts'
+import { associateDropdownActions } from './uu-controls.ts'
+import { showDialog } from './uu-dialog.ts'
+import { renderDataInsights } from './uu-data-insights.ts'
+import { Pager } from './uu-pager.ts'
+import { prompt } from './uu-input.ts'
+import { showSelection } from './uu-selection.ts'
 
 export type PropRenderOption<T extends object> = {
     formatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement

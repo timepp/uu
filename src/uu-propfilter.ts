@@ -1,5 +1,7 @@
 import * as tu from './tu.ts'
-import { createElement, showDialog, showSelection } from './uu.ts'
+import { createElement } from './uu-dom.ts'
+import { showDialog } from './uu-dialog.ts'
+import { showSelection } from './uu-selection.ts'
 
 export type PropertyFilterState = {
     properties: string[]

@@ -1,4 +1,3 @@
 {
     "deno.enable": true,
-    "deno.enablePaths": ["./script", "./src/tu-deno.ts"],
 }

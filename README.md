@@ -1,6 +1,7 @@
 # UU
 
 UU aims to provide the following reusable constructs for modern development:
+
 - script development using typescript and Deno
 - web development using typescript and Vite, without any transpilation step
 
@@ -12,6 +13,19 @@ UU aims to provide the following reusable constructs for modern development:
 
 JavaScript UI dependencies are managed through npm and loaded lazily when their
 features are first used.
+
+Font Awesome and UU's shared dialog styles are initialized automatically when
+`fa()` and `showDialog()` are first used. Applications can still load a custom
+Font Awesome stylesheet URL ahead of time:
+
+```typescript
+import { enableFontAwesome } from 'tpuu'
+
+enableFontAwesome('https://example.com/font-awesome/css/all.min.css')
+```
+
+Importing `uu.ts` itself has no browser side effects. `enableFontAwesome()`
+remains available for explicit early initialization.
 
 ### Without a package installation
 
@@ -38,9 +52,9 @@ task to the host project's `deno.json`:
 
 ```json
 {
-	"tasks": {
-		"install:uu": "deno install --config uu/deno.json --node-modules-dir=auto --no-lock"
-	}
+  "tasks": {
+    "install:uu": "deno install --config uu/deno.json --node-modules-dir=auto --no-lock"
+  }
 }
 ```
 
@@ -51,8 +65,14 @@ auto-managed `node_modules` directory without modifying the host lock file.
 ### File structure
 
 - `package.json`: used for publishing the package to npm registry
-- `src/uu.ts`: UI specific library, which is used in the browser.
+- `src/uu.ts`: pure public barrel containing export declarations only
 - `src/tu.ts`: Non UI specific, can be used in both browser and Deno environments
+- `src/uu-dom.ts`, `src/uu-dialog.ts`, `src/uu-progress.ts`: foundational browser UI APIs
+- `src/uu-text.ts`, `src/uu-json.ts`, `src/uu-media.ts`: text, JSON, Markdown, and chart APIs
+- `src/uu-controls.ts`, `src/uu-selection.ts`, `src/uu-input.ts`: controls and user input APIs
+- `src/uu-pager.ts`, `src/uu-components.ts`: paging and composed UI components
+- `src/uu-data-insights.ts`, `src/uu-object.ts`, `src/uu-visualize-array.ts`: data visualization APIs
+- `src/uu-download.ts`, `src/uu-fontawesome.ts`: browser integration APIs
 - `dist`: artifacts for npm
 - `script/increase-ver.ts`: script to increase version number
 - `script/test.ts`: script for cli test
@@ -62,7 +82,7 @@ auto-managed `node_modules` directory without modifying the host lock file.
 
 First you need to invoke npm command to update the version:
 
-```
+```shell
 npm run incver
 ```
 
@@ -78,5 +98,5 @@ npm run incver
 
 ## Todo
 
-[x] stringify support a callback function to receive the mapping between value and its position in the final string
-[x] hide column if all values are empty (null, undefined, etc) in visualizeArray
+- [x] stringify support a callback function to receive the mapping between value and its position in the final string
+- [x] hide column if all values are empty (null, undefined, etc) in visualizeArray
