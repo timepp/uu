@@ -371,7 +371,7 @@ function safeStringifyInternal(obj: any, parents: object[], path: string[], pos:
                 parts.push('}')
                 str = parts.join('')
             } else {
-                str = `${obj}`
+                str = JSON.stringify(`${obj}`)
             }
         }
     }

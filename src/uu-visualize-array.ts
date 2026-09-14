@@ -286,7 +286,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 const firstValue = getPropValue(arr[0], p, 0)
                 return arr.some((item, index) => {
                     const v = getPropValue(item, p, index)
-                    return JSON.stringify(v) !== JSON.stringify(firstValue)
+                    return tu.stringify(v) !== tu.stringify(firstValue)
                 })
             })
         }
