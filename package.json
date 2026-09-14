@@ -11,6 +11,7 @@
   "scripts": {
     "test": "deno test",
     "build": "npx tsc --noCheck",
+    "prepublishOnly": "npm run build",
     "ui-test": "cd ui-test && vite --open",
     "incver": "deno run -A script/increase-ver.ts"
   },
