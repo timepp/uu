@@ -1149,7 +1149,7 @@ export async function createMarkdownViewer(markdownText: string) {
     const { default: markdownIt } = await MarkdownLoader.getModule();
 
     const md = markdownIt({
-        html: true,
+        html: false,
         linkify: true,
         typographer: true,
         breaks: true,
