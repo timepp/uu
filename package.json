@@ -1,6 +1,6 @@
 {
   "name": "tpuu",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "description": "UU aims to provide the following reusable constructs for modern development:\r - script development using typescript and Deno\r - web development using typescript and Vite, without any transpilation step",
   "main": "dist/uu.js",
   "type": "module",
@@ -11,7 +11,9 @@
   "scripts": {
     "test": "deno test",
     "build": "npx tsc --noCheck",
-    "prepublishOnly": "npm run build",
+    "build:bundle": "esbuild src/uu.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/uu.bundle.js",
+    "build:all": "npm run build && npm run build:bundle",
+    "prepublishOnly": "npm run build:all",
     "ui-test": "cd ui-test && vite --open",
     "incver": "deno run -A script/increase-ver.ts"
   },
@@ -23,13 +25,23 @@
     "url": "git+https://github.com/timepp/uu.git"
   },
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/timepp/uu/issues"
   },
   "homepage": "https://github.com/timepp/uu#readme",
   "devDependencies": {
+    "esbuild": "0.28.2",
     "typescript": "^7.0.2",
     "vite": "^6.3.5"
+  },
+  "dependencies": {
+    "@codemirror/lang-json": "6.0.2",
+    "@codemirror/language": "6.12.4",
+    "@codemirror/search": "6.7.2",
+    "@codemirror/state": "6.7.4",
+    "@codemirror/view": "6.43.11",
+    "chart.js": "4.5.1",
+    "markdown-it": "15.0.1"
   }
 }

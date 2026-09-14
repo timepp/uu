@@ -1,11 +1,20 @@
 {
   "name": "@timepp/uu",
-  "version": "1.0.9",
+  "version": "1.0.11",
   "license": "MIT",
   "exports": {
     ".": "./src/uu.ts",
     "./tu": "./src/tu.ts",
     "./deno": "./src/tu-deno.ts"
+  },
+  "imports": {
+    "@codemirror/lang-json": "npm:@codemirror/lang-json@6.0.2",
+    "@codemirror/language": "npm:@codemirror/language@6.12.4",
+    "@codemirror/search": "npm:@codemirror/search@6.7.2",
+    "@codemirror/state": "npm:@codemirror/state@6.7.4",
+    "@codemirror/view": "npm:@codemirror/view@6.43.11",
+    "chart.js/auto": "npm:chart.js@4.5.1/auto",
+    "markdown-it": "npm:markdown-it@15.0.1"
   },
   "compilerOptions": {
     "lib": [

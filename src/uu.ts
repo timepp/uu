@@ -2,6 +2,7 @@
 // uu: a set of utility functions for modern web UI
 
 import * as tu from './tu.ts'
+import { loadChartJs, loadCodeMirrorModules, loadFontAwesomeStylesheet, loadMarkdownIt } from './uu-dependencies.ts'
 export * from './tu.ts'
 
 export type AnnotatedString = {
@@ -40,39 +41,14 @@ export function derivedCurrentUrl(paramsToAdd: Record<string, string>, paramsToR
     return derivedUrl(window.location.href, paramsToAdd, paramsToRemove)
 }
 
-let _isFaAvailable: boolean | undefined
-export function isFontAwesomeAvailable() {
-    if (_isFaAvailable === undefined) {
-        const span = document.createElement('i')
-        span.className = 'fa'
-        span.style.display = 'none'
-        document.body.appendChild(span)
-        const fontFamily = getComputedStyle(span).fontFamily
-        _isFaAvailable = fontFamily.includes('Awesome')
-        span.remove()
-    }
-    return _isFaAvailable
+export function enableFontAwesome(cdnUrl?: string) {
+    loadFontAwesomeStylesheet(cdnUrl)
 }
 
-export function enableFontAwesome(cdnUrl?: string) {
-    const url = cdnUrl || 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = url
-    document.head.appendChild(link)
-    // Reset cache so isFontAwesomeAvailable will recheck
-    _isFaAvailable = undefined
-}
+enableFontAwesome()
 
 export function fa(...classNames: string[]) {
-    if (isFontAwesomeAvailable()) {
-        return createElement(null, 'i', ['fa', ...classNames])
-    }
-    const text = classNames[0].replace('fa-', '')
-    const cvt: Record<string, string> = {
-        'bars': '☰',
-    }
-    return createElement(null, 'span', [], cvt[text] || text)
+    return createElement(null, 'i', ['fa', ...classNames])
 }
 
 export function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -919,50 +895,6 @@ export function createFoldableArea(parent: Element | null, title: string, conten
     return { div, header, body, toggleBtn, refreshBtn }
 }
 
-class CodeMirrorLoader {
-    static modules: any = null;
-
-    static async getModules() {
-        if (!this.modules) {
-
-            // This is to ensure all codemirror modules use the same version of @codemirror/state
-            // Otherwise, there will be conflicts, with errors like 
-            // "Unrecognized extension value in extension set ([object Object]). This sometimes happens because multiple 
-            // instances of @codemirror/state are loaded, breaking instanceof checks."
-            const stateVer = "6.5.3";
-            const deps = `?deps=@codemirror/state@${stateVer}`;
-
-            const [
-                state, view, lang, json, search,
-            ] = await callAsyncFunctionWithProgress(() => Promise.all([
-                import(`https://esm.sh/@codemirror/state@6.5.3`),
-                import(`https://esm.sh/@codemirror/view?deps=@codemirror/state@6.5.3`),
-                import(`https://esm.sh/@codemirror/language?deps=@codemirror/state@6.5.3`),
-                import(`https://esm.sh/@codemirror/lang-json?deps=@codemirror/state@6.5.3`),
-                import(`https://esm.sh/@codemirror/search?deps=@codemirror/state@6.5.3`)
-            ]));
-
-            this.modules = {
-                EditorState: state.EditorState,
-                EditorView: view.EditorView,
-                lineNumbers: view.lineNumbers,
-                Decoration: view.Decoration,
-                hoverTooltip: view.hoverTooltip,
-                keymap: view.keymap,
-                syntaxHighlighting: lang.syntaxHighlighting,
-                defaultHighlightStyle: lang.defaultHighlightStyle,
-                json: json.json,
-                search: search.search,
-                searchKeymap: search.searchKeymap,
-                openSearchPanel: search.openSearchPanel,
-                foldGutter: lang.foldGutter,
-                foldKeymap: lang.foldKeymap
-            };
-        }
-        return this.modules;
-    }
-}
-
 export type EntityRenderer = {
     anchorStyle: string,
     render: () => HTMLElement | Promise<HTMLElement>
@@ -975,7 +907,7 @@ export type JsonViewerOptions = {
 }
 
 export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewerOptions = {}) {
-    const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap, openSearchPanel, keymap, foldGutter, foldKeymap } = await CodeMirrorLoader.getModules();
+    const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap, openSearchPanel, keymap, foldGutter, foldKeymap } = await callAsyncFunctionWithProgress(loadCodeMirrorModules);
     const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '100%', overflow: 'hidden' });
     const visulizers = [] as {
         start: number,
@@ -1107,7 +1039,7 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
 }
 
 export async function createCodeMirrorJsonEditor(initialText: string) {
-    const { EditorState, EditorView, lineNumbers, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap } = await CodeMirrorLoader.getModules();
+    const { EditorState, EditorView, lineNumbers, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap } = await callAsyncFunctionWithProgress(loadCodeMirrorModules);
     const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '400px', overflow: 'hidden' });
     const state = EditorState.create({
         doc: initialText,
@@ -1135,18 +1067,8 @@ export async function createCodeMirrorJsonEditor(initialText: string) {
     }
 }
 
-class MarkdownLoader {
-    static module: any = null;
-    static async getModule() {
-        if (!this.module) {
-            this.module = await callAsyncFunctionWithProgress(() => import("https://esm.sh/markdown-it"), 'Loading Markdown-It module...');
-        }
-        return this.module;
-    }
-}
-
 export async function createMarkdownViewer(markdownText: string) {
-    const { default: markdownIt } = await MarkdownLoader.getModule();
+    const { default: markdownIt } = await callAsyncFunctionWithProgress(loadMarkdownIt, 'Loading Markdown-It module...');
 
     const md = markdownIt({
         html: false,
@@ -1166,11 +1088,8 @@ export async function createMarkdownViewer(markdownText: string) {
     return container
 }
 
-let chartJsModule: any = null;
 export async function createChart(parent: HTMLElement, width: string, height: string, config: any) {
-    if (!chartJsModule) {
-        chartJsModule = await callAsyncFunctionWithProgress(() => import("https://esm.sh/chart.js/auto"), 'Loading Chart.js...');
-    }
+    const chartJsModule = await callAsyncFunctionWithProgress(loadChartJs, 'Loading Chart.js...');
     const chartWrapper = createElement(parent, 'div', [], '', {
         // position: 'relative',
         height: `${height}`,

@@ -10,11 +10,43 @@ UU aims to provide the following reusable constructs for modern development:
 
 `npm install tpuu`
 
+JavaScript UI dependencies are managed through npm and loaded lazily when their
+features are first used.
+
+### Without a package installation
+
+Run `npm run build:bundle` to produce `dist/uu.bundle.js`. This self-contained
+ES module can be hosted on a CDN and imported directly by browser applications.
+
+### As a Git submodule
+
+When importing directly from the submodule's `src` directory, run `npm install`
+inside the UU submodule so its dependencies are available. For frequent local
+development, the host repository can instead register the submodule as an npm
+workspace, allowing one install at the workspace root.
+
 ## Reusing script components
 
 Simply `import * as uu from 'jsr:@timepp/uu' in Deno environment.
 
 ## Development
+
+### Using UU as a Git submodule in a Deno project
+
+When UU is checked out as the `uu` submodule of another Deno project, add this
+task to the host project's `deno.json`:
+
+```json
+{
+	"tasks": {
+		"install:uu": "deno install --config uu/deno.json --node-modules-dir=auto --no-lock"
+	}
+}
+```
+
+Run `deno task install:uu` from the host project root. This uses UU's Deno
+configuration to install its npm dependencies into the host project's
+auto-managed `node_modules` directory without modifying the host lock file.
 
 ### File structure
 
@@ -36,7 +68,7 @@ npm run incver
 
 #### Publish to npm
 
-1. Run `npm run build` to build the package
+1. Run `npm run build:all` to build the standard and bundled outputs
 1. commit local changes (and push to remote repository)
 1. Run `npm publish` to publish the package to the npm registry
 
