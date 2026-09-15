@@ -7,7 +7,21 @@ UU aims to provide the following reusable constructs for modern development:
 
 ## Usage
 
-### With npm
+### Without a package installation
+
+`uu` can be used directly from esm.sh
+
+```typescript
+    const arr = [
+        {age: 20, name: 'Alice'},
+        {age: 22, name: 'Bob'},
+        ...
+    ]
+    const uu = await import('https://esm.sh/jsr/@timepp/uu@1.0.14')
+    document.body.appendChild(uu.visualizeArray())
+```
+ 
+### With package installation
 
 `npm install tpuu`
 
@@ -40,42 +54,7 @@ setBootstrapAutoLoad(false)
 Importing `uu.ts` itself has no browser side effects. `enableBootstrap()` and
 `enableFontAwesome()` remain available for explicit early initialization.
 
-### Runtime state
-
-In browser environments, UU exposes a non-enumerable runtime diagnostics
-registry at `window.timepp_uu_state`. It tracks module-level mutable values,
-lazy dependency status, UU-managed styles and special DOM nodes, and every
-localStorage key accessed through UU:
-
-```typescript
-console.log(window.timepp_uu_state)
-console.log(window.timepp_uu_state.snapshot())
-```
-
-Module values are live read-only getters. DOM resources use weak references and
-transient entries are removed with their nodes. `snapshot()` returns a
-JSON-serializable point-in-time view, including current values for tracked
-localStorage keys.
-
-### Without a package installation
-
-Run `npm run build:bundle` to produce `dist/uu.bundle.js`. This self-contained
-ES module can be hosted on a CDN and imported directly by browser applications.
-
 ### As a Git submodule
-
-When importing directly from the submodule's `src` directory, run `npm install`
-inside the UU submodule so its dependencies are available. For frequent local
-development, the host repository can instead register the submodule as an npm
-workspace, allowing one install at the workspace root.
-
-## Reusing script components
-
-Simply `import * as uu from 'jsr:@timepp/uu' in Deno environment.
-
-## Development
-
-### Using UU as a Git submodule in a Deno project
 
 When UU is checked out as the `uu` submodule of another Deno project, add this
 task to the host project's `deno.json`:
@@ -91,6 +70,12 @@ task to the host project's `deno.json`:
 Run `deno task install:uu` from the host project root. This uses UU's Deno
 configuration to install its npm dependencies into the host project's
 auto-managed `node_modules` directory without modifying the host lock file.
+
+## Diagnostics
+
+uu exposes all its internal states, owned local storages, and injected styles in `window.timepp_uu_state`
+
+## Development
 
 ### File structure
 

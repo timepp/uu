@@ -24,6 +24,8 @@ export type PropRenderOption<T extends object> = {
 }
 export type ItemAction = (item: any, dataIndex: number) => void
 export type ItemActions = Record<string, ItemAction>
+export type MultiItemAction<T extends object> = (selectedItems: T[]) => void | Promise<void>
+export type MultiItemActions<T extends object> = Record<string, MultiItemAction<T>>
 export type WallRenderOption<T extends object> = RenderOption<T> & {
     // Required: returns the image URL for a given item
     imageUrl: (item: T, dataIndex: number) => string
@@ -60,6 +62,10 @@ export type VisualizeConfig<T extends object> = {
     wallRenderOption: WallRenderOption<T>
     
     itemActions: ItemActions | ((item: T, dataIndex: number) => ItemActions)
+
+    // Adds named entries to the options menu. Each callback receives all
+    // selected items in selection order.
+    multiItemActions: MultiItemActions<T>
 
     // If not empty, raw index will be shown in the first prop with the given prop name
     // note: this prop can be hide / sort as well
@@ -124,6 +130,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const renderStyles = cfg.renderStyles || ['table', 'tile', 'wall']
     const rawIndexProp = cfg.rawIndexProp ?? '#'
     const actionProp = cfg.actionProp ?? '(Actions)'
+    const selectedIndexes = new Set<number>()
 
     // persist state
     const state = tu.createObservableState(cfg.stateKey || null, {
@@ -174,7 +181,10 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         for (const [name, action] of Object.entries(allActions)) {
             const btn = createElement(container, 'a', ['me-2'], name)
             btn.style.cursor = 'pointer'
-            btn.onclick = () => action(item, index)
+            btn.onclick = event => {
+                event.stopPropagation()
+                action(item, index)
+            }
         }
         return container
     }
@@ -342,13 +352,51 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         return style
     }
 
+    function getSelectedItems(): T[] {
+        return [...selectedIndexes]
+            .map(index => arr[index])
+            .filter((item): item is T => item !== undefined)
+    }
+
+    function syncItemSelection(element: HTMLElement, index: number) {
+        const selected = selectedIndexes.has(index)
+        element.setAttribute('aria-selected', `${selected}`)
+        element.classList.toggle('table-primary', state.renderStyle === 'table' && selected)
+        if (state.renderStyle !== 'table') {
+            if (selected) {
+                element.dataset.uuUnselectedOutline = element.style.outline
+                element.dataset.uuUnselectedOutlineOffset = element.style.outlineOffset
+                element.style.outline = '3px solid var(--bs-primary, #0d6efd)'
+                element.style.outlineOffset = '-3px'
+            } else if (element.dataset.uuUnselectedOutline !== undefined) {
+                element.style.outline = element.dataset.uuUnselectedOutline
+                element.style.outlineOffset = element.dataset.uuUnselectedOutlineOffset || ''
+                delete element.dataset.uuUnselectedOutline
+                delete element.dataset.uuUnselectedOutlineOffset
+            }
+        }
+    }
+
     function attachItemClickHandler(item: T, index: number, element: HTMLElement) {
         const viewOption = getActiveViewRenderOption()
         const onItemClickFallbackChain = [
             viewOption?.onItemClick,
             cfg.renderOption?.onItemClick
         ].filter(v => !!v) as ((item: T, dataIndex: number) => Promise<boolean|undefined>)[]
-        if (onItemClickFallbackChain.length === 0) return
+        syncItemSelection(element, index)
+        element.style.cursor = 'pointer'
+        if (onItemClickFallbackChain.length === 0) {
+            element.onclick = evt => {
+                evt.stopPropagation()
+                const target = evt.target as Element | null
+                if (target?.closest('a, button, input, select, textarea, label')) return
+                if (globalThis.getSelection?.()?.toString()) return
+                if (selectedIndexes.has(index)) selectedIndexes.delete(index)
+                else selectedIndexes.add(index)
+                syncItemSelection(element, index)
+            }
+            return
+        }
         element.onclick = async (evt) => {
             evt.stopPropagation()
             for (const onItemClickHandler of onItemClickFallbackChain) {
@@ -356,7 +404,54 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 if (handled !== false) break
             }
         }
-        element.style.cursor = 'pointer'
+    }
+
+    function comparisonValue(item: T, property: string): unknown {
+        return item[property as keyof T]
+    }
+
+    function renderComparisonValue(value: unknown): HTMLElement {
+        let text: string
+        if (value === undefined) text = '(undefined)'
+        else if (value === null) text = '(null)'
+        else if (typeof value === 'object') text = tu.stringify(value)
+        else text = String(value)
+        return createFoldedString(text, cfg.stringFoldThreshold ?? 120)
+    }
+
+    function compareSelectedItems() {
+        const selected = [...selectedIndexes]
+            .map(index => ({ item: arr[index], index }))
+            .filter((entry): entry is { item: T, index: number } => entry.item !== undefined)
+        if (selected.length < 2) {
+            return showDialog('Compare Selected Items', 'Select at least two items first.', { actions: ['Close'] })
+        }
+        const [left, right] = selected
+        const properties = tu.dataProperties([left.item, right.item]).filter(property => {
+            return tu.stringify(comparisonValue(left.item, property)) !== tu.stringify(comparisonValue(right.item, property))
+        })
+        const content = createElement(null, 'div')
+        if (properties.length === 0) {
+            createElement(content, 'div', ['alert', 'alert-info', 'mb-0'], 'The first two selected items have no different properties.')
+        } else {
+            const table = createElement(content, 'table', ['table', 'table-bordered', 'table-hover', 'mb-0'])
+            const thead = createElement(table, 'thead', ['table-light'])
+            const header = createElement(thead, 'tr')
+            createElement(header, 'th', [], 'Property')
+            createElement(header, 'th', [], `Item ${left.index + 1}`)
+            createElement(header, 'th', [], `Item ${right.index + 1}`)
+            const tbody = createElement(table, 'tbody')
+            for (const property of properties) {
+                const row = createElement(tbody, 'tr')
+                createElement(row, 'th', [], property)
+                createElement(row, 'td', [], renderComparisonValue(comparisonValue(left.item, property)))
+                createElement(row, 'td', [], renderComparisonValue(comparisonValue(right.item, property)))
+            }
+        }
+        return showDialog('Compare Selected Items', content, {
+            actions: ['Close'],
+            style: { minWidth: '70vw', maxWidth: '90vw', maxHeight: '80vh' }
+        })
     }
 
     function tableRenderer(startIndex: number, endIndex: number) {
@@ -764,7 +859,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         }
     })
 
-    associateDropdownActions(optionBtn, {
+    const dropdownActions: Record<string, () => void | Promise<void> | Promise<unknown>> = {
         'Charts': async () => {
             const info = tu.getPropStat(arr)
             console.log('prop stat', info)
@@ -792,7 +887,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         'View Original Data': () => {
             showJsonResult('Original Data', arr)
         }
-    })
+    }
+    for (const [name, action] of Object.entries(cfg.multiItemActions || {})) {
+        dropdownActions[name] = () => action(getSelectedItems())
+    }
+    dropdownActions['Compare Selected Items'] = () => compareSelectedItems()
+    associateDropdownActions(optionBtn, dropdownActions)
 
     // Load More button
     if (!cfg.loadMore) {
