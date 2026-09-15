@@ -52,10 +52,8 @@ export type UURuntimeState = {
     snapshot: () => object
 }
 
-declare global {
-    interface Window {
-        timepp_uu_state: UURuntimeState
-    }
+type UUWindow = Window & {
+    timepp_uu_state?: UURuntimeState
 }
 
 function simplify(value: unknown): unknown {
@@ -115,15 +113,16 @@ const fallbackState = createRuntimeState()
 
 export function getUURuntimeState() {
     if (typeof window === 'undefined') return fallbackState
-    if (!window.timepp_uu_state) {
-        Object.defineProperty(window, 'timepp_uu_state', {
+    const uuWindow = window as UUWindow
+    if (!uuWindow.timepp_uu_state) {
+        Object.defineProperty(uuWindow, 'timepp_uu_state', {
             value: fallbackState,
             writable: false,
             configurable: true,
             enumerable: false
         })
     }
-    return window.timepp_uu_state
+    return uuWindow.timepp_uu_state!
 }
 
 export function registerModule(name: string, status: UUModuleStatus = 'ready') {
