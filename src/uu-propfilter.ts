@@ -26,10 +26,24 @@ function arraylize<T>(value: T | T[]) {
     return value instanceof Array ? value : [value]
 }
 
+function valueToString(value: unknown) {
+    if (typeof value === 'string') return value
+    if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint' || typeof value === 'symbol') {
+        return String(value)
+    }
+    if (typeof value === 'function') return value.name ? `[Function ${value.name}]` : '[Function]'
+    try {
+        return tu.stringify(value)
+    } catch {
+        return '[Unprintable value]'
+    }
+}
+
 function normalizeValues(values: unknown | unknown[]) {
     return arraylize(values)
-        .filter(value => value !== undefined && value !== null && `${value}` !== '')
-        .map(value => `${value}`)
+        .filter(value => value !== undefined && value !== null)
+        .map(valueToString)
+        .filter(value => value !== '')
 }
 
 function countValues<T extends object>(items: T[], property: NormalizedProperty<T>) {
@@ -340,9 +354,10 @@ export class PropertyFilter<T extends object> {
             return
         }
 
-        for (const propertyName of this.state.properties) {
+        for (const [index, propertyName] of this.state.properties.entries()) {
             const property = this.normalizeProperty(propertyName)
-            const row = createElement(this.root, 'div', ['property-filter-row', 'd-flex', 'align-items-start', 'mb-1'])
+            const row = createElement(this.root, 'div', ['property-filter-row', 'd-flex', 'align-items-start'])
+            if (index < this.state.properties.length - 1) row.classList.add('mb-1')
             const propertyNameElement = createElement(row, 'div', ['property-filter-name', 'me-2'], property.name)
             propertyNameElement.title = 'Select and reorder filter properties'
             propertyNameElement.onclick = () => this.selectProperties()

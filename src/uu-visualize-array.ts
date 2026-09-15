@@ -15,6 +15,7 @@ import { renderDataInsights } from './uu-data-insights.ts'
 import { Pager } from './uu-pager.ts'
 import { prompt } from './uu-input.ts'
 import { showSelection } from './uu-selection.ts'
+import { PropertyFilter } from './uu-propfilter.ts'
 
 export type PropRenderOption<T extends object> = {
     formatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement
@@ -513,8 +514,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         return state.renderStyle === 'table' ? tableRenderer : state.renderStyle === 'tile' ? tileRenderer : wallRenderer
     }
 
-    // data is filtered view of arr
+    // data flows through: allData -> text filter -> property filter -> sort/render
     const allData = arr.map((item, index) => ({item, index}))
+    let textFilteredData = allData
     let data = allData
     const pager = new Pager(data.length, state.pageSize || Infinity, (page) => gotoPage(page))
     const pagerElem = pager.getElement()
@@ -545,13 +547,22 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const sortHint = createElement(igSort, 'span', ['input-group-text'])
     const randomSortBtn = createButton(igSort, ['btn', 'btn-outline-secondary'], fa('fa-random'))
     const igFiler = createElement(toolbar, 'div', ['input-group', 'flex-grow-1'])
-    const filterHint = createElement(igFiler, 'span', ['input-group-text'], fa('fa-filter'))
     const filter = createElement(igFiler, 'input', ['form-control'], '')
+    const filterHint = createElement(igFiler, 'span', ['input-group-text'], fa('fa-filter'))
     const counts = createElement(igFiler, 'span', ['input-group-text'], '20 / 100')
     const pagerPlaceholder = createElement(toolbar, 'div', [])
     const loadMoreBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-plus'))
     const optionBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-bars'))
+    const propertyFilterArea = createElement(view, 'div', ['mb-1'], '', { display: 'none' })
     const dataContainer = createElement(view, 'div')
+
+    const propertyFilter = new PropertyFilter<T>(propertyFilterArea, allData.map(v => v.item), cfg.stateKey ? `${cfg.stateKey}:property-filter` : '', {
+        onChange: () => {
+            applyPropertyFilter()
+            applySort()
+            pager.gotoPage(0)
+        }
+    })
 
     toolbar.replaceChild(pagerElem, pagerPlaceholder)
     filter.value = state.filter || ''
@@ -565,16 +576,17 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     function applyFilterAndSort() {
-        applyFilter(state.filter || '')
+        applyTextFilter(state.filter || '')
+        applyPropertyFilter()
         applySort()
         pager.gotoPage(0)
     }
 
-    function applyFilter(s: string) {
+    function applyTextFilter(s: string) {
         let hasFilterError = false
         s = s.trim()
         if (s === '') {
-            data = allData
+            textFilteredData = allData
         } else {
             const isExpr = /[><]|===?|!==?|&&|\|\||\.\w+\(/.test(s)
             if (isExpr) {
@@ -583,7 +595,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 console.log('compile filter function with code:', funcCode)
                 try {
                     const filterFunc = new Function('item', funcCode) as (item: T) => boolean
-                    data = allData.filter(v => {
+                    textFilteredData = allData.filter(v => {
                         try {
                             return filterFunc(v.item)
                         } catch (e) {
@@ -593,23 +605,30 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 } catch (e) {
                     console.error('invalid filter code', e)
                     hasFilterError = true
-                    data = []
+                    textFilteredData = []
                 }
             } else {
-                data = allData
+                textFilteredData = allData
                 const itemFilter = (item: T, filter: string) => {
                     const r = cfg.itemFilter ? cfg.itemFilter(item, filter) : undefined
                     if (r !== undefined) return r
                     return tu.fuzzyFind(item, filter, false) !== null
                 }
                 for (const c of s.split(' ')) {
-                    data = data.filter(v => itemFilter(v.item, c))
+                    textFilteredData = textFilteredData.filter(v => itemFilter(v.item, c))
                 }
             }
         }
+        propertyFilter.setItems(textFilteredData.map(v => v.item))
+        filter.style.backgroundColor = hasFilterError ? '#ffcccc' : (textFilteredData.length < arr.length ? '#ccffcc' : '')
+    }
+
+    function applyPropertyFilter() {
+        const filteredItems = new Set(propertyFilter.getFilteredItems(textFilteredData.map(v => v.item)))
+        data = textFilteredData.filter(v => filteredItems.has(v.item))
         updateCountsDisplay()
         pager.setTotalItems(data.length)
-        filter.style.backgroundColor = hasFilterError ? '#ffcccc' : (data.length < arr.length ? '#ccffcc' : '')
+        filterHint.classList.toggle('text-success', propertyFilter.getSummary().length > 0)
     }
 
     const zhCollator = new Intl.Collator('zh-Hans-CN', { sensitivity: 'base' })
@@ -724,6 +743,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         gotoPage(0)
     }
     propSelectorBtn.onclick = () => selectProps()
+
+    filterHint.style.cursor = 'pointer'
+    filterHint.title = 'Show or hide property filters'
+    filterHint.onclick = () => {
+        propertyFilterArea.style.display = propertyFilterArea.style.display === 'none' ? '' : 'none'
+    }
 
     randomSortBtn.onclick = () => {
         state.sortBy = []
