@@ -217,15 +217,10 @@ export class PropertyFilter<T extends object> {
 
     private sortPropertyValues(
         values: string[],
-        selectedValues: string[],
         counts: Record<string, number>,
         sort: PropertyValueSort = 'count',
-        selectedFirst = true,
     ) {
         return [...values].sort((a, b) => {
-            const aSelected = selectedValues.includes(a)
-            const bSelected = selectedValues.includes(b)
-            if (selectedFirst && aSelected !== bSelected) return aSelected ? -1 : 1
             if (sort === 'value-asc') return a.localeCompare(b)
             if (sort === 'value-desc') return b.localeCompare(a)
             return (counts[b] || 0) - (counts[a] || 0) || a.localeCompare(b)
@@ -278,16 +273,19 @@ export class PropertyFilter<T extends object> {
         limit?: number,
         sort: PropertyValueSort = 'count',
         onSelectionChange?: () => void,
-        selectedFirst = true,
     ) {
         container.replaceChildren()
 
         const selectedValues = this.getSelectedValues(property.name)
         const countItems = this.applyFiltersExcept(this.items, property.name)
         const counts = countValues(countItems, property)
-        const sortedValues = this.sortPropertyValues(values, selectedValues, counts, sort, selectedFirst)
-        const nonZeroValues = sortedValues.filter(value => (counts[value] || 0) > 0)
-        const visibleValues = limit ? nonZeroValues.slice(0, limit) : nonZeroValues
+        const sortedValues = this.sortPropertyValues(values, counts, sort)
+        const availableValues = sortedValues.filter(value => (counts[value] || 0) > 0 || selectedValues.includes(value))
+        const inlineValues = limit ? availableValues.slice(0, limit) : availableValues
+        const visibleValues = [
+            ...inlineValues,
+            ...selectedValues.filter(value => !inlineValues.includes(value))
+        ]
 
         const allButton = createElement(container, 'span', ['property-filter-value', 'me-1', 'mb-1'], `All (${countItems.length})`)
         allButton.classList.toggle('selected', selectedValues.length === 0)
@@ -309,7 +307,7 @@ export class PropertyFilter<T extends object> {
             }
         }
 
-        if (limit && nonZeroValues.length > limit) {
+        if (limit && availableValues.some(value => !visibleValues.includes(value))) {
             const moreButton = createElement(container, 'span', ['property-filter-value', 'me-1', 'mb-1'], '...')
             moreButton.onclick = () => this.showAllValuesDialog(property, values)
         }
@@ -327,7 +325,7 @@ export class PropertyFilter<T extends object> {
             countButton.classList.toggle('active', sort === 'count')
             valueAscButton.classList.toggle('active', sort === 'value-asc')
             valueDescButton.classList.toggle('active', sort === 'value-desc')
-            this.renderValues(valuesArea, property, values, undefined, sort, render, false)
+            this.renderValues(valuesArea, property, values, undefined, sort, render)
         }
         countButton.onclick = () => {
             sort = 'count'
