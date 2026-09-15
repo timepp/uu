@@ -1,4 +1,5 @@
 import { simpleHash } from './tu.ts'
+import { ensureBootstrap } from './uu-bootstrap.ts'
 import { ensureFontAwesome } from './uu-fontawesome.ts'
 
 export type AnnotatedString = {
@@ -28,6 +29,7 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
     style: Partial<CSSStyleDeclaration> = {},
     attributes: Partial<Record<keyof HTMLElementTagNameMap[K], any>> = {}
 ): HTMLElementTagNameMap[K] {
+    ensureBootstrap()
     const element = document.createElement(tagName)
     if (classes.length > 0) element.classList.add(...classes.filter(c => c))
     if (parent) parent.appendChild(element)

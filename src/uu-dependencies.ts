@@ -1,8 +1,9 @@
 // Centralizes lazy loading and caching for optional UI dependencies. JavaScript
-// modules are resolved by the package manager; Font Awesome remains configurable
-// so consumers can use an existing stylesheet or load one from a CDN.
+// modules are resolved by the package manager; Bootstrap and Font Awesome remain
+// configurable so consumers can use existing stylesheets or load them from a CDN.
 import { registerModule, registerModuleValue, setDependencyState } from './uu-runtime-state.ts'
 
+export const bootstrapVersion = '5.3.8'
 export const fontAwesomeVersion = '6.4.0'
 
 let codeMirrorModulesPromise: Promise<any> | undefined
@@ -90,6 +91,26 @@ export function loadFontAwesomeStylesheet(cdnUrl = `https://cdnjs.cloudflare.com
     link.rel = 'stylesheet'
     link.href = resolvedUrl
     link.dataset.uuDependency = 'font-awesome'
+    document.head.appendChild(link)
+    return link
+}
+
+export function loadBootstrapStylesheet(cdnUrl = `https://cdn.jsdelivr.net/npm/bootstrap@${bootstrapVersion}/dist/css/bootstrap.min.css`): HTMLLinkElement {
+    const resolvedUrl = new URL(cdnUrl, document.baseURI).href
+    const matchingLink = [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')]
+        .find(link => link.href === resolvedUrl)
+    if (matchingLink) return matchingLink
+
+    const managedLink = document.querySelector<HTMLLinkElement>('link[data-uu-dependency="bootstrap"]')
+    if (managedLink) {
+        managedLink.href = resolvedUrl
+        return managedLink
+    }
+
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = resolvedUrl
+    link.dataset.uuDependency = 'bootstrap'
     document.head.appendChild(link)
     return link
 }

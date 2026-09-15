@@ -12,20 +12,33 @@ UU aims to provide the following reusable constructs for modern development:
 `npm install tpuu`
 
 JavaScript UI dependencies are managed through npm and loaded lazily when their
-features are first used.
+features are first used. Bootstrap CSS is also loaded automatically from a
+pinned CDN URL when the first UU element is created. If the application already
+provides Bootstrap 5, UU reuses it instead of adding another stylesheet.
 
 Font Awesome and UU's shared dialog styles are initialized automatically when
-`fa()` and `showDialog()` are first used. Applications can still load a custom
-Font Awesome stylesheet URL ahead of time:
+`fa()` and `showDialog()` are first used. Applications can load custom Bootstrap
+and Font Awesome stylesheet URLs ahead of time:
 
 ```typescript
-import { enableFontAwesome } from 'tpuu'
+import { enableBootstrap, enableFontAwesome } from 'tpuu'
 
+enableBootstrap('https://example.com/bootstrap/css/bootstrap.min.css')
 enableFontAwesome('https://example.com/font-awesome/css/all.min.css')
 ```
 
-Importing `uu.ts` itself has no browser side effects. `enableFontAwesome()`
-remains available for explicit early initialization.
+To prevent UU from loading Bootstrap—for example when the host supplies
+Bootstrap later or uses its own compatible styles—disable automatic loading
+before creating any UU elements:
+
+```typescript
+import { setBootstrapAutoLoad } from 'tpuu'
+
+setBootstrapAutoLoad(false)
+```
+
+Importing `uu.ts` itself has no browser side effects. `enableBootstrap()` and
+`enableFontAwesome()` remain available for explicit early initialization.
 
 ### Runtime state
 
@@ -89,7 +102,7 @@ auto-managed `node_modules` directory without modifying the host lock file.
 - `src/uu-controls.ts`, `src/uu-selection.ts`, `src/uu-input.ts`: controls and user input APIs
 - `src/uu-pager.ts`, `src/uu-components.ts`: paging and composed UI components
 - `src/uu-data-insights.ts`, `src/uu-object.ts`, `src/uu-visualize-array.ts`: data visualization APIs
-- `src/uu-download.ts`, `src/uu-fontawesome.ts`: browser integration APIs
+- `src/uu-download.ts`, `src/uu-bootstrap.ts`, `src/uu-fontawesome.ts`: browser integration APIs
 - `src/uu-runtime-state.ts`: browser runtime diagnostics registry
 - `dist`: artifacts for npm
 - `script/increase-ver.ts`: script to increase version number
@@ -112,7 +125,7 @@ npm run incver
 
 #### Publish to Deno
 
-1. Run `deno publish --allow-slow-types` to publish the package to the Deno registry
+1. Run `deno publish` to publish the package to the Deno registry
 
 ## Todo
 
