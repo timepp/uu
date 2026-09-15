@@ -37,7 +37,7 @@ export type DialogElements = {
     buttons: Record<string, HTMLButtonElement>
 }
 
-export function showDialog<T>(title: string, content: string | HTMLElement | undefined = undefined, options: DialogOptions = {}, onCreate?: (elements: DialogElements, finisher: (value?: T) => void) => void) {
+export function showDialog<T>(title: string, content: string | HTMLElement | undefined = undefined, options: DialogOptions = {}, onCreate?: (elements: DialogElements, finisher: (value?: T) => void) => void): Promise<T | undefined> {
     ensureDialogStyles()
     const dialog = createElement(document.body, 'dialog', options.classes || [], '', {
         padding: '0', display: 'flex', flexDirection: 'column', resize: 'both', ...(options.style || {})
@@ -99,11 +99,11 @@ export function showDialog<T>(title: string, content: string | HTMLElement | und
     return promise
 }
 
-export function showInDialog(title: string, content: string|HTMLElement, actions: string[] | Record<string, ButtonAction> = ['Close']) {
+export function showInDialog(title: string, content: string|HTMLElement, actions: string[] | Record<string, ButtonAction> = ['Close']): Promise<unknown> {
     return showDialog(title, content, { actions, softDismissable: false })
 }
 
-export function showInfo(title: string, content: string) {
+export function showInfo(title: string, content: string): Promise<unknown> {
     const main = createElement(null, 'pre', [], content, { maxWidth: '800px' })
     return showDialog(title, main, { actions: ['Close'] })
 }

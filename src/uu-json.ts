@@ -17,6 +17,11 @@ export type JsonViewerOptions = {
 }
 export type InformationExtractor = (obj: object) => HTMLElement | Promise<HTMLElement>
 export type EntityParser = (path: string[], value: any) => EntityRenderer|undefined
+export type CodeMirrorJsonEditor = {
+    div: HTMLDivElement
+    getValue: () => string
+    setValue: (text: string) => void
+}
 
 let informationExtractor: InformationExtractor | null = null
 let globalEntityParser: EntityParser | null = null
@@ -69,7 +74,7 @@ export function showGeneralText(title: string, content: string) {
     })
 }
 
-export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewerOptions = {}) {
+export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewerOptions = {}): Promise<HTMLDivElement> {
     const modules = await callAsyncFunctionWithProgress(loadCodeMirrorModules)
     const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap, keymap, foldGutter, foldKeymap } = modules
     const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '100%', overflow: 'hidden' })
@@ -129,7 +134,7 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
     return parent
 }
 
-export async function createCodeMirrorJsonEditor(initialText: string) {
+export async function createCodeMirrorJsonEditor(initialText: string): Promise<CodeMirrorJsonEditor> {
     const { EditorState, EditorView, lineNumbers, syntaxHighlighting, defaultHighlightStyle, json } = await callAsyncFunctionWithProgress(loadCodeMirrorModules)
     const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '400px', overflow: 'hidden' })
     const state = EditorState.create({

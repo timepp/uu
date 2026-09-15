@@ -86,7 +86,7 @@ function aggregateDate(values: InsightValue[], unit: DateUnit) {
     return [...buckets].map(([bucket, count]) => ({value: dateLabel(bucket, unit), count, _sortValue: bucket}))
 }
 
-export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValueClick?: DataInsightValueClickCallback) {
+export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValueClick?: DataInsightValueClickCallback): Promise<HTMLDivElement> {
     const root = createElement(null, 'div')
     const controls = createElement(root, 'div', ['d-flex', 'flex-wrap', 'gap-2', 'align-items-end', 'mb-2'])
     const chartHost = createElement(root, 'div', ['border', 'border-light-subtle', 'rounded', 'p-2'])

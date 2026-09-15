@@ -22,7 +22,7 @@ export class DraggableSortedContainer {
         this.render()
     }
 
-    getStrings(items: string[] = []) {
+    getStrings(items: string[] = []): string[] {
         items.length = 0
         items.push(...this.items)
         return items

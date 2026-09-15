@@ -19,7 +19,7 @@ import type { FieldEditOption } from './uu-input.ts'
  * ], '%')
  * ```
  */
-export function createSizeBar(parent: HTMLElement | null, parts: {name: string, value: number, color?: string}[], unit = '') {
+export function createSizeBar(parent: HTMLElement | null, parts: {name: string, value: number, color?: string}[], unit = ''): HTMLDivElement {
     const container = createElement(parent, 'div', ['d-flex', 'flex-column', 'gap-2'])
     
     const total = parts.reduce((sum, part) => sum + part.value, 0)
@@ -79,7 +79,7 @@ export function createSizeBar(parent: HTMLElement | null, parts: {name: string, 
     return container
 }
 
-export function createDataArea<T extends object>(parent: HTMLElement | null, title: string, params: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, renderer: (params: T) => Promise<HTMLElement>) {
+export function createDataArea<T extends object>(parent: HTMLElement | null, title: string, params: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, renderer: (params: T) => Promise<HTMLElement>): HTMLDivElement {
     const div = createElement(parent, 'div', ['d-flex', 'flex-column', 'border', 'border-light-subtle', 'p-2'])
     // div.style.backgroundColor = tu.stringToColor(title, 100, 97)
     const ia = createInputArea(div, params, fieldOptions, 'bar')

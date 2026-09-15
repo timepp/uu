@@ -1,7 +1,7 @@
 import { loadFontAwesomeStylesheet } from './uu-dependencies.ts'
 import { getUURuntimeState, registerDomResource, registerModule, setDependencyState } from './uu-runtime-state.ts'
 
-export function enableFontAwesome(cdnUrl?: string) {
+export function enableFontAwesome(cdnUrl?: string): HTMLLinkElement {
     setDependencyState('font-awesome', 'loading')
     try {
         const link = loadFontAwesomeStylesheet(cdnUrl)
@@ -14,7 +14,7 @@ export function enableFontAwesome(cdnUrl?: string) {
     }
 }
 
-export function ensureFontAwesome() {
+export function ensureFontAwesome(): HTMLLinkElement | undefined {
     if (typeof document === 'undefined') return
 
     const existing = document.querySelector<HTMLLinkElement>('link[data-uu-dependency="font-awesome"]')

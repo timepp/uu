@@ -156,18 +156,18 @@ export class PropertyFilter<T extends object> {
         this.render()
     }
 
-    getFilteredItems(items = this.items) {
+    getFilteredItems(items = this.items): T[] {
         return this.applyFiltersExcept(items)
     }
 
-    getSummary() {
+    getSummary(): string[] {
         return this.state.properties
             .map(property => [property, this.getSelectedValues(property)] as const)
             .filter(([, values]) => values.length > 0)
             .map(([property, values]) => `${property}: ${values.join('+')}`)
     }
 
-    getState() {
+    getState(): PropertyFilterState {
         return this.state
     }
 

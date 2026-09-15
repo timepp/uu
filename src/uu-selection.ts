@@ -18,7 +18,7 @@ export type SelectOption = {
 
 export type SelectionItem = AnnotatedString | string
 
-export function showSelection(title: string, options: SelectionItem[], cfg: Partial<SelectOption> = {}) {
+export function showSelection(title: string, options: SelectionItem[], cfg: Partial<SelectOption> = {}): Promise<string[] | undefined> {
     return showDialog<string[]>(title, undefined, {
         classes: [], style: {width: '80vw', ...cfg.dlgStyle}, actions: ['OK', 'Cancel'], softDismissable: true
     }, (elements, finish) => {
@@ -94,7 +94,7 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
     })
 }
 
-export async function chooseOne(data: (string|AnnotatedString)[]) {
+export async function chooseOne(data: (string|AnnotatedString)[]): Promise<string | undefined> {
     const result = await showSelection('Please choose one item', data, {pickAndClose: true, showStatus: false, showToolbar: false})
     return result?.[0]
 }

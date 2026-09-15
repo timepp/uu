@@ -32,6 +32,29 @@ export type InputElementOld = string | {
     onClick?: (params: Record<string, string>) => HTMLElement | Promise<HTMLElement> | void
 }
 
+export type InputPanel = {
+    element: HTMLElement
+    getValues: () => Record<string, string | string[]>
+}
+
+export type InputArea<T extends object> = {
+    element: HTMLElement
+    getValues: () => T
+}
+
+export type OldInputArea = {
+    div: HTMLDivElement
+    inputs: Record<string, HTMLInputElement>
+    buttons: Record<string, HTMLButtonElement>
+    selects: Record<string, HTMLSelectElement>
+}
+
+export type AutofillInput = {
+    ig: HTMLDivElement
+    input: HTMLInputElement
+    button: HTMLButtonElement | null
+}
+
 type InputHistory = {
     // panel history
     panelHistory: {
@@ -45,7 +68,7 @@ type InputHistory = {
     }[]>
 }
 
-export function createInputPanel(parent: HTMLElement | null, elements: InputElement[], style: 'table' | 'bar' = 'table', name = '') {
+export function createInputPanel(parent: HTMLElement | null, elements: InputElement[], style: 'table' | 'bar' = 'table', name = ''): InputPanel {
     const appendHistory = (arr: { value: string, timestamp: number }[], value: string, maxSize: number) => {
         // remove existing entry first
         const existingIndex = arr.findIndex(entry => entry.value === value)
@@ -333,7 +356,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
     }
 }
 
-export async function showInputDlg(title: string, elements: InputElement[]) {
+export async function showInputDlg(title: string, elements: InputElement[]): Promise<Record<string, string | string[]> | null> {
     const panel = createInputPanel(null, elements)
     panel.element.style.minWidth = '50vw'
     const result = await showDialog(title, panel.element, {
@@ -406,7 +429,7 @@ function parseValue(value: string | string[], originalValue: any): any {
  * @param style display style ('table' or 'bar')
  * @returns an object containing the html element and a function to get the current values
  */
-export function createInputArea<T extends object>(parent: HTMLElement | null, obj: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, style: 'table' | 'bar' = 'table', name = '') {
+export function createInputArea<T extends object>(parent: HTMLElement | null, obj: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, style: 'table' | 'bar' = 'table', name = ''): InputArea<T> {
     const elements: InputElement[] = []
     
     for (const key in obj) {
@@ -457,7 +480,7 @@ export async function showInputDialog<T extends object>(title: string, obj: T, f
 }
 
 
-export async function showConfirmationDialog(title: string, text: string) {
+export async function showConfirmationDialog(title: string, text: string): Promise<boolean> {
     const r = await showDialog(title, text, {
         style: { width: '400px' },
         softDismissable: false,
@@ -471,7 +494,7 @@ export type InputField = {
     initialValue?: string,
     multiLine?: boolean
 }
-export function showInputDialogOld(title: string, fields: InputField[]) {
+export function showInputDialogOld(title: string, fields: InputField[]): Promise<string[] | undefined> {
     return showDialog<string[]>(title, undefined, {
         classes: [],
         style: {width: '50vw'},
@@ -506,7 +529,7 @@ export function showInputDialogOld(title: string, fields: InputField[]) {
     })
 }
 
-export async function prompt(title: string, tip: string | HTMLElement, initialValue?: string) {
+export async function prompt(title: string, tip: string | HTMLElement, initialValue?: string): Promise<string | undefined> {
     return showDialog<string>(title, undefined, {
         classes: [],
         style: {width: '50vw'},
@@ -529,7 +552,7 @@ export async function prompt(title: string, tip: string | HTMLElement, initialVa
     })
 }
 
-export async function promptMultiline(title: string, tip: string | HTMLElement, initialValue?: string) {
+export async function promptMultiline(title: string, tip: string | HTMLElement, initialValue?: string): Promise<string | undefined> {
     return showDialog<string>(title, undefined, {
         classes: [],
         style: {width: '50vw'},
@@ -556,7 +579,7 @@ export type Input = {
 /**
  * Simple form: createInputAreaOld(parent, 'input:name Name | input:age Age | button:search Search')
  */
-export function createInputAreaOld(parent: Element|null, elements: string | Input[]) {
+export function createInputAreaOld(parent: Element|null, elements: string | Input[]): OldInputArea {
     if (typeof elements === 'string') {
         // schema in the string: input:user User Name | input:age | button:search
         const parts = elements.split('|').map(p => p.trim())
@@ -607,7 +630,7 @@ export function createInputAreaOld(parent: Element|null, elements: string | Inpu
     return { div, inputs, buttons, selects }
 }
 
-export function createDataAreaOld(parent: Element|null, foldable: boolean, params: InputElementOld[]) {
+export function createDataAreaOld(parent: Element|null, foldable: boolean, params: InputElementOld[]): HTMLDivElement {
     const div = createElement(parent, 'div', ['border', 'border-light-subtle', 'mb-2'])
     const regulatedParams = params.map(p => (typeof p === 'string')? { name: p } : p)
     const inputArea = createElement(div, 'div', ['p-1', 'd-flex', 'gap-2', 'overflow-auto'])
@@ -654,7 +677,7 @@ export function createDataAreaOld(parent: Element|null, foldable: boolean, param
 /**
  * Given an user provided handler: create input controls, handle user interactions, and show result area.
  */
-export function createInputAction(title: string, actionName: string, valueId: string, handler: (value: string) => Promise<HTMLElement>, value?: string) {
+export function createInputAction(title: string, actionName: string, valueId: string, handler: (value: string) => Promise<HTMLElement>, value?: string): HTMLDivElement {
     const div = createElement(null, 'div', ['border', 'border-light-subtle', 'rounded'])
     const resultArea = createElement(null, 'div', ['mt-2', 'p-1'])
     const {ig, input, button} = createAutofillInput(title, '', '', valueId, async v => {
@@ -670,7 +693,7 @@ export function createInputAction(title: string, actionName: string, valueId: st
     return div
 }
 
-export function createAutofillInput(title: string, placeholder: string, initialValue: string, valueId = title, handler?: (value: string) => void, btn?: string) {
+export function createAutofillInput(title: string, placeholder: string, initialValue: string, valueId = title, handler?: (value: string) => void, btn?: string): AutofillInput {
     const ig = createElement(null, 'div', ['input-group'])
     const label = createElement(ig, 'label', ['input-group-text'], title, {minWidth: '100px'})
     const input = createElement(ig, 'input', ['form-control'], '', {}, {placeholder})

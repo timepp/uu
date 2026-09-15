@@ -1,7 +1,7 @@
 import { createButton, createElement } from './uu-dom.ts'
 import { registerDomResource, registerModule, unregisterDomResource } from './uu-runtime-state.ts'
 
-export async function asyncGet<T>(fn: () => T) {
+export async function asyncGet<T>(fn: () => T): Promise<T> {
     await new Promise(resolve => setTimeout(resolve, 100))
     return fn()
 }

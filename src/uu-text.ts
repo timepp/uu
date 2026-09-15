@@ -2,7 +2,7 @@ import { getJsonRegexps, getStringFoldingIndicator, segmentByRegex } from './tu.
 import { createElement, syncDisplay } from './uu-dom.ts'
 import { showDialog } from './uu-dialog.ts'
 
-export function highlightText(text: string, rules: [RegExp, string][]) {
+export function highlightText(text: string, rules: [RegExp, string][]): HTMLSpanElement[] {
     return segmentByRegex(text, rules).map(part => {
         const span = createElement(null, 'span', [], part.content)
         if (part.category) span.style.color = part.category
@@ -10,7 +10,7 @@ export function highlightText(text: string, rules: [RegExp, string][]) {
     })
 }
 
-export function createJsonView(content: string, customColors: [RegExp, string][] = []) {
+export function createJsonView(content: string, customColors: [RegExp, string][] = []): HTMLPreElement {
     const pre = createElement(null, 'pre', [], '', { overflowX: 'wrap', whiteSpace: 'pre-wrap', wordWrap: 'break-word' })
     for (const part of segmentByRegex(content, [...customColors, ...getJsonRegexps()])) {
         const span = createElement(pre, 'span', [], part.content, { wordWrap: 'break-word', whiteSpace: 'pre-wrap' })
@@ -28,13 +28,13 @@ export function createJsonView(content: string, customColors: [RegExp, string][]
     return pre
 }
 
-export function createLargeJsonView(content: string) {
+export function createLargeJsonView(content: string): HTMLPreElement {
     const main = createElement(null, 'pre')
     main.append(...highlightText(content, [[/"[^"]+":/g, 'blue'], [/…[0-9]+ more (chars|items)…/g, 'red']]))
     return main
 }
 
-export function createFoldedString(content: string, maxLength: number) {
+export function createFoldedString(content: string, maxLength: number): HTMLSpanElement | HTMLDivElement {
     if (content.length <= maxLength) return createElement(null, 'span', [], content)
     const folding = getStringFoldingIndicator(content.length, maxLength)
     const sideLength = Math.floor((content.length - folding.foldedLength) / 2)

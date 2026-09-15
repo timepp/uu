@@ -3,7 +3,7 @@ import { createElement } from './uu-dom.ts'
 
 export type VisualizeObjectConfig<T extends object> = Record<string, never>
 
-export function visualizeObject(obj: object, _cfg: Partial<VisualizeObjectConfig<any>> = {}) {
+export function visualizeObject(obj: object, _cfg: Partial<VisualizeObjectConfig<any>> = {}): HTMLTableElement {
     const table = createElement(null, 'table', ['table', 'table-bordered'])
     const tbody = createElement(table, 'tbody')
     for (const prop of dataProperties([obj])) {

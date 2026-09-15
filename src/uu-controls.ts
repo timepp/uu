@@ -2,7 +2,21 @@ import { createObservableState, stringToColor } from './tu.ts'
 import { createCheckBtn, createElement, createLoadingSpinner, fa } from './uu-dom.ts'
 import { registerDomResource, registerModule, unregisterDomResource } from './uu-runtime-state.ts'
 
-export function createSelector(parent: HTMLElement | null, options: string[], onChange: (value: string[]) => void, multiSelect = false, initialValue: string[] = []) {
+export type SelectorControl = {
+    element: HTMLDivElement
+    getSelected: () => string[]
+    setSelected: (values: string[]) => void
+}
+
+export type FoldableArea = {
+    div: HTMLDivElement
+    header: HTMLDivElement
+    body: HTMLDivElement
+    toggleBtn: HTMLButtonElement
+    refreshBtn: HTMLButtonElement
+}
+
+export function createSelector(parent: HTMLElement | null, options: string[], onChange: (value: string[]) => void, multiSelect = false, initialValue: string[] = []): SelectorControl {
     const div = createElement(parent, 'div', ['d-flex', 'flex-wrap', 'gap-1'])
     const btns = options.map(o => {
         const btn = createCheckBtn(div, [], o, stringToColor(o, 100, 90), initialValue.includes(o))
@@ -72,7 +86,7 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
 
 export type ContentProvider = HTMLElement | ((refresh: boolean) => HTMLElement) | ((refresh: boolean) => Promise<HTMLElement>)
 
-export function createFoldableArea(parent: Element | null, title: string, content?: ContentProvider, initiallyFolded = true) {
+export function createFoldableArea(parent: Element | null, title: string, content?: ContentProvider, initiallyFolded = true): FoldableArea {
     const div = createElement(parent, 'div', ['card', 'mb-2', 'mt-2'])
     const header = createElement(div, 'div', ['card-header', 'd-flex', 'justify-content-between', 'align-items-center'], '', {cursor: 'pointer'})
     createElement(header, 'span', [], title)

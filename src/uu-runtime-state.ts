@@ -111,7 +111,7 @@ function createRuntimeState(): UURuntimeState {
 
 const fallbackState = createRuntimeState()
 
-export function getUURuntimeState() {
+export function getUURuntimeState(): UURuntimeState {
     if (typeof window === 'undefined') return fallbackState
     const uuWindow = window as UUWindow
     if (!uuWindow.timepp_uu_state) {
@@ -125,7 +125,7 @@ export function getUURuntimeState() {
     return uuWindow.timepp_uu_state!
 }
 
-export function registerModule(name: string, status: UUModuleStatus = 'ready') {
+export function registerModule(name: string, status: UUModuleStatus = 'ready'): UUModuleRuntimeState {
     const modules = getUURuntimeState().modules
     return modules[name] ||= { status, initializedAt: Date.now(), values: {} }
 }
@@ -139,7 +139,7 @@ export function setDependencyState(name: string, status: UUDependencyStatus, err
     getUURuntimeState().dependencies[name] = { status, updatedAt: Date.now(), ...(error === undefined ? {} : { error }) }
 }
 
-export function registerDomResource(element: Element, owner: string, kind: string, selector?: string, stableId?: string) {
+export function registerDomResource(element: Element, owner: string, kind: string, selector?: string, stableId?: string): string {
     const state = getUURuntimeState()
     const id = stableId || `${owner}:${kind}:${++state.counters.dom}`
     const reference = new WeakRef(element)
@@ -177,7 +177,7 @@ function storageEntry(key: string, owner: string) {
     return storage[key]
 }
 
-export function readLocalStorage(key: string, owner: string) {
+export function readLocalStorage(key: string, owner: string): string | null {
     const entry = storageEntry(key, owner)
     entry.reads++
     entry.updatedAt = Date.now()

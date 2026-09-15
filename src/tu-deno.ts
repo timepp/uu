@@ -11,7 +11,7 @@ export class DenoFileCacheStorage implements tuc.CacheStorage {
     private getPath(location: string[]) {
         return [this.baseDir, ...location].join('/') + this.fileExt
     }
-    async getItem(location: string[]) {
+    async getItem(location: string[]): Promise<string | null> {
         const path = this.getPath(location)
         try {
             const data = await Deno.readTextFile(path)
@@ -39,7 +39,7 @@ export class DenoFileCacheStorage implements tuc.CacheStorage {
     }
 }
 
-export function createDenoCachedCaller(baseDir?: string, fileExt?: string) {
+export function createDenoCachedCaller(baseDir?: string, fileExt?: string): tuc.CachedCaller {
     const storage = new DenoFileCacheStorage(baseDir, fileExt)
     return new tuc.CachedCaller(storage)
 }

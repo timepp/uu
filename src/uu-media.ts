@@ -2,7 +2,12 @@ import { loadChartJs, loadMarkdownIt } from './uu-dependencies.ts'
 import { createElement } from './uu-dom.ts'
 import { callAsyncFunctionWithProgress } from './uu-progress.ts'
 
-export async function createMarkdownViewer(markdownText: string) {
+export type ChartResult = {
+	canvas: HTMLCanvasElement
+	chart: any
+}
+
+export async function createMarkdownViewer(markdownText: string): Promise<HTMLDivElement> {
 	const { default: markdownIt } = await callAsyncFunctionWithProgress(loadMarkdownIt, 'Loading Markdown-It module...')
 	const markdown = markdownIt({ html: false, linkify: true, typographer: true, breaks: true })
 	const container = createElement(null, 'div')
@@ -14,7 +19,7 @@ export async function createMarkdownViewer(markdownText: string) {
 	return container
 }
 
-export async function createChart(parent: HTMLElement, width: string, height: string, config: any) {
+export async function createChart(parent: HTMLElement, width: string, height: string, config: any): Promise<ChartResult> {
 	const chartJsModule = await callAsyncFunctionWithProgress(loadChartJs, 'Loading Chart.js...')
 	const wrapper = createElement(parent, 'div', [], '', { height, width, maxWidth: '100%' })
 	const canvas = createElement(wrapper, 'canvas')

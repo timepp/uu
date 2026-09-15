@@ -6,7 +6,16 @@ export type AnnotatedString = {
     comment?: string
 }
 
-export function fa(...classNames: string[]) {
+export type CheckControl = { btn: HTMLLabelElement, checkbox: HTMLInputElement }
+export type CheckButtonControl = { div: HTMLDivElement, checkbox: HTMLInputElement }
+export type TableElements = {
+    tbl: HTMLTableElement
+    thead: HTMLTableSectionElement
+    headCells: HTMLTableCellElement[]
+    tbody: HTMLTableSectionElement
+}
+
+export function fa(...classNames: string[]): HTMLElement {
     ensureFontAwesome()
     return createElement(null, 'i', ['fa', ...classNames])
 }
@@ -18,7 +27,7 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
     child?: string|HTMLElement,
     style: Partial<CSSStyleDeclaration> = {},
     attributes: Partial<Record<keyof HTMLElementTagNameMap[K], any>> = {}
-) {
+): HTMLElementTagNameMap[K] {
     const element = document.createElement(tagName)
     if (classes.length > 0) element.classList.add(...classes.filter(c => c))
     if (parent) parent.appendChild(element)
@@ -35,13 +44,13 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
     return element
 }
 
-export function createButton(parent: Element | null, classes: string[] = [], child: string|HTMLElement, onclick = () => {}) {
+export function createButton(parent: Element | null, classes: string[] = [], child: string|HTMLElement, onclick = () => {}): HTMLButtonElement {
     const button = createElement(parent, 'button', classes, child)
     button.onclick = onclick
     return button
 }
 
-export function createCheck(parent: Element | null, classes: string[] = [], labelText: string, checked = false, onChange = (checked: boolean) => {}) {
+export function createCheck(parent: Element | null, classes: string[] = [], labelText: string, checked = false, onChange = (checked: boolean) => {}): CheckControl {
     const btn = createElement(parent, 'label', ['btn', 'd-flex', 'align-items-center', ...classes])
     const checkbox = createElement(btn, 'input', ['me-2'], '', {}, {type: 'checkbox'})
     checkbox.style.marginTop = '0'
@@ -51,7 +60,7 @@ export function createCheck(parent: Element | null, classes: string[] = [], labe
     return { btn, checkbox }
 }
 
-export function createCheckBtn(parent: Element | null, classes: string[] = [], labelText: string, accentColor?: string, checked = false, onChange = (checked: boolean) => {}) {
+export function createCheckBtn(parent: Element | null, classes: string[] = [], labelText: string, accentColor?: string, checked = false, onChange = (checked: boolean) => {}): CheckButtonControl {
     const div = createElement(parent, 'div', ['input-group', 'w-auto', ...classes])
     div.style.cursor = 'pointer'
     const label = createElement(div, 'label', ['input-group-text'], '', {userSelect: 'none'})
@@ -71,7 +80,7 @@ export function createCheckBtn(parent: Element | null, classes: string[] = [], l
     return { div, checkbox }
 }
 
-export function createTable(parent: Element|null, props: string[] = [], classes: string[] = [], styles: Partial<CSSStyleDeclaration> = {}) {
+export function createTable(parent: Element|null, props: string[] = [], classes: string[] = [], styles: Partial<CSSStyleDeclaration> = {}): TableElements {
     const tbl = createElement(parent, 'table', classes, '', styles)
     const thead = createElement(tbl, 'thead')
     const tr = createElement(thead, 'tr')
@@ -94,11 +103,11 @@ export function hideAll(collection: NodeListOf<HTMLElement>) {
     collection.forEach(element => element.style.display = 'none')
 }
 
-export function rgbValue(obj: {r: number, g: number, b: number}) {
+export function rgbValue(obj: {r: number, g: number, b: number}): string {
     return `rgb(${obj.r}, ${obj.g}, ${obj.b})`
 }
 
-export function getStringColor(str: string, s = 100, l = 90) {
+export function getStringColor(str: string, s = 100, l = 90): string {
     return `hsl(${simpleHash(str) % 360}, ${s}%, ${l}%)`
 }
 
@@ -122,13 +131,13 @@ export function syncChildDisplay(parent: HTMLElement, childSelector: string, vis
     parent.querySelectorAll<HTMLElement>(childSelector).forEach(child => syncDisplay(child, visible))
 }
 
-export function createButtonGroup(parent: Element | null, buttons: Record<string, () => void>) {
+export function createButtonGroup(parent: Element | null, buttons: Record<string, () => void>): HTMLDivElement {
     const div = createElement(parent, 'div', ['btn-group'])
     for (const [name, action] of Object.entries(buttons)) createButton(div, ['btn', 'btn-outline-secondary'], name, action)
     return div
 }
 
-export function createToggleBar(values: (string|HTMLElement)[], value: number, onNewValue: (value: number) => void) {
+export function createToggleBar(values: (string|HTMLElement)[], value: number, onNewValue: (value: number) => void): HTMLDivElement {
     const div = createElement(null, 'div', ['btn-group'])
     const buttons: HTMLButtonElement[] = []
     const updateUI = (selectedIndex: number) => buttons.forEach((button, index) => {
@@ -148,7 +157,7 @@ export function createToggleBar(values: (string|HTMLElement)[], value: number, o
     return div
 }
 
-export function createLoadingSpinner(parent: Element | null, size = '2rem', color = 'primary') {
+export function createLoadingSpinner(parent: Element | null, size = '2rem', color = 'primary'): HTMLDivElement {
     const loadingDiv = createElement(parent, 'div', ['d-flex', 'justify-content-center', 'align-items-center', 'p-3'])
     const spinner = createElement(loadingDiv, 'div', ['spinner-border', `text-${color}`], '', { width: size, height: size })
     spinner.setAttribute('role', 'status')

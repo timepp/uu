@@ -113,7 +113,7 @@ export type VisualizeConfig<T extends object> = {
     onPropertyValueClick: (prop: string, value: string) => void
 }
 
-export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}) {
+export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}): HTMLDivElement {
     if (arr.length === 0) {
         return createElement(null, 'div', ['alert', 'alert-info', 'mb-0'], 'Data is empty.')
     }

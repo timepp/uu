@@ -49,7 +49,7 @@ export class Pager {
         this.totalItems = totalItems
     }
 
-    getPageRange(page: number) {
+    getPageRange(page: number): { startIndex: number, endIndex: number } {
         const startIndex = this.pageSize === Infinity ? 0 : page * this.pageSize
         const endIndex = Math.min(startIndex + this.pageSize, this.totalItems)
         return { startIndex, endIndex }
@@ -78,7 +78,7 @@ export class Pager {
         this.gotoPage(this.currentPage)
     }
 
-    getElement() {
+    getElement(): HTMLElement {
         return this.toolbar
     }
 }
