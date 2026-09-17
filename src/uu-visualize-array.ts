@@ -4,8 +4,7 @@ import {
     createElement, 
     fa, 
     createToggleBar, 
-    syncExistence, 
-    createButton
+    syncExistence
 } from './uu-dom.ts'
 import { showJsonResult } from './uu-json.ts'
 import { createFoldedString } from './uu-text.ts'
@@ -16,6 +15,7 @@ import { Pager } from './uu-pager.ts'
 import { prompt } from './uu-input.ts'
 import { showSelection } from './uu-selection.ts'
 import { PropertyFilter } from './uu-propfilter.ts'
+import { DraggableSortedContainer } from './uu-dnd.ts'
 
 export type PropRenderOption<T extends object> = {
     formatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement
@@ -129,7 +129,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
-    const fromArrow = (s: string) => s === '⬆️' ? 'asc' : 'desc'
     const renderStyles = cfg.renderStyles || ['table', 'tile', 'wall']
     const rawIndexProp = cfg.rawIndexProp ?? '#'
     const actionProp = cfg.actionProp ?? '(Actions)'
@@ -139,6 +138,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     // persist state
     const state = tu.createObservableState(cfg.stateKey || null, {
         sortBy: (cfg.sortBy || []) as VisualizeConfig<T>['sortBy'],
+        randomSort: false,
         filter: cfg.filter || '',
         pageSize: cfg.pageSize,
         renderStyle: renderStyles[0],
@@ -649,7 +649,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const igSort = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
     const sortBtn = createElement(igSort, 'button', ['btn', 'btn-outline-secondary'], fa('fa-sort'))
     const sortHint = createElement(igSort, 'span', ['input-group-text'])
-    const randomSortBtn = createButton(igSort, ['btn', 'btn-outline-secondary'], fa('fa-random'))
     const igFiler = createElement(toolbar, 'div', ['input-group', 'flex-grow-1'])
     const filter = createElement(igFiler, 'input', ['form-control'], '')
     const filterHint = createElement(igFiler, 'span', ['input-group-text'], fa('fa-filter'))
@@ -746,10 +745,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     function applySort() {
         // update sort hint
         const sortBy = state.sortBy || []
-        sortHint.textContent = `${sortBy.map(s => `${s.prop} ${toArrow(s.order)}`).join(', ')}`
+        sortHint.textContent = state.randomSort ? 'Random' : `${sortBy.map(s => `${s.prop} ${toArrow(s.order)}`).join(', ')}`
 
         // sort the table rows
-        if (sortBy.length > 0) {
+        if (state.randomSort) {
+            tu.shuffleArray(data)
+        } else if (sortBy.length > 0) {
             data.sort((a, b) => {
                 for (const s of sortBy) {
                     const aValue = getPropValue(a.item, s.prop, a.index)
@@ -791,7 +792,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         syncExistence(igPropSelector, showPropSelector)
         syncExistence(sortBtn, showSortButton)
         syncExistence(sortHint, showSortButton)
-        syncExistence(randomSortBtn, showSortButton)
         syncExistence(filter, showFilter)
         syncExistence(filterHint, showFilter)
         syncExistence(counts, showFilter)
@@ -825,25 +825,89 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         gotoPage(pager.currentPage)
     }
 
-    sortBtn.onclick = async () => {
-        // construct all properties
-        const allOptions = allPropsWithRaw.map(p => [`${p} ${toArrow('asc')}`, `${p} ${toArrow('desc')}`]).flat()
-        const sortOptions = state.sortBy?.map(s => `${s.prop} ${toArrow(s.order)}`)
-        const checker = (oldSelection: string[], newSelection: string[]) => {
-            if (newSelection.length > oldSelection.length) {
-                // a new sort is added, we will make sure to remove old duplicates if there is
-                const item = newSelection[newSelection.length - 1]
-                const key = item.split(' ')[0]
-                return oldSelection.filter(s => s.split(' ')[0] !== key).concat([item])
+    function showSortDialog() {
+        type SortSetting = VisualizeConfig<T>['sortBy'][number]
+        type SortResult = { sortBy: SortSetting[], randomSort: boolean }
+        return showDialog<SortResult>('Sort By', undefined, {
+            actions: ['Random', 'OK', 'Cancel'],
+            softDismissable: true,
+            style: { width: '80vw' }
+        }, (elements, finish) => {
+            let sortBy = (state.sortBy || []).map(setting => ({ ...setting }))
+            let randomSort = state.randomSort
+            const container = createElement(elements.contentArea, 'div', ['d-flex', 'flex-column'])
+            const statusBar = createElement(container, 'div', ['form-control', 'd-flex', 'align-items-center'])
+            createElement(statusBar, 'span', ['me-2', 'text-primary'], 'Sort:')
+            const selectedItems = new DraggableSortedContainer(statusBar, {
+                emptyText: '(none)',
+                showOrder: true,
+                interactive: true,
+                removable: false,
+                onChange: labels => {
+                    const previous = sortBy
+                    sortBy = labels
+                        .map(label => previous.find(setting => sortLabel(setting) === label))
+                        .filter((setting): setting is SortSetting => setting !== undefined)
+                    updateUI()
+                }
+            })
+            const toolbar = createElement(container, 'div', ['input-group', 'my-2'])
+            const filter = createElement(toolbar, 'input', ['form-control'], '', {}, { placeholder: 'Filter' })
+            const properties = createElement(container, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'p-2'])
+            const propertyButtons = new Map<string, { button: HTMLButtonElement, order: HTMLElement }>()
+            const sortLabel = (setting: SortSetting) => `${setting.prop} ${toArrow(setting.order)}`
+
+            function updateUI() {
+                selectedItems.setStrings(sortBy.map(sortLabel))
+                for (const [prop, elements] of propertyButtons) {
+                    const setting = sortBy.find(item => item.prop === prop)
+                    elements.button.classList.toggle('btn-primary', !!setting)
+                    elements.button.classList.toggle('btn-outline-secondary', !setting)
+                    elements.order.textContent = setting ? toArrow(setting.order) : ''
+                }
+                const randomButton = elements.buttons['Random']
+                randomButton.classList.toggle('btn-warning', randomSort)
+                randomButton.classList.toggle('btn-outline-secondary', !randomSort)
+                randomButton.replaceChildren(fa('fa-random'), document.createTextNode(` Random: ${randomSort ? 'On' : 'Off'}`))
             }
-            return newSelection
-       }
-        const r = await showSelection('Sort By', allOptions, {showOrder: true, initialSelection: sortOptions, checker})
-        if (r === undefined) return
-        state.sortBy = r.map(s => {
-            const [prop, order] = s.split(' ')
-            return {prop, order: fromArrow(order) as 'asc' | 'desc'}
+
+            for (const prop of allPropsWithRaw) {
+                const button = createElement(properties, 'button', ['btn', 'btn-outline-secondary', 'd-inline-flex', 'align-items-center', 'gap-1'], '', {
+                    minWidth: '100px'
+                }) as HTMLButtonElement
+                createElement(button, 'span', [], prop)
+                const order = createElement(button, 'span', [], '', { minWidth: '1.5em' })
+                propertyButtons.set(prop, { button, order })
+                button.onclick = () => {
+                    const index = sortBy.findIndex(setting => setting.prop === prop)
+                    if (index < 0) sortBy.push({ prop, order: 'asc' })
+                    else if (sortBy[index].order === 'asc') sortBy[index] = { prop, order: 'desc' }
+                    else sortBy.splice(index, 1)
+                    updateUI()
+                }
+            }
+            filter.oninput = () => {
+                const value = filter.value.toLowerCase()
+                for (const [prop, elements] of propertyButtons) {
+                    elements.button.style.display = prop.toLowerCase().includes(value) ? '' : 'none'
+                }
+            }
+            elements.buttons['Random'].onclick = () => {
+                randomSort = !randomSort
+                updateUI()
+            }
+            elements.buttons['OK'].onclick = () => finish({ sortBy, randomSort })
+            elements.buttons['Cancel'].onclick = () => finish()
+            updateUI()
+            try { filter.focus({ preventScroll: true }) } catch { filter.focus() }
         })
+    }
+
+    sortBtn.onclick = async () => {
+        const r = await showSortDialog()
+        if (r === undefined) return
+        state.sortBy = r.sortBy
+        state.randomSort = r.randomSort
         applySort()
         gotoPage(0)
     }
@@ -855,12 +919,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         propertyFilterArea.style.display = propertyFilterArea.style.display === 'none' ? '' : 'none'
     }
 
-    randomSortBtn.onclick = () => {
-        state.sortBy = []
-        tu.shuffleArray(data)
-        sortHint.textContent = `Random`
-        gotoPage(0)
-    }
     filter.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             const v = filter.value
