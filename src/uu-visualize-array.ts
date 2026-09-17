@@ -67,6 +67,9 @@ export type VisualizeConfig<T extends object> = {
     // selected items in selection order.
     multiItemActions: MultiItemActions<T>
 
+    // Whether item selection is enabled. Default: false.
+    enableSelection: boolean
+
     // If not empty, raw index will be shown in the first prop with the given prop name
     // note: this prop can be hide / sort as well
     // default: #
@@ -131,6 +134,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const rawIndexProp = cfg.rawIndexProp ?? '#'
     const actionProp = cfg.actionProp ?? '(Actions)'
     const selectedIndexes = new Set<number>()
+    const selectionElements = new Map<number, HTMLElement>()
 
     // persist state
     const state = tu.createObservableState(cfg.stateKey || null, {
@@ -383,9 +387,11 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             viewOption?.onItemClick,
             cfg.renderOption?.onItemClick
         ].filter(v => !!v) as ((item: T, dataIndex: number) => Promise<boolean|undefined>)[]
-        syncItemSelection(element, index)
-        element.style.cursor = 'pointer'
         if (onItemClickFallbackChain.length === 0) {
+            if (!(cfg.enableSelection ?? false)) return
+            selectionElements.set(index, element)
+            syncItemSelection(element, index)
+            element.style.cursor = 'pointer'
             element.onclick = evt => {
                 evt.stopPropagation()
                 const target = evt.target as Element | null
@@ -393,10 +399,13 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 if (globalThis.getSelection?.()?.toString()) return
                 if (selectedIndexes.has(index)) selectedIndexes.delete(index)
                 else selectedIndexes.add(index)
-                syncItemSelection(element, index)
+                for (const [renderedIndex, renderedElement] of selectionElements) {
+                    syncItemSelection(renderedElement, renderedIndex)
+                }
             }
             return
         }
+        element.style.cursor = 'pointer'
         element.onclick = async (evt) => {
             evt.stopPropagation()
             for (const onItemClickHandler of onItemClickFallbackChain) {
@@ -666,6 +675,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         // only visible rows falling into the current page are shown, all others are hidden
         const {startIndex, endIndex} = pager.getPageRange(page)
         console.log(`goto page ${page}, show items from ${startIndex} to ${endIndex}`)
+        selectionElements.clear()
         dataContainer.replaceChildren()
         dataContainer.appendChild(getRenderer()(startIndex, endIndex))
     }
