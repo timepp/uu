@@ -9,7 +9,9 @@ UU aims to provide the following reusable constructs for modern development:
 
 ### Without a package installation
 
-`uu` can be used directly from esm.sh
+`uu` can be used directly from esm.sh. The `/cdn` entry pins dependencies that
+must remain singletons, such as CodeMirror, so callers do not need to provide a
+long `?deps=` query.
 
 ```typescript
     const arr = [
@@ -17,7 +19,7 @@ UU aims to provide the following reusable constructs for modern development:
         {age: 22, name: 'Bob'},
         ...
     ]
-    const uu = await import('https://esm.sh/jsr/@timepp/uu@1.0.14')
+  const uu = await import('https://esm.sh/jsr/@timepp/uu@1.0.20/cdn')
     document.body.appendChild(uu.visualizeArray())
 ```
  

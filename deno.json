@@ -1,9 +1,10 @@
 {
   "name": "@timepp/uu",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "license": "MIT",
   "exports": {
     ".": "./src/uu.ts",
+    "./cdn": "./src/uu-cdn.ts",
     "./tu": "./src/tu.ts",
     "./deno": "./src/tu-deno.ts"
   },

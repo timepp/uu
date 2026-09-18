@@ -6,17 +6,40 @@ import { registerModule, registerModuleValue, setDependencyState } from './uu-ru
 export const bootstrapVersion = '5.3.8'
 export const fontAwesomeVersion = '6.4.0'
 
+type CodeMirrorModuleUrls = {
+    state: string
+    view: string
+    language: string
+    json: string
+    search: string
+}
+
+let codeMirrorModuleUrls: CodeMirrorModuleUrls | undefined
 let codeMirrorModulesPromise: Promise<any> | undefined
+export function setCodeMirrorModuleUrls(urls: CodeMirrorModuleUrls) {
+    if (codeMirrorModulesPromise) throw new Error('CodeMirror modules have already started loading')
+    codeMirrorModuleUrls = urls
+}
+
 export function loadCodeMirrorModules() {
     if (!codeMirrorModulesPromise) {
         setDependencyState('codemirror', 'loading')
-        codeMirrorModulesPromise = Promise.all([
-            import('@codemirror/state'),
-            import('@codemirror/view'),
-            import('@codemirror/language'),
-            import('@codemirror/lang-json'),
-            import('@codemirror/search')
-        ]).then(([state, view, language, json, search]) => ({
+        const modules = codeMirrorModuleUrls
+            ? Promise.all([
+                import(codeMirrorModuleUrls.state),
+                import(codeMirrorModuleUrls.view),
+                import(codeMirrorModuleUrls.language),
+                import(codeMirrorModuleUrls.json),
+                import(codeMirrorModuleUrls.search)
+            ])
+            : Promise.all([
+                import('@codemirror/state'),
+                import('@codemirror/view'),
+                import('@codemirror/language'),
+                import('@codemirror/lang-json'),
+                import('@codemirror/search')
+            ])
+        codeMirrorModulesPromise = modules.then(([state, view, language, json, search]) => ({
             EditorState: state.EditorState,
             EditorView: view.EditorView,
             lineNumbers: view.lineNumbers,
