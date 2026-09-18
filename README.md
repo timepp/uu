@@ -19,8 +19,17 @@ long `?deps=` query.
         {age: 22, name: 'Bob'},
         ...
     ]
-  const uu = await import('https://esm.sh/jsr/@timepp/uu@1.0.21/cdn')
+  const uu = await import('https://esm.sh/jsr/@timepp/uu@1.0.22/cdn')
     document.body.appendChild(uu.visualizeArray())
+```
+
+Input areas resolve initial values in this order: defaults, the most recent
+saved history, then explicitly supplied runtime parameters.
+
+```typescript
+const defaults = { query: '', limit: 20 }
+const runtimeParams = { query: 'status:active' }
+const input = uu.createInputArea(parent, defaults, {}, 'table', 'search', runtimeParams)
 ```
  
 ### With package installation

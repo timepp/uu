@@ -111,14 +111,14 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
     const valueFetchers: Record<string, () => string | string[]> = {}
     const valueSetters: Record<string, (value: any) => void> = {}
     const createInputControl = (parent: HTMLElement, element: InputElement) => {
-        const initialVal = (element.initialValue || element.defaultValue) as string
-        const initialArr = (element.initialValue || element.defaultValue) as string[]
+        const defaultVal = (element.defaultValue ?? '') as string
+        const defaultArr = (element.defaultValue ?? []) as string[]
         switch (element.type) {
             case 'single-line-string':
             case 'number':
                 {
                     const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
-                    input.value = initialVal
+                    input.value = defaultVal
                     valueFetchers[element.id] = () => input.value
                     valueSetters[element.id] = v => input.value = v
                     break
@@ -127,7 +127,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 {
                     const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
                     input.type = 'date'
-                    input.value = initialVal
+                    input.value = defaultVal
                     valueFetchers[element.id] = () => input.value
                     valueSetters[element.id] = v => input.value = v
                     break
@@ -136,7 +136,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 {
                     const textarea = createElement(parent, 'textarea', ['form-control']) as HTMLTextAreaElement
                     textarea.rows = 4
-                    textarea.value = initialVal
+                    textarea.value = defaultVal
                     valueFetchers[element.id] = () => textarea.value
                     valueSetters[element.id] = v => textarea.value = v
                     break
@@ -148,14 +148,14 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                         const opt = createElement(select, 'option', [], option) as HTMLOptionElement
                         opt.value = option
                     })
-                    select.value = initialVal
+                    select.value = defaultVal
                     valueFetchers[element.id] = () => select.value
                     valueSetters[element.id] = v => select.value = v
                     break
                 }
             case 'multi-select':
                 {
-                    const selector = createSelector(parent, element.selectOptions || [], () => {}, true, initialArr)
+                    const selector = createSelector(parent, element.selectOptions || [], () => {}, true, defaultArr)
                     valueFetchers[element.id] = () => selector.getSelected()
                     valueSetters[element.id] = v => selector.setSelected(Array.isArray(v) ? v : [])
                     break
@@ -163,7 +163,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
             case 'single-picker':
                 {
                     const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
-                    input.value = initialVal
+                    input.value = defaultVal
                     input.readOnly = true
                     input.placeholder = 'Click to select...'
                     input.style.cursor = 'pointer'
@@ -183,7 +183,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
             case 'multi-picker':
                 {
                     const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
-                    input.value = initialArr.join(', ')
+                    input.value = defaultArr.join(', ')
                     input.readOnly = true
                     input.placeholder = 'Click to select...'
                     input.style.cursor = 'pointer'
@@ -204,7 +204,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
             case 'custom':
                 {
                     const input = createElement(parent, 'span', ['form-control'])
-                    input.textContent = initialVal
+                    input.textContent = defaultVal
                     input.style.cursor = 'pointer'
                     input.onclick = async () => {
                         if (element.customInput) {
@@ -344,6 +344,11 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
     if (history.panelHistory.length > 0) {
         applyPanelHistory(history.panelHistory[history.panelHistory.length - 1].value)
     }
+    elements.forEach(element => {
+        if (element.initialValue !== undefined) {
+            valueSetters[element.id]?.(element.initialValue)
+        }
+    })
 
     const getValues = () => {
         const values: Record<string, string | string[]> = {}
@@ -427,26 +432,28 @@ function parseValue(value: string | string[], originalValue: any): any {
 /**
  * A typed input control. The passed object is used to infer types and initial values.
  * @param parent parent element
- * @param obj object with inital values
+ * @param obj object with default values
  * @param fieldOptions optional settings customizing field behavior, if needed
  * @param style display style ('table' or 'bar')
+ * @param runtimeParams values that override defaults and the most recent history
  * @returns an object containing the html element and a function to get the current values
  */
-export function createInputArea<T extends object>(parent: HTMLElement | null, obj: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, style: 'table' | 'bar' = 'table', name = ''): InputArea<T> {
+export function createInputArea<T extends object>(parent: HTMLElement | null, obj: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, style: 'table' | 'bar' = 'table', name = '', runtimeParams: Partial<T> = {}): InputArea<T> {
     const elements: InputElement[] = []
     
     for (const key in obj) {
         const value = obj[key]
         const option = fieldOptions[key] || {}
 
-        const formattedValue = formatValue(value)
+        const defaultValue = formatValue(value)
+        const hasRuntimeValue = Object.prototype.hasOwnProperty.call(runtimeParams, key)
         elements.push({
             type: option.type || inferInputType(value),
-            defaultValue: formattedValue,
+            defaultValue,
             id: String(key),
             name: option.displayName || String(key),
             selectOptions: option.selectOptions,
-            initialValue: formattedValue
+            initialValue: hasRuntimeValue ? formatValue(runtimeParams[key]) : undefined
         })
     }
 
