@@ -19,7 +19,7 @@ long `?deps=` query.
         {age: 22, name: 'Bob'},
         ...
     ]
-  const uu = await import('https://esm.sh/jsr/@timepp/uu@1.0.20/cdn')
+  const uu = await import('https://esm.sh/jsr/@timepp/uu@1.0.21/cdn')
     document.body.appendChild(uu.visualizeArray())
 ```
  
