@@ -16,6 +16,7 @@ import { prompt } from './uu-input.ts'
 import { showSelection } from './uu-selection.ts'
 import { PropertyFilter } from './uu-propfilter.ts'
 import { DraggableSortedContainer } from './uu-dnd.ts'
+import { withUI } from './uu-progress.ts'
 
 export type PropRenderOption<T extends object> = {
     formatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement
@@ -33,6 +34,11 @@ export type WallRenderOption<T extends object> = RenderOption<T> & {
     imageWidth?: string
     // Vertical gap between images in each column, default '6px'
     rowGap?: string
+}
+
+export type TileRenderOption<T extends object> = RenderOption<T> & {
+    // Style of the grid container. Values override the default tile layout.
+    containerStyle?: Partial<CSSStyleDeclaration>
 }
 
 export type RenderOption<T extends object> = {
@@ -58,7 +64,7 @@ export type VisualizeConfig<T extends object> = {
 
     renderOption: RenderOption<T>
     tableRenderOption: RenderOption<T>
-    tileRenderOption: RenderOption<T>
+    tileRenderOption: TileRenderOption<T>
     wallRenderOption: WallRenderOption<T>
     
     itemActions: ItemActions | ((item: T, dataIndex: number) => ItemActions)
@@ -185,9 +191,16 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         for (const [name, action] of Object.entries(allActions)) {
             const btn = createElement(container, 'a', ['me-2'], name)
             btn.style.cursor = 'pointer'
-            btn.onclick = event => {
+            btn.onclick = async (event) => {
                 event.stopPropagation()
-                action(item, index)
+                try {
+                    await action(item, index)
+                } catch (error) {
+                    console.error(`item action "${name}" failed`, error)
+                    const message = error instanceof Error ? error.message : String(error)
+                    const content = createElement(null, 'pre', ['text-danger', 'overflow-auto'], message)
+                    showDialog(`Error executing action "${name}"`, content)
+                }
             }
         }
         return container
@@ -522,7 +535,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const container = createElement(null, 'div', [], '', {
             display: 'grid',
             gap: '10px',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))'
+            gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))',
+            ...cfg.tileRenderOption?.containerStyle
         })
 
         for (let i = startIndex; i < endIndex; i++) {
@@ -969,7 +983,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         loadMoreBtn.onclick = async (e) => {
             e.preventDefault()
             try {
-                const moreData = await cfg.loadMore!()
+                const moreData = await withUI(() => cfg.loadMore!(), 'Loading more data...')
                 if (moreData && moreData.length > 0) {
                     // Update arr with new data
                     arr.push(...moreData)

@@ -70,15 +70,18 @@ type InputHistory = {
 
 export function createInputPanel(parent: HTMLElement | null, elements: InputElement[], style: 'table' | 'bar' = 'table', name = ''): InputPanel {
     const appendHistory = (arr: { value: string, timestamp: number }[], value: string, maxSize: number) => {
+        if (!value || maxSize <= 0) return
         // remove existing entry first
         const existingIndex = arr.findIndex(entry => entry.value === value)
         if (existingIndex !== -1) {
             arr.splice(existingIndex, 1)
         }
         // append new entry
-        if (arr.length < maxSize && value) {
-            arr.push({ value, timestamp: Date.now() })
+        // remove the oldest entry if the array exceeds the max size
+        while (arr.length >= maxSize) {
+            arr.shift()
         }
+        arr.push({ value, timestamp: Date.now() })
     }
     const loadInputHistory = () => {
         if (name) {
