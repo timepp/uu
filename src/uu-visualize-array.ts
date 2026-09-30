@@ -37,6 +37,10 @@ export type WallRenderOption<T extends object> = RenderOption<T> & {
 }
 
 export type TileRenderOption<T extends object> = RenderOption<T> & {
+    // Optional: returns content to render before the tile properties.
+    header?: (item: T) => HTMLElement
+    // Whether to hide property names in the default tile renderer. Default: false.
+    hidePropName?: boolean
     // Style of the grid container. Values override the default tile layout.
     containerStyle?: Partial<CSSStyleDeclaration>
 }
@@ -546,11 +550,14 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             if (!card) {
                 card = createElement(null, 'div', ['card', 'p-1', 'hover-effect'], '')
 
+                const header = cfg.tileRenderOption?.header?.(item)
+                if (header) card.appendChild(header)
+
                 // const cardBody = createElement(card, 'div', ['card-body', 'd-flex', 'flex-column', 'gap-2'])
                 for (const [j, prop] of getVisibleProps().entries()) {
                     if (!getPropValue(item, prop, dataIndex)) continue
                     const row = createElement(card, 'div', [])
-                    if (prop !== actionProp) {
+                    if (!cfg.tileRenderOption?.hidePropName && prop !== actionProp) {
                         createElement(row, 'span', [], `${prop}: `, { opacity: '0.35' })
                     }
                     createElement(row, 'span', [], renderPropValue(item, prop, dataIndex))

@@ -1,6 +1,6 @@
 {
   "name": "@timepp/uu",
-  "version": "1.0.22",
+  "version": "1.0.24",
   "license": "MIT",
   "exports": {
     ".": "./src/uu.ts",
