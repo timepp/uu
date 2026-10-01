@@ -26,11 +26,11 @@ export function loadCodeMirrorModules() {
         setDependencyState('codemirror', 'loading')
         const modules = codeMirrorModuleUrls
             ? Promise.all([
-                import(codeMirrorModuleUrls.state),
-                import(codeMirrorModuleUrls.view),
-                import(codeMirrorModuleUrls.language),
-                import(codeMirrorModuleUrls.json),
-                import(codeMirrorModuleUrls.search)
+                import(/* @vite-ignore */ codeMirrorModuleUrls.state),
+                import(/* @vite-ignore */ codeMirrorModuleUrls.view),
+                import(/* @vite-ignore */ codeMirrorModuleUrls.language),
+                import(/* @vite-ignore */ codeMirrorModuleUrls.json),
+                import(/* @vite-ignore */ codeMirrorModuleUrls.search)
             ])
             : Promise.all([
                 import('@codemirror/state'),
