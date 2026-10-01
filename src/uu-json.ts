@@ -44,7 +44,9 @@ export async function showJsonResult(title: string, content: string | object, pa
     const entityParser = parser || globalEntityParser ? (path: string[], value: any) => parser?.(path, value) || globalEntityParser?.(path, value) : undefined
     let stringFoldThreshold = 80
     const createViewer = () => createCodeMirrorJsonViewer(object, { stringFoldThreshold, visualizeCallback: entityParser })
-    const container = createElement(null, 'div')
+    const container = createElement(null, 'div', [], '', {
+        display: 'flex', flexDirection: 'column', flex: '1', minWidth: '0', minHeight: '0', overflow: 'hidden'
+    })
     container.append(await createViewer())
     const actions: Record<string, ButtonAction> = {
         'Fold Less': async () => {
@@ -62,7 +64,18 @@ export async function showJsonResult(title: string, content: string | object, pa
         await showInDialog('Extracted Entities', await informationExtractor!(object))
     }
     actions.Close = () => true
-    showInDialog(title, container, actions)
+    showDialog(title, container, {
+        actions,
+        softDismissable: false,
+        style: { width: '80vw', height: '80vh' }
+    }, ({ contentArea }) => {
+        Object.assign(contentArea.style, {
+            display: 'flex',
+            minWidth: '0',
+            minHeight: '0',
+            overflow: 'hidden'
+        })
+    })
 }
 
 export function showGeneralText(title: string, content: string) {
@@ -77,7 +90,9 @@ export function showGeneralText(title: string, content: string) {
 export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewerOptions = {}): Promise<HTMLDivElement> {
     const modules = await callAsyncFunctionWithProgress(loadCodeMirrorModules)
     const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap, keymap, foldGutter, foldKeymap } = modules
-    const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '100%', overflow: 'hidden' })
+    const parent = createElement(null, 'div', [], '', {
+        border: '1px solid #ddd', borderRadius: '4px', display: 'flex', flex: '1', minWidth: '0', minHeight: '0', overflow: 'hidden'
+    })
     const visualizers: {start: number, end: number, type: 'fold'|'visualizer', marker: any, render: EntityRenderer|string}[] = []
     const doc = safeStringify(obj, 2, options.stringFoldThreshold ?? 80, Infinity, false, (path, value, start, end, isTrimmed) => {
         const renderer = options.visualizeCallback?.(path, value)
@@ -118,8 +133,8 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
             lineNumbers(), foldGutter(), keymap.of(foldKeymap), syntaxHighlighting(defaultHighlightStyle), json(),
             EditorState.readOnly.of(true), EditorView.decorations.of(decorations), tooltip, clickHandler,
             EditorView.theme({
-                '&': {height: '100%', maxWidth: '100%'},
-                '.cm-scroller': {overflow: 'auto', maxWidth: '100%'},
+                '&': {height: '100%', minWidth: '0', minHeight: '0', maxWidth: '100%', flex: '1'},
+                '.cm-scroller': {overflow: 'auto', minWidth: '0', minHeight: '0', maxWidth: '100%'},
                 '.cm-content': {whiteSpace: 'pre-wrap !important', wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%'},
                 '.cm-line': {whiteSpace: 'pre-wrap !important', wordBreak: 'break-word !important', overflowWrap: 'anywhere !important', maxWidth: '100%'}
             }),
@@ -127,10 +142,6 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
         ]
     })
     new EditorView({state, parent})
-    parent.style.width = '100%'
-    parent.style.maxWidth = '80vw'
-    parent.style.minHeight = '400px'
-    parent.style.maxHeight = '70vh'
     return parent
 }
 
