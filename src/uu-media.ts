@@ -10,7 +10,7 @@ export type ChartResult = {
 export async function createMarkdownViewer(markdownText: string): Promise<HTMLDivElement> {
 	const { default: markdownIt } = await callAsyncFunctionWithProgress(loadMarkdownIt, 'Loading Markdown-It module...')
 	const markdown = markdownIt({ html: false, linkify: true, typographer: true, breaks: true })
-	const container = createElement(null, 'div')
+	const container = createElement(null, 'div', ['uu-md'])
 	container.innerHTML = markdown.render(markdownText)
 	container.querySelectorAll('a').forEach(link => {
 		link.setAttribute('target', '_blank')
@@ -21,8 +21,8 @@ export async function createMarkdownViewer(markdownText: string): Promise<HTMLDi
 
 export async function createChart(parent: HTMLElement, width: string, height: string, config: any): Promise<ChartResult> {
 	const chartJsModule = await callAsyncFunctionWithProgress(loadChartJs, 'Loading Chart.js...')
-	const wrapper = createElement(parent, 'div', [], '', { height, width, maxWidth: '100%' })
-	const canvas = createElement(wrapper, 'canvas')
+	const wrapper = createElement(parent, 'div', ['uu-chart'], '', { height, width, maxWidth: '100%' })
+	const canvas = createElement(wrapper, 'canvas', ['uu-chart-canvas'])
 	const chart = new chartJsModule.default(canvas.getContext('2d'), config)
 	return { canvas, chart }
 }

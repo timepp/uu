@@ -87,40 +87,40 @@ function aggregateDate(values: InsightValue[], unit: DateUnit) {
 }
 
 export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValueClick?: DataInsightValueClickCallback): Promise<HTMLDivElement> {
-    const root = createElement(null, 'div')
-    const controls = createElement(root, 'div', ['d-flex', 'flex-wrap', 'gap-2', 'align-items-end', 'mb-2'])
-    const chartHost = createElement(root, 'div', ['border', 'border-light-subtle', 'rounded', 'p-2'])
-    const chartHeader = createElement(chartHost, 'div', ['d-flex', 'justify-content-between', 'align-items-center', 'mb-2'])
-    const title = createElement(chartHeader, 'h6', ['m-0'], 'Data insights')
-    const subtitle = createElement(chartHeader, 'small', ['text-muted'])
-    const chartBody = createElement(chartHost, 'div')
+    const root = createElement(null, 'div', ['uu-di'])
+    const controls = createElement(root, 'div', ['uu-di-controls', 'd-flex', 'flex-wrap', 'gap-2', 'align-items-end', 'mb-2'])
+    const chartHost = createElement(root, 'div', ['uu-di-chart', 'border', 'border-light-subtle', 'rounded', 'p-2'])
+    const chartHeader = createElement(chartHost, 'div', ['uu-di-header', 'd-flex', 'justify-content-between', 'align-items-center', 'mb-2'])
+    const title = createElement(chartHeader, 'h6', ['uu-di-title', 'm-0'], 'Data insights')
+    const subtitle = createElement(chartHeader, 'small', ['uu-di-subtitle', 'text-muted'])
+    const chartBody = createElement(chartHost, 'div', ['uu-di-body'])
     if (info.length === 0) {
-        createElement(chartBody, 'div', ['text-muted'], 'No data insights available.')
+        createElement(chartBody, 'div', ['uu-di-empty', 'uu-is-empty', 'text-muted'], 'No data insights available.')
         return root
     }
 
     const addSelect = (label: string, options: [string, string][]) => {
-        const group = createElement(controls, 'div')
-        createElement(group, 'label', ['form-label', 'mb-1'], label)
-        const select = createElement(group, 'select', ['form-select'])
-        for (const [text, value] of options) createElement(select, 'option', [], text, {}, {value})
+        const group = createElement(controls, 'div', ['uu-di-control'])
+        createElement(group, 'label', ['uu-di-label', 'form-label', 'mb-1'], label)
+        const select = createElement(group, 'select', ['uu-di-input', 'form-select'])
+        for (const [text, value] of options) createElement(select, 'option', ['uu-di-option'], text, {}, {value})
         return select
     }
     const propertySelect = addSelect('Property', info.map(stat => stat.propName).sort().map(value => [value, value]))
     const chartTypeSelect = addSelect('Chart type', [['Bar chart', 'bar'], ['Line chart', 'line'], ['Pie chart', 'pie'], ['Doughnut chart', 'doughnut'], ['Polar area chart', 'polarArea'], ['Text Summary', 'text']])
     const sortSelect = addSelect('Sort by', [['Count (desc)', 'count'], ['Value (asc)', 'value']])
 
-    const binGroup = createElement(controls, 'div')
-    const binLabel = createElement(binGroup, 'label', ['form-label', 'mb-1'], 'Bin size')
-    const binInput = createElement(binGroup, 'input', ['form-control'], '', {}, {type: 'number', step: 'any', value: 0})
-    const dateBinSelect = createElement(binGroup, 'select', ['form-select'], '', {display: 'none'})
+    const binGroup = createElement(controls, 'div', ['uu-di-control'])
+    const binLabel = createElement(binGroup, 'label', ['uu-di-label', 'form-label', 'mb-1'], 'Bin size')
+    const binInput = createElement(binGroup, 'input', ['uu-di-input', 'form-control'], '', {}, {type: 'number', step: 'any', value: 0})
+    const dateBinSelect = createElement(binGroup, 'select', ['uu-di-input', 'form-select'], '', {display: 'none'})
     for (const [text, value] of [['Original', 'original'], ['Minute', 'minute'], ['Hour', 'hour'], ['Day', 'day'], ['Month', 'month'], ['Year', 'year']]) {
-        createElement(dateBinSelect, 'option', [], text, {}, {value})
+        createElement(dateBinSelect, 'option', ['uu-di-option'], text, {}, {value})
     }
     const addCountInput = (label: string, placeholder: string) => {
-        const group = createElement(controls, 'div')
-        createElement(group, 'label', ['form-label', 'mb-1'], label)
-        const input = createElement(group, 'input', ['form-control'], '', {}, {type: 'number', min: 0, step: 1, value: ''})
+        const group = createElement(controls, 'div', ['uu-di-control'])
+        createElement(group, 'label', ['uu-di-label', 'form-label', 'mb-1'], label)
+        const input = createElement(group, 'input', ['uu-di-input', 'form-control'], '', {}, {type: 'number', min: 0, step: 1, value: ''})
         input.placeholder = placeholder
         return input
     }
@@ -154,16 +154,16 @@ export async function renderDataInsights(info: tu.DataPropStat[], onPropertyValu
         currentChart?.destroy?.()
         currentChart = null
         if (values.length === 0) {
-            createElement(chartBody, 'div', ['text-muted'], 'No values to display with current filters.')
+            createElement(chartBody, 'div', ['uu-di-empty', 'uu-is-empty', 'text-muted'], 'No values to display with current filters.')
             return
         }
         if (chartTypeSelect.value === 'text') {
-            const summary = createElement(chartBody, 'div', ['d-flex', 'flex-wrap', 'gap-1'])
+            const summary = createElement(chartBody, 'div', ['uu-di-summary', 'd-flex', 'flex-wrap', 'gap-1'])
             for (const item of values) {
                 const value = item.value || '(empty)'
-                const entry = createElement(summary, 'span', ['border', 'rounded', 'p-1', 'hover-effect'], '', {cursor: onPropertyValueClick ? 'pointer' : 'default'})
-                createElement(entry, 'span', ['fw-bold'], value, {color: color(value)})
-                createElement(entry, 'span', ['text-muted'], ` (${item.count})`)
+                const entry = createElement(summary, 'span', ['uu-di-item', 'border', 'rounded', 'p-1'], '', {cursor: onPropertyValueClick ? 'pointer' : 'default'})
+                createElement(entry, 'span', ['uu-di-value', 'fw-bold'], value, {color: color(value)})
+                createElement(entry, 'span', ['uu-di-count', 'text-muted'], ` (${item.count})`)
                 entry.onclick = () => onPropertyValueClick?.(stat.propName, item.value)
             }
             return

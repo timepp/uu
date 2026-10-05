@@ -117,7 +117,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
             case 'single-line-string':
             case 'number':
                 {
-                    const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
+                    const input = createElement(parent, 'input', ['uu-input-control', 'uu-input', 'form-control']) as HTMLInputElement
                     input.value = defaultVal
                     valueFetchers[element.id] = () => input.value
                     valueSetters[element.id] = v => input.value = v
@@ -125,7 +125,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'date':
                 {
-                    const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
+                    const input = createElement(parent, 'input', ['uu-input-control', 'uu-input', 'uu-input-date', 'form-control']) as HTMLInputElement
                     input.type = 'date'
                     input.value = defaultVal
                     valueFetchers[element.id] = () => input.value
@@ -134,7 +134,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'multi-line-string':
                 {
-                    const textarea = createElement(parent, 'textarea', ['form-control']) as HTMLTextAreaElement
+                    const textarea = createElement(parent, 'textarea', ['uu-input-control', 'uu-textarea', 'form-control']) as HTMLTextAreaElement
                     textarea.rows = 4
                     textarea.value = defaultVal
                     valueFetchers[element.id] = () => textarea.value
@@ -143,9 +143,9 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'single-select':
                 {
-                    const select = createElement(parent, 'select', ['form-select']) as HTMLSelectElement
+                    const select = createElement(parent, 'select', ['uu-input-control', 'uu-select', 'form-select']) as HTMLSelectElement
                     element.selectOptions?.forEach(option => {
-                        const opt = createElement(select, 'option', [], option) as HTMLOptionElement
+                        const opt = createElement(select, 'option', ['uu-select-option'], option) as HTMLOptionElement
                         opt.value = option
                     })
                     select.value = defaultVal
@@ -162,7 +162,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'single-picker':
                 {
-                    const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
+                    const input = createElement(parent, 'input', ['uu-input-control', 'uu-picker', 'form-control']) as HTMLInputElement
                     input.value = defaultVal
                     input.readOnly = true
                     input.placeholder = 'Click to select...'
@@ -182,7 +182,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'multi-picker':
                 {
-                    const input = createElement(parent, 'input', ['form-control']) as HTMLInputElement
+                    const input = createElement(parent, 'input', ['uu-input-control', 'uu-picker', 'form-control']) as HTMLInputElement
                     input.value = defaultArr.join(', ')
                     input.readOnly = true
                     input.placeholder = 'Click to select...'
@@ -203,7 +203,7 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
                 }
             case 'custom':
                 {
-                    const input = createElement(parent, 'span', ['form-control'])
+                    const input = createElement(parent, 'span', ['uu-input-control', 'uu-custom-input', 'form-control'])
                     input.textContent = defaultVal
                     input.style.cursor = 'pointer'
                     input.onclick = async () => {
@@ -251,17 +251,18 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
         }, (elements, finish) => {
             // Section 1: Element-specific history
             if (history.elementHistory[key] && history.elementHistory[key].length > 0) {
-                const section1Title = createElement(elements.contentArea, 'h6', ['mt-2'], `History for ${key}`)
-                const section1 = createElement(elements.contentArea, 'div', ['list-group', 'mb-3'])
+                elements.contentArea.classList.add('uu-input-history')
+                const section1Title = createElement(elements.contentArea, 'h6', ['uu-input-history-title', 'mt-2'], `History for ${key}`)
+                const section1 = createElement(elements.contentArea, 'div', ['uu-input-history-section', 'uu-input-history-list', 'list-group', 'mb-3'])
                 
                 history.elementHistory[key].slice().reverse().forEach((entry, index) => {
-                    const item = createElement(section1, 'a', ['list-group-item', 'list-group-item-action'])
+                    const item = createElement(section1, 'a', ['uu-input-history-item', 'list-group-item', 'list-group-item-action'])
                     item.style.cursor = 'pointer'
                     
-                    const header = createElement(item, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
-                    createElement(header, 'span', ['text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
+                    const header = createElement(item, 'div', ['uu-input-history-header', 'd-flex', 'justify-content-between', 'align-items-center'])
+                    createElement(header, 'span', ['uu-input-history-time', 'text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
                     
-                    const valuePreview = createElement(item, 'div', ['mt-1'])
+                    const valuePreview = createElement(item, 'div', ['uu-input-history-value', 'mt-1'])
                     let displayText = ''
                     try {
                         const parsedValue = JSON.parse(entry.value)
@@ -280,17 +281,18 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
             
             // Section 2: Panel-wide history
             if (history.panelHistory.length > 0) {
-                const section2Title = createElement(elements.contentArea, 'h6', ['mt-3'], 'Full Panel History')
-                const section2 = createElement(elements.contentArea, 'div', ['list-group'])
+                elements.contentArea.classList.add('uu-input-history')
+                const section2Title = createElement(elements.contentArea, 'h6', ['uu-input-history-title', 'mt-3'], 'Full Panel History')
+                const section2 = createElement(elements.contentArea, 'div', ['uu-input-history-section', 'uu-input-history-list', 'list-group'])
                 
                 history.panelHistory.slice().reverse().forEach((entry, index) => {
-                    const item = createElement(section2, 'a', ['list-group-item', 'list-group-item-action'])
+                    const item = createElement(section2, 'a', ['uu-input-history-item', 'list-group-item', 'list-group-item-action'])
                     item.style.cursor = 'pointer'
                     
-                    const header = createElement(item, 'div', ['d-flex', 'justify-content-between', 'align-items-center'])
-                    createElement(header, 'span', ['text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
+                    const header = createElement(item, 'div', ['uu-input-history-header', 'd-flex', 'justify-content-between', 'align-items-center'])
+                    createElement(header, 'span', ['uu-input-history-time', 'text-muted', 'small'], new Date(entry.timestamp).toLocaleString())
                     
-                    const valuePreview = createElement(item, 'div', ['mt-1', 'small'])
+                    const valuePreview = createElement(item, 'div', ['uu-input-history-value', 'mt-1', 'small'])
                     let displayText = ''
                     try {
                         const parsedValue = JSON.parse(entry.value) as Record<string, any>
@@ -316,25 +318,25 @@ export function createInputPanel(parent: HTMLElement | null, elements: InputElem
 
     let element: HTMLElement | null = null
     if (style === 'table') {
-        const table = createElement(parent, 'table', ['table', 'table-bordered', 'table-hover'])
-        const tbody = createElement(table, 'tbody')
+        const table = createElement(parent, 'table', ['uu-input-panel', 'uu-input-panel-table', 'table', 'table-bordered', 'table-hover'])
+        const tbody = createElement(table, 'tbody', ['uu-input-panel-body'])
         elements.forEach(element => {
-            const row = createElement(tbody, 'tr')
-            const nameCell = createElement(row, 'td')
+            const row = createElement(tbody, 'tr', ['uu-input-field'])
+            const nameCell = createElement(row, 'td', ['uu-input-label'])
             nameCell.textContent = element.name
             nameCell.style.whiteSpace = 'nowrap'
             nameCell.style.verticalAlign = 'middle'
             nameCell.style.backgroundColor = '#f8f9fa'
             nameCell.onclick = () => pickHistory(element.id)
-            const valueCell = createElement(row, 'td')
+            const valueCell = createElement(row, 'td', ['uu-input-field-control'])
             createInputControl(valueCell, element)
         })
         element = table
     } else if (style === 'bar') {
-        const div = createElement(parent, 'div', ['d-flex', 'gap-2', 'overflow-auto'])
+        const div = createElement(parent, 'div', ['uu-input-panel', 'uu-input-panel-bar', 'd-flex', 'gap-2', 'overflow-auto'])
         elements.forEach(element => {
-            const ig = createElement(div, 'div', ['input-group', 'flex-grow-1'])
-            const label = createElement(ig, 'span', ['input-group-text'], element.name, { minWidth: '100px' })
+            const ig = createElement(div, 'div', ['uu-input-field', 'uu-input-field-control', 'input-group', 'flex-grow-1'])
+            const label = createElement(ig, 'span', ['uu-input-label', 'input-group-text'], element.name, { minWidth: '100px' })
             label.onclick = () => pickHistory(element.id)
             createInputControl(ig, element)
         })
@@ -546,8 +548,9 @@ export async function prompt(title: string, tip: string | HTMLElement, initialVa
         actions: ['OK', 'Cancel'],
         softDismissable: true
     }, (elements, finish) => {
-        createElement(elements.contentArea, 'div', ['text-muted', 'mb-1'], tip)
-        const input = createElement(elements.contentArea, 'input', ['form-control'], '', {}, { value: initialValue || '' })
+        elements.contentArea.classList.add('uu-prompt')
+        createElement(elements.contentArea, 'div', ['uu-prompt-tip', 'text-muted', 'mb-1'], tip)
+        const input = createElement(elements.contentArea, 'input', ['uu-prompt-input', 'form-control'], '', {}, { value: initialValue || '' })
         const finishWithValue = () => finish(input.value)
         input.addEventListener('keydown', async (evt: Event) => {
                 const e = evt as KeyboardEvent
@@ -569,8 +572,9 @@ export async function promptMultiline(title: string, tip: string | HTMLElement, 
         actions: ['OK', 'Cancel'],
         softDismissable: true
     }, (elements, finish) => {
-        createElement(elements.contentArea, 'div', ['text-muted', 'mb-1'], tip)
-        const input = createElement(elements.contentArea, 'textarea', ['form-control'], '', {}, { value: initialValue || '' })
+        elements.contentArea.classList.add('uu-prompt', 'uu-prompt-multiline')
+        createElement(elements.contentArea, 'div', ['uu-prompt-tip', 'text-muted', 'mb-1'], tip)
+        const input = createElement(elements.contentArea, 'textarea', ['uu-prompt-input', 'form-control'], '', {}, { value: initialValue || '' })
         input.rows = 5
         const finishWithValue = () => finish(input.value)
         elements.buttons['OK'].onclick = () => finishWithValue()
@@ -609,7 +613,7 @@ export function createInputAreaOld(parent: Element|null, elements: string | Inpu
     const inputs: Record<string, HTMLInputElement> = {}
     const buttons: Record<string, HTMLButtonElement> = {}
     const selects: Record<string, HTMLSelectElement> = {}
-    const div = createElement(parent, 'div', ['d-flex', 'gap-2', 'overflow-auto'])
+    const div = createElement(parent, 'div', ['uu-input-area-old', 'd-flex', 'gap-2', 'overflow-auto'])
     for (const e of elements) {
         if (e.type === 'input') {
             const {ig, input} = createAutofillInput(e.label || e.id, '', e.initialValue || '', e.id)
@@ -623,12 +627,12 @@ export function createInputAreaOld(parent: Element|null, elements: string | Inpu
             const btn = createButton(div, ['btn', 'btn-primary'], e.label || e.id)
             buttons[e.id] = btn
         } else if (e.type === 'select') {
-            const ig = createElement(div, 'div', ['input-group', 'flex-shrink-0', 'w-auto'])
-            const label = createElement(ig, 'label', ['input-group-text'], e.label || e.id, {minWidth: '100px'})
-            const select = createElement(ig, 'select', ['form-select'], '', {}, {id: e.id})
+            const ig = createElement(div, 'div', ['uu-input-field', 'input-group', 'flex-shrink-0', 'w-auto'])
+            const label = createElement(ig, 'label', ['uu-input-label', 'input-group-text'], e.label || e.id, {minWidth: '100px'})
+            const select = createElement(ig, 'select', ['uu-input-control', 'uu-select', 'form-select'], '', {}, {id: e.id})
             if (e.options) {
                 for (const option of e.options) {
-                    const optionElem = createElement(select, 'option', [], option, {}, {value: option})
+                    const optionElem = createElement(select, 'option', ['uu-select-option'], option, {}, {value: option})
                     if (e.initialValue && e.initialValue === option) {
                         optionElem.selected = true
                     }
@@ -641,10 +645,10 @@ export function createInputAreaOld(parent: Element|null, elements: string | Inpu
 }
 
 export function createDataAreaOld(parent: Element|null, foldable: boolean, params: InputElementOld[]): HTMLDivElement {
-    const div = createElement(parent, 'div', ['border', 'border-light-subtle', 'mb-2'])
+    const div = createElement(parent, 'div', ['uu-data-area-old', 'border', 'border-light-subtle', 'mb-2'])
     const regulatedParams = params.map(p => (typeof p === 'string')? { name: p } : p)
-    const inputArea = createElement(div, 'div', ['p-1', 'd-flex', 'gap-2', 'overflow-auto'])
-    const resultArea = createElement(div, 'div', ['mt-2', 'p-1'])
+    const inputArea = createElement(div, 'div', ['uu-data-area-inputs', 'p-1', 'd-flex', 'gap-2', 'overflow-auto'])
+    const resultArea = createElement(div, 'div', ['uu-data-area-content', 'mt-2', 'p-1'])
     const inputs = {} as Record<string, HTMLInputElement>
 
     const state = tu.createObservableState(null, {showResult: true}, s => {
@@ -652,7 +656,7 @@ export function createDataAreaOld(parent: Element|null, foldable: boolean, param
     })
 
     if (foldable) {
-        const toggleBtn = createElement(inputArea, 'button', ['btn', 'btn-secondary'])
+        const toggleBtn = createElement(inputArea, 'button', ['uu-btn', 'uu-data-area-toggle', 'btn', 'btn-secondary'])
         toggleBtn.title = 'Show/Hide Result Area'
         toggleBtn.onclick = () => state.showResult = !state.showResult
         state.addObserver(s => toggleBtn.replaceChildren(s.showResult ? fa('fa-chevron-up') : fa('fa-chevron-down')))
@@ -688,8 +692,8 @@ export function createDataAreaOld(parent: Element|null, foldable: boolean, param
  * Given an user provided handler: create input controls, handle user interactions, and show result area.
  */
 export function createInputAction(title: string, actionName: string, valueId: string, handler: (value: string) => Promise<HTMLElement>, value?: string): HTMLDivElement {
-    const div = createElement(null, 'div', ['border', 'border-light-subtle', 'rounded'])
-    const resultArea = createElement(null, 'div', ['mt-2', 'p-1'])
+    const div = createElement(null, 'div', ['uu-input-action', 'border', 'border-light-subtle', 'rounded'])
+    const resultArea = createElement(null, 'div', ['uu-input-action-result', 'mt-2', 'p-1'])
     const {ig, input, button} = createAutofillInput(title, '', '', valueId, async v => {
         const result = await callAsyncFunctionWithProgress(() => handler(v), `${actionName}`)
         resultArea.replaceChildren(result)
@@ -704,9 +708,9 @@ export function createInputAction(title: string, actionName: string, valueId: st
 }
 
 export function createAutofillInput(title: string, placeholder: string, initialValue: string, valueId = title, handler?: (value: string) => void, btn?: string): AutofillInput {
-    const ig = createElement(null, 'div', ['input-group'])
-    const label = createElement(ig, 'label', ['input-group-text'], title, {minWidth: '100px'})
-    const input = createElement(ig, 'input', ['form-control'], '', {}, {placeholder})
+    const ig = createElement(null, 'div', ['uu-autofill', 'input-group'])
+    const label = createElement(ig, 'label', ['uu-autofill-label', 'input-group-text'], title, {minWidth: '100px'})
+    const input = createElement(ig, 'input', ['uu-autofill-input', 'form-control'], '', {}, {placeholder})
     const historyKey = `input-history-${valueId}`
     const valueKey = `input-${valueId}`
     const history = JSON.parse(readLocalStorage(historyKey, 'uu-input') || '[]') as string[]
@@ -720,7 +724,7 @@ export function createAutofillInput(title: string, placeholder: string, initialV
 
     let button : HTMLButtonElement | null = null
     if (btn) {
-        button = createElement(ig, 'button', ['input-group-btn', 'btn', 'btn-primary'], btn)
+        button = createElement(ig, 'button', ['uu-btn', 'uu-autofill-action', 'input-group-btn', 'btn', 'btn-primary'], btn)
         button.onclick = () => {
             if (handler) {
                 updateHistory(input.value)
@@ -769,4 +773,3 @@ export function createAutofillInput(title: string, placeholder: string, initialV
 
 registerModule('uu-input')
 registerModuleValue('uu-input', 'autofillProvider', () => autofillProvider)
-

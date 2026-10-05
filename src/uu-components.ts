@@ -20,16 +20,16 @@ import type { FieldEditOption } from './uu-input.ts'
  * ```
  */
 export function createSizeBar(parent: HTMLElement | null, parts: {name: string, value: number, color?: string}[], unit = ''): HTMLDivElement {
-    const container = createElement(parent, 'div', ['d-flex', 'flex-column', 'gap-2'])
+    const container = createElement(parent, 'div', ['uu-sizebar', 'd-flex', 'flex-column', 'gap-2'])
     
     const total = parts.reduce((sum, part) => sum + part.value, 0)
     if (total === 0) {
-        createElement(container, 'div', ['text-muted'], 'No data')
+        createElement(container, 'div', ['uu-sizebar-empty', 'uu-is-empty', 'text-muted'], 'No data')
         return container
     }
     
     // Create the bar
-    const bar = createElement(container, 'div', ['d-flex', 'w-100'])
+    const bar = createElement(container, 'div', ['uu-sizebar-track', 'd-flex', 'w-100'])
     bar.style.height = '30px'
     bar.style.borderRadius = '4px'
     bar.style.overflow = 'hidden'
@@ -40,7 +40,7 @@ export function createSizeBar(parent: HTMLElement | null, parts: {name: string, 
         const percentage = (part.value / total) * 100
         if (percentage < 0.1) return // Skip very small segments
         
-        const segment = createElement(bar, 'div')
+        const segment = createElement(bar, 'div', ['uu-sizebar-segment'])
         segment.style.width = `${percentage}%`
         segment.style.backgroundColor = part.color || tu.stringToColor(part.name)
         segment.style.transition = 'all 0.3s ease'
@@ -58,20 +58,20 @@ export function createSizeBar(parent: HTMLElement | null, parts: {name: string, 
     })
     
     // Create legend
-    const legend = createElement(container, 'div', ['d-flex', 'flex-wrap', 'gap-2', 'small'])
+    const legend = createElement(container, 'div', ['uu-sizebar-legend', 'd-flex', 'flex-wrap', 'gap-2', 'small'])
     parts.forEach(part => {
         const percentage = (part.value / total) * 100
         
-        const item = createElement(legend, 'div', ['d-flex', 'align-items-center', 'gap-1'])
+        const item = createElement(legend, 'div', ['uu-sizebar-item', 'd-flex', 'align-items-center', 'gap-1'])
         
-        const colorBox = createElement(item, 'div')
+        const colorBox = createElement(item, 'div', ['uu-sizebar-color'])
         colorBox.style.width = '12px'
         colorBox.style.height = '12px'
         colorBox.style.backgroundColor = part.color || tu.stringToColor(part.name)
         colorBox.style.borderRadius = '2px'
         colorBox.style.flexShrink = '0'
         
-        const label = createElement(item, 'span')
+        const label = createElement(item, 'span', ['uu-sizebar-label'])
         const valueStr = unit ? `${tu.formatFloat(part.value, 2)} ${unit}` : tu.formatFloat(part.value, 2)
         label.textContent = `${part.name}: ${valueStr} (${tu.formatFloat(percentage, 1)}%)`
     })
@@ -80,16 +80,17 @@ export function createSizeBar(parent: HTMLElement | null, parts: {name: string, 
 }
 
 export function createDataArea<T extends object>(parent: HTMLElement | null, title: string, params: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, renderer: (params: T) => Promise<HTMLElement>): HTMLDivElement {
-    const div = createElement(parent, 'div', ['d-flex', 'flex-column', 'border', 'border-light-subtle', 'p-2'])
+    const div = createElement(parent, 'div', ['uu-data-area', 'd-flex', 'flex-column', 'border', 'border-light-subtle', 'p-2'])
     // div.style.backgroundColor = tu.stringToColor(title, 100, 97)
     const ia = createInputArea(div, params, fieldOptions, 'bar')
-    const contentDiv = createElement(div, 'div', ['mt-2'])
+    ia.element.classList.add('uu-data-area-inputs')
+    const contentDiv = createElement(div, 'div', ['uu-data-area-content', 'mt-2'])
 
-    const renderBtn = createElement(ia.element, 'button', ['btn', 'btn-primary'], `${title}`)
+    const renderBtn = createElement(ia.element, 'button', ['uu-btn', 'uu-data-area-render', 'btn', 'btn-primary'], `${title}`)
     renderBtn.style.whiteSpace = 'nowrap'
     renderBtn.style.flexShrink = '0'
 
-    const showHideBtn = createElement(ia.element, 'button', ['btn', 'btn-outline-secondary'], '')
+    const showHideBtn = createElement(ia.element, 'button', ['uu-btn', 'uu-data-area-toggle', 'btn', 'btn-outline-secondary'], '')
     showHideBtn.style.whiteSpace = 'nowrap'
     showHideBtn.style.flexShrink = '0'
     // Initially hide the show/hide button until content is rendered
@@ -99,7 +100,7 @@ export function createDataArea<T extends object>(parent: HTMLElement | null, tit
         contentDiv.style.display = s.showData ? 'block' : 'none'
         //toggleBtn.replaceChildren(s.folded ? fa('fa-chevron-down') : fa('fa-chevron-up'))
         showHideBtn.replaceChildren(s.showData ? fa('fa-chevron-down') : fa('fa-chevron-right'))
-        syncClass(div, 'highlight', s.showData)
+        syncClass(div, 'uu-is-expanded', s.showData)
     })
 
     showHideBtn.onclick = () => {
@@ -108,12 +109,15 @@ export function createDataArea<T extends object>(parent: HTMLElement | null, tit
 
     renderBtn.onclick = async () => {
         state.showData = true
+        div.classList.add('uu-is-loading')
         contentDiv.textContent = 'Loading...'
-        const content = await renderer(ia.getValues())
-        contentDiv.replaceChildren(content)
-        // force show data if render is called
-        // show the show/hide button once content is rendered
-        showHideBtn.style.display = 'inline-block'
+        try {
+            const content = await renderer(ia.getValues())
+            contentDiv.replaceChildren(content)
+            showHideBtn.style.display = 'inline-block'
+        } finally {
+            div.classList.remove('uu-is-loading')
+        }
     }
 
     return div

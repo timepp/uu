@@ -25,21 +25,22 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
         let selection = cfg.initialSelection || []
         const itemElements: Record<string, HTMLDivElement> = {}
         let currentAlert = ''
-        const container = createElement(elements.contentArea, 'div', ['d-flex', 'flex-column'])
-        const statusBar = createElement(container, 'span', ['form-control'])
-        const selectedPrefix = createElement(statusBar, 'span', ['me-2'], 'Selected: ', { color: 'blue' })
+        const container = createElement(elements.contentArea, 'div', ['uu-selection', 'd-flex', 'flex-column'])
+        const statusBar = createElement(container, 'span', ['uu-selection-status', 'form-control'])
+        const selectedPrefix = createElement(statusBar, 'span', ['uu-selection-status-label', 'me-2'], 'Selected: ', { color: 'blue' })
         const selectedItems = new DraggableSortedContainer(statusBar, {
             emptyText: '(none)', showOrder: cfg.showOrder,
             interactive: (cfg.statusInteractive ?? true) && !cfg.singleSelect,
             removable: (cfg.statusInteractive ?? true) && !cfg.singleSelect,
             onChange: newSelection => onSelectionChange(selection, newSelection)
         })
-        const toolbar = createElement(container, 'div', ['input-group', 'mb-4', 'mt-2'])
-        const filter = createElement(toolbar, 'input', ['form-control'], '', {}, {placeholder: 'Filter'})
-        const selectAllButton = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☑')
-        const unselectAllButton = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], '☐')
-        const main = createElement(container, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'p-2'])
-        const alert = createElement(container, 'div', ['alert', 'alert-danger', 'd-none'])
+        selectedItems.root.classList.add('uu-selection-selected')
+        const toolbar = createElement(container, 'div', ['uu-selection-toolbar', 'input-group', 'mb-4', 'mt-2'])
+        const filter = createElement(toolbar, 'input', ['uu-selection-filter', 'form-control'], '', {}, {placeholder: 'Filter'})
+        const selectAllButton = createElement(toolbar, 'button', ['uu-btn', 'uu-selection-all', 'btn', 'btn-outline-secondary'], '☑')
+        const unselectAllButton = createElement(toolbar, 'button', ['uu-btn', 'uu-selection-none', 'btn', 'btn-outline-secondary'], '☐')
+        const main = createElement(container, 'div', ['uu-selection-items', 'd-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'p-2'])
+        const alert = createElement(container, 'div', ['uu-selection-alert', 'alert', 'alert-danger', 'd-none'])
         if (cfg.pickAndClose) cfg.singleSelect = true
         syncDisplay(toolbar, cfg.showToolbar ?? true)
         syncDisplay(statusBar, cfg.showStatus ?? true)
@@ -51,11 +52,12 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
             selectedItems.setStrings(selection)
             for (const [value, element] of Object.entries(itemElements)) {
                 const selected = selection.includes(value)
-                element.classList.toggle('selected', selected)
+                element.classList.toggle('uu-is-selected', selected)
                 element.style.border = '2px solid'
                 element.style.borderColor = selected ? '#0d6efd' : '#cccccc'
             }
             alert.textContent = currentAlert
+            alert.classList.toggle('uu-has-error', currentAlert !== '')
             syncDisplay(alert, currentAlert !== '')
         }
         function onSelectionChange(oldSelection: string[], newSelection: string[]) {
@@ -71,11 +73,11 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
             updateUI()
         }
         for (const item of options.map(option => typeof option === 'string' ? { value: option } : option)) {
-            const element = createElement(main, 'div', ['rounded', 'hover-effect', 'text-center', 'p-2'], '', { cursor: 'pointer', minWidth: '100px' })
-            createElement(element, 'span', [], item.value)
+            const element = createElement(main, 'div', ['uu-selection-item', 'rounded', 'text-center', 'p-2'], '', { cursor: 'pointer', minWidth: '100px' })
+            createElement(element, 'span', ['uu-selection-value'], item.value)
             if (item.comment) {
-                createElement(element, 'span', [], '', { border: '1px solid #cccccc', margin: '0 5px', width: '1px', height: '80%' })
-                createElement(element, 'span', ['text-muted'], item.comment)
+                createElement(element, 'span', ['uu-selection-separator'], '', { border: '1px solid #cccccc', margin: '0 5px', width: '1px', height: '80%' })
+                createElement(element, 'span', ['uu-selection-comment', 'text-muted'], item.comment)
             }
             itemElements[item.value] = element
             cfg.styleModifier?.(item.value, element)

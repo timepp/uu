@@ -12,14 +12,14 @@ export class Pager {
     currentPage = 0
 
     constructor(private totalItems: number, private pageSize: number, private onPageChange: (pageIndex: number, pageSize: number) => void) {
-        this.toolbar = createElement(null, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
+        this.toolbar = createElement(null, 'div', ['uu-pager', 'input-group', 'w-auto', 'flex-shrink-0'])
         const btnClass = ['btn', 'btn-secondary']
-        this.firstBtn = createElement(this.toolbar, 'button', btnClass, '<<')
-        this.privBtn = createElement(this.toolbar, 'button', btnClass, '<')
-        this.pageText = createElement(this.toolbar, 'button', ['btn', 'btn-secondary'], '1 / 1')
-        this.pageSizeCtrl = createElement(this.toolbar, 'span', ['btn', 'btn-secondary'], '[20]')
-        this.nextBtn = createElement(this.toolbar, 'button', btnClass, '>')
-        this.lastBtn = createElement(this.toolbar, 'button', btnClass, '>>')
+        this.firstBtn = createElement(this.toolbar, 'button', ['uu-btn', 'uu-pager-first', ...btnClass], '<<')
+        this.privBtn = createElement(this.toolbar, 'button', ['uu-btn', 'uu-pager-prev', ...btnClass], '<')
+        this.pageText = createElement(this.toolbar, 'button', ['uu-btn', 'uu-pager-status', 'btn', 'btn-secondary'], '1 / 1')
+        this.pageSizeCtrl = createElement(this.toolbar, 'span', ['uu-pager-size', 'btn', 'btn-secondary'], '[20]')
+        this.nextBtn = createElement(this.toolbar, 'button', ['uu-btn', 'uu-pager-next', ...btnClass], '>')
+        this.lastBtn = createElement(this.toolbar, 'button', ['uu-btn', 'uu-pager-last', ...btnClass], '>>')
         this.firstBtn.onclick = () => this.gotoPage(0)
         this.privBtn.onclick = () => this.gotoPage(this.currentPage - 1)
         this.nextBtn.onclick = () => this.gotoPage(this.currentPage + 1)
@@ -63,6 +63,9 @@ export class Pager {
         this.firstBtn.disabled = this.currentPage <= 0
         this.nextBtn.disabled = this.currentPage >= totalPages - 1
         this.lastBtn.disabled = this.currentPage >= totalPages - 1
+        for (const button of [this.firstBtn, this.privBtn, this.nextBtn, this.lastBtn]) {
+            button.classList.toggle('uu-is-disabled', button.disabled)
+        }
     }
 
     gotoPage(page: number) {

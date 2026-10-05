@@ -65,6 +65,51 @@ setBootstrapAutoLoad(false)
 Importing `uu.ts` itself has no browser side effects. `enableBootstrap()` and
 `enableFontAwesome()` remain available for explicit early initialization.
 
+## Styling and CSS hooks
+
+UU adds stable `uu-*` classes to the roots and important structural elements of
+the UI it creates. Use these classes instead of depending on element nesting or
+Bootstrap utility classes:
+
+```css
+.uu-dialog {
+    border-radius: 12px;
+}
+
+.uu-dialog-header {
+    background: var(--app-dialog-header);
+}
+
+.uu-va-table-row.uu-is-selected {
+    outline: 2px solid orange;
+}
+
+.uu-input-label {
+    min-width: 8rem;
+}
+```
+
+Common state classes include `uu-is-selected`, `uu-is-active`,
+`uu-is-expanded`, `uu-is-folded`, `uu-is-loading`, `uu-is-disabled`,
+`uu-is-empty`, `uu-has-error`, and `uu-has-filter`.
+
+Frequently used abbreviated component prefixes are:
+
+| Prefix | Component |
+| --- | --- |
+| `uu-va-*` | array visualization |
+| `uu-pf-*` | property filters |
+| `uu-di-*` | data insights |
+| `uu-dnd-*` | draggable sorted containers |
+| `uu-fold-*` | foldable areas |
+| `uu-md` | Markdown content |
+
+Bootstrap, Font Awesome, CodeMirror, and other third-party classes remain
+implementation details. UU marks the host elements for third-party widgets but
+does not treat their generated internal DOM as part of its CSS hook contract.
+Elements returned by custom array item and property formatters receive the
+appropriate `uu-va-*` class on their root without an extra wrapper.
+
 ### As a Git submodule
 
 When UU is checked out as the `uu` submodule of another Deno project, add this

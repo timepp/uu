@@ -134,7 +134,7 @@ export type VisualizeConfig<T extends object> = {
 
 export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}): HTMLDivElement {
     if (arr.length === 0) {
-        return createElement(null, 'div', ['alert', 'alert-info', 'mb-0'], 'Data is empty.')
+        return createElement(null, 'div', ['uu-va', 'uu-va-empty', 'uu-is-empty', 'alert', 'alert-info', 'mb-0'], 'Data is empty.')
     }
 
     // helper functions
@@ -191,9 +191,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             raw: () => showJsonResult(`Raw data (index: ${index})`, item)
         }
         const allActions = { ...defaultActions, ...actions }
-        const container = createElement(null, 'div', ['d-flex', 'gap-2'])
+        const container = createElement(null, 'div', ['uu-va-actions', 'd-flex', 'gap-2'])
         for (const [name, action] of Object.entries(allActions)) {
-            const btn = createElement(container, 'a', ['me-2'], name)
+            const btn = createElement(container, 'a', ['uu-va-action', 'me-2'], name)
             btn.style.cursor = 'pointer'
             btn.onclick = async (event) => {
                 event.stopPropagation()
@@ -246,6 +246,10 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         }
         // value is HTML element now
         const element = value as HTMLElement
+        element.classList.add('uu-va-value')
+        if (state.renderStyle === 'table') element.classList.add('uu-va-table-value')
+        else if (state.renderStyle === 'tile') element.classList.add('uu-va-tile-value')
+        else element.classList.add('uu-va-wall-value')
 
         // get style in the same way
         const styleFallbackChain = [
@@ -382,6 +386,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     function syncItemSelection(element: HTMLElement, index: number) {
         const selected = selectedIndexes.has(index)
         element.setAttribute('aria-selected', `${selected}`)
+        element.classList.toggle('uu-is-selected', selected)
         element.classList.toggle('table-primary', state.renderStyle === 'table' && selected)
         if (state.renderStyle !== 'table') {
             if (selected) {
@@ -456,22 +461,22 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const properties = tu.dataProperties([left.item, right.item]).filter(property => {
             return tu.stringify(comparisonValue(left.item, property)) !== tu.stringify(comparisonValue(right.item, property))
         })
-        const content = createElement(null, 'div')
+        const content = createElement(null, 'div', ['uu-va-compare'])
         if (properties.length === 0) {
-            createElement(content, 'div', ['alert', 'alert-info', 'mb-0'], 'The first two selected items have no different properties.')
+            createElement(content, 'div', ['uu-va-compare-empty', 'uu-is-empty', 'alert', 'alert-info', 'mb-0'], 'The first two selected items have no different properties.')
         } else {
-            const table = createElement(content, 'table', ['table', 'table-bordered', 'table-hover', 'mb-0'])
-            const thead = createElement(table, 'thead', ['table-light'])
-            const header = createElement(thead, 'tr')
-            createElement(header, 'th', [], 'Property')
-            createElement(header, 'th', [], `Item ${left.index + 1}`)
-            createElement(header, 'th', [], `Item ${right.index + 1}`)
-            const tbody = createElement(table, 'tbody')
+            const table = createElement(content, 'table', ['uu-va-compare-table', 'table', 'table-bordered', 'table-hover', 'mb-0'])
+            const thead = createElement(table, 'thead', ['uu-va-table-head', 'table-light'])
+            const header = createElement(thead, 'tr', ['uu-va-table-head-row'])
+            createElement(header, 'th', ['uu-va-table-head-cell'], 'Property')
+            createElement(header, 'th', ['uu-va-table-head-cell'], `Item ${left.index + 1}`)
+            createElement(header, 'th', ['uu-va-table-head-cell'], `Item ${right.index + 1}`)
+            const tbody = createElement(table, 'tbody', ['uu-va-table-body'])
             for (const property of properties) {
-                const row = createElement(tbody, 'tr')
-                createElement(row, 'th', [], property)
-                createElement(row, 'td', [], renderComparisonValue(comparisonValue(left.item, property)))
-                createElement(row, 'td', [], renderComparisonValue(comparisonValue(right.item, property)))
+                const row = createElement(tbody, 'tr', ['uu-va-compare-row'])
+                createElement(row, 'th', ['uu-va-compare-name'], property)
+                createElement(row, 'td', ['uu-va-compare-value'], renderComparisonValue(comparisonValue(left.item, property)))
+                createElement(row, 'td', ['uu-va-compare-value'], renderComparisonValue(comparisonValue(right.item, property)))
             }
         }
         return showDialog('Compare Selected Items', content, {
@@ -481,22 +486,22 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     function tableRenderer(startIndex: number, endIndex: number) {
-        const table = createElement(null, 'table', ['table', 'table-bordered', 'table-hover', 'mb-0'])
-        const tbody = createElement(table, 'tbody')
+        const table = createElement(null, 'table', ['uu-va-table', 'table', 'table-bordered', 'table-hover', 'mb-0'])
+        const tbody = createElement(table, 'tbody', ['uu-va-table-body'])
         const sortBy = state.sortBy || []
 
         // thead
-        const thead = createElement(table, 'thead', ['bg-light'])
-        const tr = createElement(thead, 'tr', [])
+        const thead = createElement(table, 'thead', ['uu-va-table-head', 'bg-light'])
+        const tr = createElement(thead, 'tr', ['uu-va-table-head-row'])
         for (const prop of getVisibleProps()) {
-            const th = createElement(tr, 'th')
-            createElement(th, 'span', [], prop)
+            const th = createElement(tr, 'th', ['uu-va-table-head-cell'])
+            createElement(th, 'span', ['uu-va-sort-label'], prop)
             const i = sortBy.findIndex(s => s.prop === prop)
             if (i >= 0) {
                 const s = sortBy[i]
-                createElement(th, 'span', [], toArrow(s.order))
+                createElement(th, 'span', ['uu-va-sort-order'], toArrow(s.order))
                 if (sortBy.length > 1) {
-                    createElement(th, 'span', [], `${i + 1}`, { verticalAlign: 'super', fontSize: '0.8em' })
+                    createElement(th, 'span', ['uu-va-sort-order'], `${i + 1}`, { verticalAlign: 'super', fontSize: '0.8em' })
                 }
             }
 
@@ -522,12 +527,13 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             let tr = renderItem(data[i].item, data[i].index)
             if (!tr) {
                 // create row in the default way
-                tr = createElement(null, 'tr', [], '', getItemStyle(data[i].item, data[i].index))
+                tr = createElement(null, 'tr', ['uu-va-table-row'], '', getItemStyle(data[i].item, data[i].index))
                 for (const [j, prop] of getVisibleProps().entries()) {
-                    const td = createElement(tr, 'td')
+                    const td = createElement(tr, 'td', ['uu-va-table-cell'])
                     const element = renderPropValue(data[i].item, prop, data[i].index)
                     td.appendChild(element)
                 }
+                tr.classList.add('uu-va-table-row')
             }
             attachItemClickHandler(data[i].item, data[i].index, tr)
             tbody.appendChild(tr)
@@ -536,7 +542,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     function tileRenderer(startIndex: number, endIndex: number) {
-        const container = createElement(null, 'div', [], '', {
+        const container = createElement(null, 'div', ['uu-va-tiles'], '', {
             display: 'grid',
             gap: '10px',
             gridTemplateColumns: 'repeat(auto-fill, minmax(18rem, 1fr))',
@@ -548,19 +554,23 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             const dataIndex = data[i].index
             let card = renderItem(data[i].item, data[i].index)
             if (!card) {
-                card = createElement(null, 'div', ['card', 'p-1', 'hover-effect'], '')
+                card = createElement(null, 'div', ['uu-va-tile', 'card', 'p-1'], '')
 
                 const header = cfg.tileRenderOption?.header?.(item)
-                if (header) card.appendChild(header)
+                if (header) {
+                    header.classList.add('uu-va-tile-header')
+                    card.appendChild(header)
+                }
 
                 // const cardBody = createElement(card, 'div', ['card-body', 'd-flex', 'flex-column', 'gap-2'])
                 for (const [j, prop] of getVisibleProps().entries()) {
                     if (!getPropValue(item, prop, dataIndex)) continue
-                    const row = createElement(card, 'div', [])
+                    const row = createElement(card, 'div', ['uu-va-tile-row'])
                     if (!cfg.tileRenderOption?.hidePropName && prop !== actionProp) {
-                        createElement(row, 'span', [], `${prop}: `, { opacity: '0.35' })
+                        createElement(row, 'span', ['uu-va-tile-name'], `${prop}: `, { opacity: '0.35' })
                     }
-                    createElement(row, 'span', [], renderPropValue(item, prop, dataIndex))
+                    card.classList.add('uu-va-tile')
+                    createElement(row, 'span', ['uu-va-tile-value'], renderPropValue(item, prop, dataIndex))
                 }
             }
             const style = getItemStyle(item, dataIndex)
@@ -575,7 +585,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const wallOption = cfg.wallRenderOption
         const imageWidth = wallOption?.imageWidth || '200px'
         const rowGap = wallOption?.rowGap || '6px'
-        const container = createElement(null, 'div', [], '', {
+        const container = createElement(null, 'div', ['uu-va-wall'], '', {
             columnWidth: imageWidth,
             columnGap: rowGap
         })
@@ -587,7 +597,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             const imgUrl = wallOption?.imageUrl(item, dataIndex) ?? ''
 
             // wrapper needs relative positioning for the overlay
-            const wrapper = createElement(container, 'div', [], '', {
+            const wrapper = createElement(container, 'div', ['uu-va-wall-item'], '', {
                 position: 'relative',
                 overflow: 'hidden',
                 lineHeight: '0',
@@ -595,7 +605,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             })
             Object.assign(wrapper.style, getItemStyle(item, dataIndex) || {})
 
-            const img = createElement(wrapper, 'img', [], '', {
+            const img = createElement(wrapper, 'img', ['uu-va-wall-image'], '', {
                 width: '100%',
                 height: 'auto',
                 display: 'block'
@@ -604,7 +614,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             img.loading = 'lazy'
 
             // semi-transparent hover overlay listing visible prop values
-            const overlay = createElement(wrapper, 'div', [], '', {
+            const overlay = createElement(wrapper, 'div', ['uu-va-wall-overlay'], '', {
                 position: 'absolute',
                 bottom: '0',
                 left: '0',
@@ -622,9 +632,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             for (const prop of getVisibleProps()) {
                 const val = getPropValue(item, prop, dataIndex)
                 if (val === undefined || val === null) continue
-                const row = createElement(overlay, 'div', [])
-                createElement(row, 'span', [], `${prop}: `, { fontWeight: 'bold', opacity: '0.75' })
-                createElement(row, 'span', [], renderPropValue(item, prop, dataIndex))
+                const row = createElement(overlay, 'div', ['uu-va-wall-row'])
+                createElement(row, 'span', ['uu-va-wall-name'], `${prop}: `, { fontWeight: 'bold', opacity: '0.75' })
+                createElement(row, 'span', ['uu-va-wall-value'], renderPropValue(item, prop, dataIndex))
             }
 
             wrapper.addEventListener('mouseenter', () => { overlay.style.opacity = '1' })
@@ -647,8 +657,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const pagerElem = pager.getElement()
 
     // overall dom
-    const view = createElement(null, 'div', ['border', 'p-2'])
-    const toolbar = createElement(view, 'div', ['d-flex', 'gap-1', 'mb-2'])
+    const view = createElement(null, 'div', ['uu-va', 'border', 'p-2'])
+    const toolbar = createElement(view, 'div', ['uu-va-toolbar', 'd-flex', 'gap-1', 'mb-2'])
     const renderStyleToIndex = (s: 'table' | 'tile' | 'wall') => renderStyles.indexOf(s)
     const indexToRenderStyle = (i: number) => renderStyles[i]
     const enabledRenderStyleIcons = renderStyles.map(s => {
@@ -663,22 +673,22 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         state.renderStyle = nextRenderStyle
         pager.refreshCurrentPage()
     })
-    viewToggle.classList.add('flex-shrink-0')
+    viewToggle.classList.add('uu-va-view', 'flex-shrink-0')
     toolbar.appendChild(viewToggle)
-    const igPropSelector = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
-    const propSelectorBtn = createElement(igPropSelector, 'button', ['btn', 'btn-outline-secondary'], fa('fa-eye'))
-    const igSort = createElement(toolbar, 'div', ['input-group', 'w-auto', 'flex-shrink-0'])
-    const sortBtn = createElement(igSort, 'button', ['btn', 'btn-outline-secondary'], fa('fa-sort'))
-    const sortHint = createElement(igSort, 'span', ['input-group-text'])
-    const igFiler = createElement(toolbar, 'div', ['input-group', 'flex-grow-1'])
-    const filter = createElement(igFiler, 'input', ['form-control'], '')
-    const filterHint = createElement(igFiler, 'span', ['input-group-text'], fa('fa-filter'))
-    const counts = createElement(igFiler, 'span', ['input-group-text'], '20 / 100')
-    const pagerPlaceholder = createElement(toolbar, 'div', [])
-    const loadMoreBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-plus'))
-    const optionBtn = createElement(toolbar, 'button', ['btn', 'btn-outline-secondary'], fa('fa-bars'))
-    const propertyFilterArea = createElement(view, 'div', ['mb-1'], '', { display: 'none' })
-    const dataContainer = createElement(view, 'div')
+    const igPropSelector = createElement(toolbar, 'div', ['uu-va-props', 'input-group', 'w-auto', 'flex-shrink-0'])
+    const propSelectorBtn = createElement(igPropSelector, 'button', ['uu-btn', 'uu-va-props-btn', 'btn', 'btn-outline-secondary'], fa('fa-eye'))
+    const igSort = createElement(toolbar, 'div', ['uu-va-sort', 'input-group', 'w-auto', 'flex-shrink-0'])
+    const sortBtn = createElement(igSort, 'button', ['uu-btn', 'uu-va-sort-btn', 'btn', 'btn-outline-secondary'], fa('fa-sort'))
+    const sortHint = createElement(igSort, 'span', ['uu-va-sort-hint', 'input-group-text'])
+    const igFiler = createElement(toolbar, 'div', ['uu-va-filter-group', 'input-group', 'flex-grow-1'])
+    const filter = createElement(igFiler, 'input', ['uu-va-filter', 'form-control'], '')
+    const filterHint = createElement(igFiler, 'span', ['uu-va-filter-toggle', 'input-group-text'], fa('fa-filter'))
+    const counts = createElement(igFiler, 'span', ['uu-va-count', 'input-group-text'], '20 / 100')
+    const pagerPlaceholder = createElement(toolbar, 'div', ['uu-va-pager'])
+    const loadMoreBtn = createElement(toolbar, 'button', ['uu-btn', 'uu-va-load-more', 'btn', 'btn-outline-secondary'], fa('fa-plus'))
+    const optionBtn = createElement(toolbar, 'button', ['uu-btn', 'uu-va-options', 'btn', 'btn-outline-secondary'], fa('fa-bars'))
+    const propertyFilterArea = createElement(view, 'div', ['uu-va-pf', 'mb-1'], '', { display: 'none' })
+    const dataContainer = createElement(view, 'div', ['uu-va-data'])
 
     const propertyFilter = new PropertyFilter<T>(propertyFilterArea, allData.map(v => v.item), cfg.stateKey ? `${cfg.stateKey}:property-filter` : '', {
         onChange: () => {
@@ -689,6 +699,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     })
 
     toolbar.replaceChild(pagerElem, pagerPlaceholder)
+    pagerElem.classList.add('uu-va-pager')
     filter.value = state.filter || ''
 
     function gotoPage(page: number) {
@@ -696,6 +707,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const {startIndex, endIndex} = pager.getPageRange(page)
         console.log(`goto page ${page}, show items from ${startIndex} to ${endIndex}`)
         selectionElements.clear()
+        view.classList.toggle('uu-va-view-table', state.renderStyle === 'table')
+        view.classList.toggle('uu-va-view-tiles', state.renderStyle === 'tile')
+        view.classList.toggle('uu-va-view-wall', state.renderStyle === 'wall')
         dataContainer.replaceChildren()
         dataContainer.appendChild(getRenderer()(startIndex, endIndex))
     }
@@ -746,6 +760,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         }
         propertyFilter.setItems(textFilteredData.map(v => v.item))
         filter.style.backgroundColor = hasFilterError ? '#ffcccc' : (textFilteredData.length < arr.length ? '#ccffcc' : '')
+        filter.classList.toggle('uu-has-error', hasFilterError)
+        view.classList.toggle('uu-has-filter', s !== '')
     }
 
     function applyPropertyFilter() {
@@ -760,7 +776,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     function updateCountsDisplay() {
         counts.replaceChildren()
-        createElement(counts, 'span', [], `${data.length} / ${arr.length}`)
+        createElement(counts, 'span', ['uu-va-count-value'], `${data.length} / ${arr.length}`)
     }
 
     function applySort() {
@@ -856,8 +872,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         }, (elements, finish) => {
             let sortBy = (state.sortBy || []).map(setting => ({ ...setting }))
             let randomSort = state.randomSort
-            const container = createElement(elements.contentArea, 'div', ['d-flex', 'flex-column'])
-            const statusBar = createElement(container, 'div', ['form-control', 'd-flex', 'align-items-center'])
+            const container = createElement(elements.contentArea, 'div', ['uu-va-sort-dialog', 'd-flex', 'flex-column'])
+            const statusBar = createElement(container, 'div', ['uu-va-sort-status', 'form-control', 'd-flex', 'align-items-center'])
             createElement(statusBar, 'span', ['me-2', 'text-primary'], 'Sort:')
             const selectedItems = new DraggableSortedContainer(statusBar, {
                 emptyText: '(none)',
@@ -872,9 +888,10 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                     updateUI()
                 }
             })
-            const toolbar = createElement(container, 'div', ['input-group', 'my-2'])
-            const filter = createElement(toolbar, 'input', ['form-control'], '', {}, { placeholder: 'Filter' })
-            const properties = createElement(container, 'div', ['d-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'p-2'])
+            selectedItems.root.classList.add('uu-va-sort-selected')
+            const toolbar = createElement(container, 'div', ['uu-va-sort-toolbar', 'input-group', 'my-2'])
+            const filter = createElement(toolbar, 'input', ['uu-va-sort-filter', 'form-control'], '', {}, { placeholder: 'Filter' })
+            const properties = createElement(container, 'div', ['uu-va-sort-props', 'd-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'p-2'])
             const propertyButtons = new Map<string, { button: HTMLButtonElement, order: HTMLElement }>()
             const sortLabel = (setting: SortSetting) => `${setting.prop} ${toArrow(setting.order)}`
 
@@ -893,11 +910,11 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             }
 
             for (const prop of allPropsWithRaw) {
-                const button = createElement(properties, 'button', ['btn', 'btn-outline-secondary', 'd-inline-flex', 'align-items-center', 'gap-1'], '', {
+                const button = createElement(properties, 'button', ['uu-btn', 'uu-va-sort-prop', 'btn', 'btn-outline-secondary', 'd-inline-flex', 'align-items-center', 'gap-1'], '', {
                     minWidth: '100px'
                 }) as HTMLButtonElement
-                createElement(button, 'span', [], prop)
-                const order = createElement(button, 'span', [], '', { minWidth: '1.5em' })
+                createElement(button, 'span', ['uu-va-sort-prop-name'], prop)
+                const order = createElement(button, 'span', ['uu-va-sort-prop-order'], '', { minWidth: '1.5em' })
                 propertyButtons.set(prop, { button, order })
                 button.onclick = () => {
                     const index = sortBy.findIndex(setting => setting.prop === prop)
@@ -938,6 +955,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     filterHint.title = 'Show or hide property filters'
     filterHint.onclick = () => {
         propertyFilterArea.style.display = propertyFilterArea.style.display === 'none' ? '' : 'none'
+        propertyFilterArea.classList.toggle('uu-is-active', propertyFilterArea.style.display !== 'none')
     }
 
     filter.addEventListener('keydown', (e) => {
@@ -989,6 +1007,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     } else {
         loadMoreBtn.onclick = async (e) => {
             e.preventDefault()
+            view.classList.add('uu-is-loading')
             try {
                 const moreData = await withUI(() => cfg.loadMore!(), 'Loading more data...')
                 if (moreData && moreData.length > 0) {
@@ -1005,6 +1024,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             } catch (error) {
                 console.error('Failed to load more data:', error)
                 alert('加载数据失败: ' + error)
+            } finally {
+                view.classList.remove('uu-is-loading')
             }
         }
     }

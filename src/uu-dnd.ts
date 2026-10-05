@@ -17,7 +17,7 @@ export class DraggableSortedContainer {
     private activeDropGap: HTMLElement | null = null
 
     constructor(parent: Element | null, private cfg: Partial<DraggableSortedContainerOption> = {}) {
-        this.root = createElement(parent, 'div', ['d-flex'], '', { whiteSpace: 'nowrap', overflow: 'auto', textOverflow: 'ellipsis' })
+        this.root = createElement(parent, 'div', ['uu-dnd', 'd-flex'], '', { whiteSpace: 'nowrap', overflow: 'auto', textOverflow: 'ellipsis' })
     }
 
     setStrings(items: string[]) {
@@ -37,11 +37,13 @@ export class DraggableSortedContainer {
 
     private setDropHint(gap: HTMLElement | null) {
         if (this.activeDropGap && this.activeDropGap !== gap) {
+            this.activeDropGap.classList.remove('uu-is-drop-target')
             this.activeDropGap.style.flexBasis = '6px'
             this.activeDropGap.style.backgroundColor = ''
         }
         this.activeDropGap = gap
         if (gap) {
+            gap.classList.add('uu-is-drop-target')
             gap.style.flexBasis = '16px'
             gap.style.backgroundColor = '#0d6efd'
         }
@@ -108,7 +110,7 @@ export class DraggableSortedContainer {
     }
 
     private createDropGap(insertIndex: number) {
-        const gap = createElement(this.root, 'span', [], '', {
+        const gap = createElement(this.root, 'span', ['uu-dnd-gap'], '', {
             alignSelf: 'stretch', flex: '0 0 6px', minHeight: '1.75rem', transition: 'flex-basis 0.1s'
         })
         this.dropGaps.push(gap)
@@ -135,16 +137,16 @@ export class DraggableSortedContainer {
         this.dropGaps = []
         this.activeDropGap = null
         if (this.items.length === 0) {
-            createElement(this.root, 'span', ['text-muted'], this.cfg.emptyText || '(none)')
+            createElement(this.root, 'span', ['uu-dnd-empty', 'text-muted'], this.cfg.emptyText || '(none)')
             return
         }
         this.createDropGap(0)
         for (const [index, item] of this.items.entries()) {
-            const chip = createElement(this.root, 'span', ['px-1', 'rounded', 'd-inline-flex', 'align-items-center'], '', {
+            const chip = createElement(this.root, 'span', ['uu-dnd-item', 'px-1', 'rounded', 'd-inline-flex', 'align-items-center'], '', {
                 border: '1px solid #cccccc', backgroundColor: '#f8f9fa', userSelect: 'none'
             })
             this.itemElements.push(chip)
-            createElement(chip, 'span', ['me-1'], this.cfg.showOrder ? `${index + 1}: ${item}` : item)
+            createElement(chip, 'span', ['uu-dnd-label', 'me-1'], this.cfg.showOrder ? `${index + 1}: ${item}` : item)
             if (this.cfg.interactive ?? true) {
                 chip.draggable = true
                 chip.title = 'Drag to reorder'
@@ -153,17 +155,19 @@ export class DraggableSortedContainer {
                     event.dataTransfer?.setData('text/plain', `${index}`)
                     if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'
                     chip.style.opacity = '0.6'
+                    chip.classList.add('uu-is-dragging')
                     document.addEventListener('dragover', this.onDocumentDragOver, true)
                     document.addEventListener('drop', this.onDocumentDrop, true)
                 }
                 chip.ondragend = () => {
                     chip.style.opacity = '1'
+                    chip.classList.remove('uu-is-dragging')
                     this.dragFromIndex = -1
                     this.stopDocumentDragTracking()
                 }
             }
             if (this.cfg.removable ?? true) {
-                const removeButton = createElement(chip, 'a', ['text-decoration-none'], '✕', { cursor: 'pointer' })
+                const removeButton = createElement(chip, 'a', ['uu-dnd-remove', 'text-decoration-none'], '✕', { cursor: 'pointer' })
                 removeButton.title = 'Remove'
                 removeButton.draggable = false
                 removeButton.onclick = () => {

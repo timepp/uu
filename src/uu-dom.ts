@@ -18,7 +18,7 @@ export type TableElements = {
 
 export function fa(...classNames: string[]): HTMLElement {
     ensureFontAwesome()
-    return createElement(null, 'i', ['fa', ...classNames])
+    return createElement(null, 'i', ['uu-icon', 'fa', ...classNames])
 }
 
 export function createElement<K extends keyof HTMLElementTagNameMap>(
@@ -47,27 +47,27 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
 }
 
 export function createButton(parent: Element | null, classes: string[] = [], child: string|HTMLElement, onclick = () => {}): HTMLButtonElement {
-    const button = createElement(parent, 'button', classes, child)
+    const button = createElement(parent, 'button', ['uu-btn', ...classes], child)
     button.onclick = onclick
     return button
 }
 
 export function createCheck(parent: Element | null, classes: string[] = [], labelText: string, checked = false, onChange = (checked: boolean) => {}): CheckControl {
-    const btn = createElement(parent, 'label', ['btn', 'd-flex', 'align-items-center', ...classes])
-    const checkbox = createElement(btn, 'input', ['me-2'], '', {}, {type: 'checkbox'})
+    const btn = createElement(parent, 'label', ['uu-check', 'btn', 'd-flex', 'align-items-center', ...classes])
+    const checkbox = createElement(btn, 'input', ['uu-check-input', 'me-2'], '', {}, {type: 'checkbox'})
     checkbox.style.marginTop = '0'
-    createElement(btn, 'span', [], labelText)
+    createElement(btn, 'span', ['uu-check-label'], labelText)
     checkbox.checked = checked
     checkbox.onchange = () => onChange(checkbox.checked)
     return { btn, checkbox }
 }
 
 export function createCheckBtn(parent: Element | null, classes: string[] = [], labelText: string, accentColor?: string, checked = false, onChange = (checked: boolean) => {}): CheckButtonControl {
-    const div = createElement(parent, 'div', ['input-group', 'w-auto', ...classes])
+    const div = createElement(parent, 'div', ['uu-check-btn', 'input-group', 'w-auto', ...classes])
     div.style.cursor = 'pointer'
-    const label = createElement(div, 'label', ['input-group-text'], '', {userSelect: 'none'})
-    const checkbox = createElement(label, 'input', ['me-2'], '', {}, {type: 'checkbox'})
-    createElement(label, 'span', ['me-2'], ' ', {backgroundColor: '#cccccc', width: '1px', height: '80%'})
+    const label = createElement(div, 'label', ['uu-check-btn-label', 'input-group-text'], '', {userSelect: 'none'})
+    const checkbox = createElement(label, 'input', ['uu-check-btn-input', 'me-2'], '', {}, {type: 'checkbox'})
+    createElement(label, 'span', ['uu-check-btn-separator', 'me-2'], ' ', {backgroundColor: '#cccccc', width: '1px', height: '80%'})
     label.append(labelText)
     label.style.cursor = 'pointer'
     const updateStyle = () => {
@@ -83,11 +83,11 @@ export function createCheckBtn(parent: Element | null, classes: string[] = [], l
 }
 
 export function createTable(parent: Element|null, props: string[] = [], classes: string[] = [], styles: Partial<CSSStyleDeclaration> = {}): TableElements {
-    const tbl = createElement(parent, 'table', classes, '', styles)
-    const thead = createElement(tbl, 'thead')
-    const tr = createElement(thead, 'tr')
-    const headCells = props.map(prop => createElement(tr, 'th', [], prop))
-    const tbody = createElement(tbl, 'tbody')
+    const tbl = createElement(parent, 'table', ['uu-table', ...classes], '', styles)
+    const thead = createElement(tbl, 'thead', ['uu-table-head'])
+    const tr = createElement(thead, 'tr', ['uu-table-head-row'])
+    const headCells = props.map(prop => createElement(tr, 'th', ['uu-table-head-cell'], prop))
+    const tbody = createElement(tbl, 'tbody', ['uu-table-body'])
     return { tbl, thead, headCells, tbody }
 }
 
@@ -134,25 +134,26 @@ export function syncChildDisplay(parent: HTMLElement, childSelector: string, vis
 }
 
 export function createButtonGroup(parent: Element | null, buttons: Record<string, () => void>): HTMLDivElement {
-    const div = createElement(parent, 'div', ['btn-group'])
-    for (const [name, action] of Object.entries(buttons)) createButton(div, ['btn', 'btn-outline-secondary'], name, action)
+    const div = createElement(parent, 'div', ['uu-btn-group', 'btn-group'])
+    for (const [name, action] of Object.entries(buttons)) createButton(div, ['uu-btn-group-item', 'btn', 'btn-outline-secondary'], name, action)
     return div
 }
 
 export function createToggleBar(values: (string|HTMLElement)[], value: number, onNewValue: (value: number) => void): HTMLDivElement {
-    const div = createElement(null, 'div', ['btn-group'])
+    const div = createElement(null, 'div', ['uu-toggle', 'btn-group'])
     const buttons: HTMLButtonElement[] = []
     const updateUI = (selectedIndex: number) => buttons.forEach((button, index) => {
         syncClass(button, 'btn-primary', index === selectedIndex)
         syncClass(button, 'btn-secondary', index !== selectedIndex)
+        syncClass(button, 'uu-is-active', index === selectedIndex)
     })
     for (const item of values) {
-        const button = createButton(div, ['btn'], '', () => {
+        const button = createButton(div, ['uu-toggle-item', 'btn'], '', () => {
             const index = values.indexOf(item)
             updateUI(index)
             onNewValue(index)
         })
-        button.append(typeof item === 'string' ? createElement(null, 'span', [], item) : item)
+        button.append(typeof item === 'string' ? createElement(null, 'span', ['uu-toggle-label'], item) : item)
         buttons.push(button)
     }
     updateUI(value)
@@ -160,9 +161,9 @@ export function createToggleBar(values: (string|HTMLElement)[], value: number, o
 }
 
 export function createLoadingSpinner(parent: Element | null, size = '2rem', color = 'primary'): HTMLDivElement {
-    const loadingDiv = createElement(parent, 'div', ['d-flex', 'justify-content-center', 'align-items-center', 'p-3'])
-    const spinner = createElement(loadingDiv, 'div', ['spinner-border', `text-${color}`], '', { width: size, height: size })
+    const loadingDiv = createElement(parent, 'div', ['uu-loading', 'uu-is-loading', 'd-flex', 'justify-content-center', 'align-items-center', 'p-3'])
+    const spinner = createElement(loadingDiv, 'div', ['uu-loading-spinner', 'spinner-border', `text-${color}`], '', { width: size, height: size })
     spinner.setAttribute('role', 'status')
-    createElement(spinner, 'span', ['visually-hidden'], 'Loading...')
+    createElement(spinner, 'span', ['uu-loading-label', 'visually-hidden'], 'Loading...')
     return loadingDiv
 }

@@ -44,7 +44,7 @@ export async function showJsonResult(title: string, content: string | object, pa
     const entityParser = parser || globalEntityParser ? (path: string[], value: any) => parser?.(path, value) || globalEntityParser?.(path, value) : undefined
     let stringFoldThreshold = 80
     const createViewer = () => createCodeMirrorJsonViewer(object, { stringFoldThreshold, visualizeCallback: entityParser })
-    const container = createElement(null, 'div', [], '', {
+    const container = createElement(null, 'div', ['uu-json-result'], '', {
         display: 'flex', flexDirection: 'column', flex: '1', minWidth: '0', minHeight: '0', overflow: 'hidden'
     })
     container.append(await createViewer())
@@ -79,7 +79,7 @@ export async function showJsonResult(title: string, content: string | object, pa
 }
 
 export function showGeneralText(title: string, content: string) {
-    const pre = createElement(null, 'pre', [], content, { maxWidth: '80vw', whiteSpace: 'pre-wrap', wordBreak: 'break-all' })
+    const pre = createElement(null, 'pre', ['uu-json-text'], content, { maxWidth: '80vw', whiteSpace: 'pre-wrap', wordBreak: 'break-all' })
     showDialog(title, pre, {
         actions: {
             parseJson: () => showJsonResult('Parsed JSON Objects', extractJsonObjects(content))
@@ -90,7 +90,7 @@ export function showGeneralText(title: string, content: string) {
 export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewerOptions = {}): Promise<HTMLDivElement> {
     const modules = await callAsyncFunctionWithProgress(loadCodeMirrorModules)
     const { EditorState, EditorView, lineNumbers, Decoration, hoverTooltip, syntaxHighlighting, defaultHighlightStyle, json, search, searchKeymap, keymap, foldGutter, foldKeymap } = modules
-    const parent = createElement(null, 'div', [], '', {
+    const parent = createElement(null, 'div', ['uu-json-viewer'], '', {
         border: '1px solid #ddd', borderRadius: '4px', display: 'flex', flex: '1', minWidth: '0', minHeight: '0', overflow: 'hidden'
     })
     const visualizers: {start: number, end: number, type: 'fold'|'visualizer', marker: any, render: EntityRenderer|string}[] = []
@@ -110,6 +110,7 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
             pos: item.start, end: item.end, above: true,
             create: () => {
                 const dom = document.createElement('div')
+                dom.classList.add('uu-json-tooltip')
                 const rendered = (item.render as EntityRenderer).render()
                 if (rendered instanceof Promise) rendered.then(element => dom.appendChild(element))
                 else dom.appendChild(rendered)
@@ -147,7 +148,7 @@ export async function createCodeMirrorJsonViewer(obj: object, options: JsonViewe
 
 export async function createCodeMirrorJsonEditor(initialText: string): Promise<CodeMirrorJsonEditor> {
     const { EditorState, EditorView, lineNumbers, syntaxHighlighting, defaultHighlightStyle, json } = await callAsyncFunctionWithProgress(loadCodeMirrorModules)
-    const parent = createElement(null, 'div', [], '', { border: '1px solid #ddd', borderRadius: '4px', height: '400px', overflow: 'hidden' })
+    const parent = createElement(null, 'div', ['uu-json-editor'], '', { border: '1px solid #ddd', borderRadius: '4px', height: '400px', overflow: 'hidden' })
     const state = EditorState.create({
         doc: initialText,
         extensions: [

@@ -61,7 +61,7 @@ function sortedKeysByCount(counts: Record<string, number>) {
 }
 
 function injectPropertyFilterStyles() {
-    const styleId = 'uu-property-filter-styles'
+    const styleId = 'uu-pf-styles'
     const existing = document.getElementById(styleId)
     if (existing) {
         registerDomResource(existing, 'uu-propfilter', 'style', `#${styleId}`, 'property-filter-styles')
@@ -69,15 +69,15 @@ function injectPropertyFilterStyles() {
     }
     const style = createElement(document.head, 'style', [], '', {}, { id: styleId })
     style.textContent = `
-        .property-filters {
+        .uu-pf {
             margin-top: 5px;
             padding: 5px;
             border: 1px solid #CCCCCC;
         }
-        .property-filter-row {
+        .uu-pf-row {
             gap: 4px;
         }
-        .property-filter-name {
+        .uu-pf-name {
             min-width: 110px;
             font-weight: 600;
             color: #555;
@@ -85,7 +85,7 @@ function injectPropertyFilterStyles() {
             cursor: pointer;
             align-self: stretch;
         }
-        .property-filter-value {
+        .uu-pf-value {
             border: 1px solid #CCCCCC;
             border-top-left-radius: 4px;
             border-bottom-right-radius: 4px;
@@ -94,13 +94,13 @@ function injectPropertyFilterStyles() {
             display: inline-block;
             background-color: #fff;
         }
-        .property-filter-value:hover {
+        .uu-pf-value:hover {
             background-color: lightyellow;
         }
-        .property-filter-value.selected {
+        .uu-pf-value.uu-is-selected {
             background-color: #CCFFCC;
         }
-        .property-filter-dialog {
+        .uu-pf-dialog {
             max-width: 80vw;
             max-height: 65vh;
             overflow: auto;
@@ -138,7 +138,7 @@ export class PropertyFilter<T extends object> {
         this.maxInlineValues = options.maxInlineValues ?? 20
         this.onChange = options.onChange
         this.valueGetters = options.valueGetters || {}
-        this.root = createElement(parent, 'div', ['property-filters'])
+        this.root = createElement(parent, 'div', ['uu-pf'])
         this.cleanupState()
         this.render()
     }
@@ -287,8 +287,8 @@ export class PropertyFilter<T extends object> {
             ...selectedValues.filter(value => !inlineValues.includes(value))
         ]
 
-        const allButton = createElement(container, 'span', ['property-filter-value', 'me-1', 'mb-1'], `All (${countItems.length})`)
-        allButton.classList.toggle('selected', selectedValues.length === 0)
+        const allButton = createElement(container, 'span', ['uu-pf-value', 'me-1', 'mb-1'], `All (${countItems.length})`)
+        allButton.classList.toggle('uu-is-selected', selectedValues.length === 0)
         allButton.onclick = async () => {
             this.clearProperty(property.name)
             this.render()
@@ -297,8 +297,8 @@ export class PropertyFilter<T extends object> {
         }
 
         for (const value of visibleValues) {
-            const button = createElement(container, 'span', ['property-filter-value', 'me-1', 'mb-1'], `${value} (${counts[value] || 0})`)
-            button.classList.toggle('selected', selectedValues.includes(value))
+            const button = createElement(container, 'span', ['uu-pf-value', 'me-1', 'mb-1'], `${value} (${counts[value] || 0})`)
+            button.classList.toggle('uu-is-selected', selectedValues.includes(value))
             button.onclick = async () => {
                 this.toggleValue(property.name, value)
                 this.render()
@@ -308,23 +308,26 @@ export class PropertyFilter<T extends object> {
         }
 
         if (limit && availableValues.some(value => !visibleValues.includes(value))) {
-            const moreButton = createElement(container, 'span', ['property-filter-value', 'me-1', 'mb-1'], '...')
+            const moreButton = createElement(container, 'span', ['uu-pf-value', 'uu-pf-more', 'me-1', 'mb-1'], '...')
             moreButton.onclick = () => this.showAllValuesDialog(property, values)
         }
     }
 
     private showAllValuesDialog(property: NormalizedProperty<T>, values: string[]) {
-        const content = createElement(null, 'div', ['property-filter-dialog'])
-        const toolbar = createElement(content, 'div', ['btn-group', 'mb-2'])
-        const valuesArea = createElement(content, 'div')
-        const countButton = createElement(toolbar, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], 'Sort by Count')
-        const valueAscButton = createElement(toolbar, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], 'Sort by Value (Asc)')
-        const valueDescButton = createElement(toolbar, 'button', ['btn', 'btn-sm', 'btn-outline-secondary'], 'Sort by Value (Desc)')
+        const content = createElement(null, 'div', ['uu-pf-dialog'])
+        const toolbar = createElement(content, 'div', ['uu-pf-toolbar', 'btn-group', 'mb-2'])
+        const valuesArea = createElement(content, 'div', ['uu-pf-dialog-values'])
+        const countButton = createElement(toolbar, 'button', ['uu-btn', 'uu-pf-sort-count', 'btn', 'btn-sm', 'btn-outline-secondary'], 'Sort by Count')
+        const valueAscButton = createElement(toolbar, 'button', ['uu-btn', 'uu-pf-sort-asc', 'btn', 'btn-sm', 'btn-outline-secondary'], 'Sort by Value (Asc)')
+        const valueDescButton = createElement(toolbar, 'button', ['uu-btn', 'uu-pf-sort-desc', 'btn', 'btn-sm', 'btn-outline-secondary'], 'Sort by Value (Desc)')
         let sort: PropertyValueSort = 'count'
         const render = (): void => {
             countButton.classList.toggle('active', sort === 'count')
             valueAscButton.classList.toggle('active', sort === 'value-asc')
             valueDescButton.classList.toggle('active', sort === 'value-desc')
+            countButton.classList.toggle('uu-is-active', sort === 'count')
+            valueAscButton.classList.toggle('uu-is-active', sort === 'value-asc')
+            valueDescButton.classList.toggle('uu-is-active', sort === 'value-desc')
             this.renderValues(valuesArea, property, values, undefined, sort, render)
         }
         countButton.onclick = () => {
@@ -347,19 +350,21 @@ export class PropertyFilter<T extends object> {
         this.root.replaceChildren()
         this.cleanupState()
         if (this.state.properties.length === 0) {
-            const selectButton = createElement(this.root, 'button', ['btn', 'btn-outline-secondary'], 'Select Filter Properties')
+            this.root.classList.add('uu-is-empty')
+            const selectButton = createElement(this.root, 'button', ['uu-btn', 'uu-pf-select', 'btn', 'btn-outline-secondary'], 'Select Filter Properties')
             selectButton.onclick = () => this.selectProperties()
             return
         }
+        this.root.classList.remove('uu-is-empty')
 
         for (const [index, propertyName] of this.state.properties.entries()) {
             const property = this.normalizeProperty(propertyName)
-            const row = createElement(this.root, 'div', ['property-filter-row', 'd-flex', 'align-items-start'])
+            const row = createElement(this.root, 'div', ['uu-pf-row', 'd-flex', 'align-items-start'])
             if (index < this.state.properties.length - 1) row.classList.add('mb-1')
-            const propertyNameElement = createElement(row, 'div', ['property-filter-name', 'me-2'], property.name)
+            const propertyNameElement = createElement(row, 'div', ['uu-pf-name', 'me-2'], property.name)
             propertyNameElement.title = 'Select and reorder filter properties'
             propertyNameElement.onclick = () => this.selectProperties()
-            const valuesArea = createElement(row, 'div', ['property-filter-values', 'd-flex', 'flex-wrap'])
+            const valuesArea = createElement(row, 'div', ['uu-pf-values', 'd-flex', 'flex-wrap'])
             this.renderValues(valuesArea, property, this.allPropertyValues(property), this.maxInlineValues)
         }
     }
