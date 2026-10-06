@@ -79,7 +79,7 @@ export function createSizeBar(parent: HTMLElement | null, parts: {name: string, 
     return container
 }
 
-export function createDataArea<T extends object>(parent: HTMLElement | null, title: string, params: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, renderer: (params: T) => Promise<HTMLElement>): HTMLDivElement {
+export function createDataArea<T extends object>(parent: HTMLElement | null, title: string, params: T, fieldOptions: Partial<Record<keyof T, FieldEditOption>> = {}, renderer: (params: T) => tu.MaybePromise<HTMLElement>): HTMLDivElement {
     const div = createElement(parent, 'div', ['uu-data-area', 'd-flex', 'flex-column', 'border', 'border-light-subtle', 'p-2'])
     // div.style.backgroundColor = tu.stringToColor(title, 100, 97)
     const ia = createInputArea(div, params, fieldOptions, 'bar')

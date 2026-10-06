@@ -25,7 +25,7 @@ export type PropRenderOption<T extends object> = {
 }
 export type ItemAction = (item: any, dataIndex: number) => void
 export type ItemActions = Record<string, ItemAction>
-export type MultiItemAction<T extends object> = (selectedItems: T[]) => void | Promise<void>
+export type MultiItemAction<T extends object> = (selectedItems: T[]) => tu.MaybePromise<void>
 export type MultiItemActions<T extends object> = Record<string, MultiItemAction<T>>
 export type WallRenderOption<T extends object> = RenderOption<T> & {
     // Required: returns the image URL for a given item
@@ -55,7 +55,7 @@ export type RenderOption<T extends object> = {
     
     // When used in table mode, this must return a tr element directly.
     itemFormatter?: (item: T, dataIndex: number, props: string[]) => HTMLElement | undefined
-    onItemClick?: (item: T, dataIndex: number) => Promise<boolean|undefined>
+    onItemClick?: (item: T, dataIndex: number) => tu.MaybePromise<boolean | undefined>
     itemStyle?: (item: T, dataIndex: number) => Partial<CSSStyleDeclaration> | undefined
 }
 export type VisualizeConfig<T extends object> = {
@@ -408,7 +408,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const onItemClickFallbackChain = [
             viewOption?.onItemClick,
             cfg.renderOption?.onItemClick
-        ].filter(v => !!v) as ((item: T, dataIndex: number) => Promise<boolean|undefined>)[]
+        ].filter(v => !!v) as NonNullable<RenderOption<T>['onItemClick']>[]
         if (onItemClickFallbackChain.length === 0) {
             if (!(cfg.enableSelection ?? false)) return
             selectionElements.set(index, element)
@@ -966,7 +966,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         }
     })
 
-    const dropdownActions: Record<string, () => void | Promise<void> | Promise<unknown>> = {
+    const dropdownActions: Record<string, () => tu.MaybePromise<unknown>> = {
         'Charts': async () => {
             const info = tu.getPropStat(arr)
             console.log('prop stat', info)

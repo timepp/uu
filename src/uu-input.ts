@@ -22,14 +22,14 @@ export type InputElement = {
     selectOptions?: string[]
     defaultValue?: string | string[]
     initialValue?: string | string[]
-    customInput?: (currentValue: string) => Promise<string>
+    customInput?: (currentValue: string) => tu.MaybePromise<string>
 }
 
 export type InputElementOld = string | {
     name: string
     valueId?: string // For input type
     initialValue?: string // For input type
-    onClick?: (params: Record<string, string>) => HTMLElement | Promise<HTMLElement> | void
+    onClick?: (params: Record<string, string>) => tu.MaybePromise<HTMLElement | void>
 }
 
 export type InputPanel = {
@@ -691,7 +691,7 @@ export function createDataAreaOld(parent: Element|null, foldable: boolean, param
 /**
  * Given an user provided handler: create input controls, handle user interactions, and show result area.
  */
-export function createInputAction(title: string, actionName: string, valueId: string, handler: (value: string) => Promise<HTMLElement>, value?: string): HTMLDivElement {
+export function createInputAction(title: string, actionName: string, valueId: string, handler: (value: string) => tu.MaybePromise<HTMLElement>, value?: string): HTMLDivElement {
     const div = createElement(null, 'div', ['uu-input-action', 'border', 'border-light-subtle', 'rounded'])
     const resultArea = createElement(null, 'div', ['uu-input-action-result', 'mt-2', 'p-1'])
     const {ig, input, button} = createAutofillInput(title, '', '', valueId, async v => {

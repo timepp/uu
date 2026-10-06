@@ -8,6 +8,8 @@ import { readLocalStorage, writeLocalStorage } from './uu-runtime-state.ts'
 export * from './tu-datetime.ts'
 export * from './tu-cache.ts'
 
+export type MaybePromise<T> = T | Promise<T>
+
 export function formatFloat(n: number, digits = 2, mininumDigits = 0): string {
     return n.toLocaleString(undefined, { 
         minimumFractionDigits: mininumDigits, 

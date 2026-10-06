@@ -1,5 +1,6 @@
 import { createButton, createElement } from './uu-dom.ts'
 import { registerDomResource, registerModule, unregisterDomResource } from './uu-runtime-state.ts'
+import type { MaybePromise } from './tu.ts'
 
 export async function asyncGet<T>(fn: () => T): Promise<T> {
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -12,7 +13,7 @@ export function asyncCallFunctionWithProgress(fn: () => void, hint = 'Please wai
     }, 0)
 }
 
-export async function callAsyncFunctionWithProgress<T>(fn: () => Promise<T>, hint = 'Please wait...'): Promise<T> {
+export async function callAsyncFunctionWithProgress<T>(fn: () => MaybePromise<T>, hint = 'Please wait...'): Promise<T> {
     const dialog = createElement(document.body, 'dialog', ['uu-progress', 'uu-is-loading'])
     const runtimeId = registerDomResource(dialog, 'uu-progress', 'progress-dialog')
     const content = createElement(dialog, 'div', ['uu-progress-content'], '', { textAlign: 'center' })

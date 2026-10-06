@@ -1,5 +1,6 @@
 import { createElement } from './uu-dom.ts'
 import { registerDomResource, registerModule, unregisterDomResource } from './uu-runtime-state.ts'
+import type { MaybePromise } from './tu.ts'
 
 function ensureDialogStyles() {
     const styleId = 'uu-common-styles'
@@ -19,7 +20,7 @@ function ensureDialogStyles() {
     registerDomResource(style, 'uu-dialog', 'style', `#${styleId}`, 'dialog-styles')
 }
 
-export type ButtonAction = () => boolean|void|Promise<boolean|void>
+export type ButtonAction = () => MaybePromise<boolean | void>
 
 export interface DialogOptions {
     classes?: string[]

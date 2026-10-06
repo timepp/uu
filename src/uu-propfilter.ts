@@ -12,7 +12,7 @@ export type PropertyFilterState = {
 export type PropertyFilterOptions<T extends object> = {
     valueGetters?: Partial<Record<keyof T | string, (item: T) => unknown | unknown[]>>
     maxInlineValues?: number
-    onChange?: (filter: PropertyFilter<T>) => void | Promise<void>
+    onChange?: (filter: PropertyFilter<T>) => tu.MaybePromise<void>
 }
 
 type NormalizedProperty<T extends object> = {
@@ -127,7 +127,7 @@ export class PropertyFilter<T extends object> {
     private availablePropertyNames: string[]
     private state: PropertyFilterState
     private maxInlineValues: number
-    private onChange?: (filter: PropertyFilter<T>) => void | Promise<void>
+    private onChange?: (filter: PropertyFilter<T>) => tu.MaybePromise<void>
     private valueGetters: Partial<Record<keyof T | string, (item: T) => unknown | unknown[]>>
 
     constructor(parent: Element | null, items: T[], private stateKey: string, options: PropertyFilterOptions<T> = {}) {

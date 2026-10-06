@@ -1,4 +1,4 @@
-import { createObservableState, stringToColor } from './tu.ts'
+import { createObservableState, stringToColor, type MaybePromise } from './tu.ts'
 import { createCheckBtn, createElement, createLoadingSpinner, fa } from './uu-dom.ts'
 import { registerDomResource, registerModule, unregisterDomResource } from './uu-runtime-state.ts'
 
@@ -88,7 +88,7 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
     }
 }
 
-export type ContentProvider = HTMLElement | ((refresh: boolean) => HTMLElement) | ((refresh: boolean) => Promise<HTMLElement>)
+export type ContentProvider = HTMLElement | ((refresh: boolean) => MaybePromise<HTMLElement>)
 
 export function createFoldableArea(parent: Element | null, title: string, content?: ContentProvider, initiallyFolded = true): FoldableArea {
     const div = createElement(parent, 'div', ['uu-fold', 'card', 'mb-2', 'mt-2'])

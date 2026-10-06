@@ -1,4 +1,4 @@
-import { extractJsonObjects, safeStringify } from './tu.ts'
+import { extractJsonObjects, safeStringify, type MaybePromise } from './tu.ts'
 import { loadCodeMirrorModules } from './uu-dependencies.ts'
 import { showDialog, showInDialog, type ButtonAction } from './uu-dialog.ts'
 import { createElement } from './uu-dom.ts'
@@ -8,14 +8,14 @@ import { registerModule, registerModuleValue } from './uu-runtime-state.ts'
 
 export type EntityRenderer = {
     anchorStyle: string,
-    render: () => HTMLElement | Promise<HTMLElement>
+    render: () => MaybePromise<HTMLElement>
 }
 export type VisualizeCallback = (path: string[], value: any) => EntityRenderer|undefined
 export type JsonViewerOptions = {
     stringFoldThreshold?: number
     visualizeCallback?: VisualizeCallback
 }
-export type InformationExtractor = (obj: object) => HTMLElement | Promise<HTMLElement>
+export type InformationExtractor = (obj: object) => MaybePromise<HTMLElement>
 export type EntityParser = (path: string[], value: any) => EntityRenderer|undefined
 export type CodeMirrorJsonEditor = {
     div: HTMLDivElement
