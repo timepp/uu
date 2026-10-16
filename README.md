@@ -65,6 +65,38 @@ setBootstrapAutoLoad(false)
 Importing `uu.ts` itself has no browser side effects. `enableBootstrap()` and
 `enableFontAwesome()` remain available for explicit early initialization.
 
+## Custom array sorting
+
+Use `getSortingValue(item, prop, dataIndex)` to customize sort keys without
+changing displayed values or filtering:
+
+```typescript
+const statusOrder: Record<string, number> = {
+    pending: 0,
+    running: 1,
+    completed: 2,
+}
+
+const view = uu.visualizeArray(items, {
+    sortBy: [{ prop: 'status', order: 'asc' }],
+    getSortingValue: (item, prop, dataIndex) => {
+        if (prop === 'status') return statusOrder[item.status]
+        if (prop === 'createdAt') return Date.parse(item.createdAt)
+        return undefined
+    },
+})
+```
+
+The callback returns `string | number | undefined`. Return `undefined` to use
+the default property value; `0` and `''` are valid custom keys. `dataIndex` is
+the zero-based index in the original array, unaffected by sorting, filtering,
+or paging. Return consistent key types for each column: numbers are compared
+numerically, and strings use the existing Chinese locale collator.
+
+Custom keys apply to initial sorting, header clicks, and multi-column sorting
+in all views. They are not used for random sorting. Callbacks should be pure
+and inexpensive because they may run multiple times during comparisons.
+
 ## Styling and CSS hooks
 
 UU adds stable `uu-*` classes to the roots and important structural elements of
@@ -149,6 +181,9 @@ uu exposes all its internal states, owned local storages, and injected styles in
 - `script/increase-ver.ts`: script to increase version number
 - `script/test.ts`: script for cli test
 - `ui-test`: directory for UI tests
+
+To run the array sorting regression checks, start `npm run ui-test`, then run
+`(await import('./sorting-test.ts')).runSortingTests()` in the browser console.
 
 ### Publishing
 

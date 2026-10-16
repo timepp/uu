@@ -116,6 +116,10 @@ export type VisualizeConfig<T extends object> = {
         order: 'asc' | 'desc'
     }[]
 
+    // Returns a custom sort key, or undefined to use the default property value.
+    // dataIndex is the zero-based index in the original array.
+    getSortingValue?: (item: T, prop: string, dataIndex: number) => string | number | undefined
+
     // initial filter string, if not present, no filtering is applied
     filter: string
 
@@ -779,6 +783,11 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         createElement(counts, 'span', ['uu-va-count-value'], `${data.length} / ${arr.length}`)
     }
 
+    function getSortingValue(item: T, prop: string, dataIndex: number) {
+        const value = cfg.getSortingValue?.(item, prop, dataIndex)
+        return value === undefined ? getPropValue(item, prop, dataIndex) : value
+    }
+
     function applySort() {
         // update sort hint
         const sortBy = state.sortBy || []
@@ -790,8 +799,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         } else if (sortBy.length > 0) {
             data.sort((a, b) => {
                 for (const s of sortBy) {
-                    const aValue = getPropValue(a.item, s.prop, a.index)
-                    const bValue = getPropValue(b.item, s.prop, b.index)
+                    const aValue = getSortingValue(a.item, s.prop, a.index)
+                    const bValue = getSortingValue(b.item, s.prop, b.index)
                     if (aValue === bValue) continue
                     let ret = 0
                     if (aValue === undefined) ret = -1
