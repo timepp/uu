@@ -65,6 +65,36 @@ setBootstrapAutoLoad(false)
 Importing `uu.ts` itself has no browser side effects. `enableBootstrap()` and
 `enableFontAwesome()` remain available for explicit early initialization.
 
+## Recreating array views
+
+`visualizeArray()` renders a data snapshot. When the data changes, create a new
+view and replace the old element. Reuse the same `stateKey` to restore the
+user's settings from local storage:
+
+```typescript
+const config = { stateKey: 'orders', pageSize: 20 }
+let view = uu.visualizeArray(items, config)
+document.body.appendChild(view)
+
+const nextView = uu.visualizeArray(updatedItems, config)
+view.replaceWith(nextView)
+view = nextView
+```
+
+Saved settings include sorting, committed text and property filters, view mode,
+column selection and order, page size (including disabled paging), current page,
+and whether the property filter panel is expanded. Page size changes through
+either the pager or the options menu are saved. Saved settings override the
+configuration defaults.
+
+The current page is restored after filtering and sorting; if there are fewer
+pages, it is clamped to the last available page. Changing sorting, filters, or
+page size starts at the first page. Empty input does not overwrite saved state.
+Without a `stateKey`, settings are not retained between calls.
+
+Row selection, scroll position, focus, and unsubmitted filter text are not
+restored. Random sorting restores the mode, not the previous shuffled order.
+
 ## Custom array sorting
 
 Use `getSortingValue(item, prop, dataIndex)` to customize sort keys without
@@ -184,6 +214,8 @@ uu exposes all its internal states, owned local storages, and injected styles in
 
 To run the array sorting regression checks, start `npm run ui-test`, then run
 `(await import('./sorting-test.ts')).runSortingTests()` in the browser console.
+For view-state persistence checks, run
+`await (await import('./state-test.ts')).runStateTests()`.
 
 ### Publishing
 
