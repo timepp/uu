@@ -256,8 +256,12 @@ export class PropertyFilter<T extends object> {
         this.state.filters[propertyName] = []
     }
 
-    private toggleValue(propertyName: string, value: string) {
+    private toggleValue(propertyName: string, value: string, multiple: boolean) {
         const selectedValues = this.state.filters[propertyName] ||= []
+        if (!multiple) {
+            this.state.filters[propertyName] = selectedValues.length === 1 && selectedValues[0] === value ? [] : [value]
+            return
+        }
         const index = selectedValues.indexOf(value)
         if (index >= 0) {
             selectedValues.splice(index, 1)
@@ -273,6 +277,7 @@ export class PropertyFilter<T extends object> {
         limit?: number,
         sort: PropertyValueSort = 'count',
         onSelectionChange?: () => void,
+        multiple = false,
     ) {
         container.replaceChildren()
 
@@ -298,9 +303,10 @@ export class PropertyFilter<T extends object> {
 
         for (const value of visibleValues) {
             const button = createElement(container, 'span', ['uu-pf-value', 'me-1', 'mb-1'], `${value} (${counts[value] || 0})`)
+            button.title = multiple ? 'Click to add or remove this value' : 'Click to select one value; Ctrl+click to toggle multiple values'
             button.classList.toggle('uu-is-selected', selectedValues.includes(value))
-            button.onclick = async () => {
-                this.toggleValue(property.name, value)
+            button.onclick = async event => {
+                this.toggleValue(property.name, value, multiple || event.ctrlKey)
                 this.render()
                 onSelectionChange?.()
                 await this.emitChange()
@@ -328,7 +334,7 @@ export class PropertyFilter<T extends object> {
             countButton.classList.toggle('uu-is-active', sort === 'count')
             valueAscButton.classList.toggle('uu-is-active', sort === 'value-asc')
             valueDescButton.classList.toggle('uu-is-active', sort === 'value-desc')
-            this.renderValues(valuesArea, property, values, undefined, sort, render)
+            this.renderValues(valuesArea, property, values, undefined, sort, render, true)
         }
         countButton.onclick = () => {
             sort = 'count'

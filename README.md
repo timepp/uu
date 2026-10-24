@@ -92,6 +92,13 @@ pages, it is clamped to the last available page. Changing sorting, filters, or
 page size starts at the first page. Empty input does not overwrite saved state.
 Without a `stateKey`, settings are not retained between calls.
 
+Property filters use single selection by default: clicking a value selects
+only that value, or clears it if it is already the only selected value.
+Hold Ctrl while clicking to add or remove individual values for multiple
+selection. `All` clears the row. The expanded values dialog keeps direct-click
+multiple selection without requiring Ctrl. Selected values are saved with the
+property filter state.
+
 Row selection, scroll position, focus, and unsubmitted filter text are not
 restored. Random sorting restores the mode, not the previous shuffled order.
 
