@@ -65,6 +65,75 @@ setBootstrapAutoLoad(false)
 Importing `uu.ts` itself has no browser side effects. `enableBootstrap()` and
 `enableFontAwesome()` remain available for explicit early initialization.
 
+## Recreating array views
+
+`visualizeArray()` renders a data snapshot. When the data changes, create a new
+view and replace the old element. Reuse the same `stateKey` to restore the
+user's settings from local storage:
+
+```typescript
+const config = { stateKey: 'orders', pageSize: 20 }
+let view = uu.visualizeArray(items, config)
+document.body.appendChild(view)
+
+const nextView = uu.visualizeArray(updatedItems, config)
+view.replaceWith(nextView)
+view = nextView
+```
+
+Saved settings include sorting, committed text and property filters, view mode,
+column selection and order, page size (including disabled paging), current page,
+and whether the property filter panel is expanded. Page size changes through
+either the pager or the options menu are saved. Saved settings override the
+configuration defaults.
+
+The current page is restored after filtering and sorting; if there are fewer
+pages, it is clamped to the last available page. Changing sorting, filters, or
+page size starts at the first page. Empty input does not overwrite saved state.
+Without a `stateKey`, settings are not retained between calls.
+
+Property filters use single selection by default: clicking a value selects
+only that value, or clears it if it is already the only selected value.
+Hold Ctrl while clicking to add or remove individual values for multiple
+selection. `All` clears the row. The expanded values dialog keeps direct-click
+multiple selection without requiring Ctrl. Selected values are saved with the
+property filter state.
+
+Row selection, scroll position, focus, and unsubmitted filter text are not
+restored. Random sorting restores the mode, not the previous shuffled order.
+
+## Custom array sorting
+
+Use `getSortingValue(item, prop, dataIndex)` to customize sort keys without
+changing displayed values or filtering:
+
+```typescript
+const statusOrder: Record<string, number> = {
+    pending: 0,
+    running: 1,
+    completed: 2,
+}
+
+const view = uu.visualizeArray(items, {
+    sortBy: [{ prop: 'status', order: 'asc' }],
+    getSortingValue: (item, prop, dataIndex) => {
+        if (prop === 'status') return statusOrder[item.status]
+        if (prop === 'createdAt') return Date.parse(item.createdAt)
+        return undefined
+    },
+})
+```
+
+The callback returns `string | number | undefined`. Return `undefined` to use
+the default property value; `0` and `''` are valid custom keys. `dataIndex` is
+the zero-based index in the original array, unaffected by sorting, filtering,
+or paging. Return consistent key types for each column: numbers are compared
+numerically, and strings use the existing Chinese locale collator.
+
+Custom keys apply to initial sorting, header clicks, and multi-column sorting
+in all views. They are not used for random sorting. Callbacks should be pure
+and inexpensive because they may run multiple times during comparisons.
+
 ## Styling and CSS hooks
 
 UU adds stable `uu-*` classes to the roots and important structural elements of
@@ -149,6 +218,11 @@ uu exposes all its internal states, owned local storages, and injected styles in
 - `script/increase-ver.ts`: script to increase version number
 - `script/test.ts`: script for cli test
 - `ui-test`: directory for UI tests
+
+To run the array sorting regression checks, start `npm run ui-test`, then run
+`(await import('./sorting-test.ts')).runSortingTests()` in the browser console.
+For view-state persistence checks, run
+`await (await import('./state-test.ts')).runStateTests()`.
 
 ### Publishing
 

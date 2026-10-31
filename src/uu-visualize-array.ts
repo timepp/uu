@@ -116,6 +116,10 @@ export type VisualizeConfig<T extends object> = {
         order: 'asc' | 'desc'
     }[]
 
+    // Returns a custom sort key, or undefined to use the default property value.
+    // dataIndex is the zero-based index in the original array.
+    getSortingValue?: (item: T, prop: string, dataIndex: number) => string | number | undefined
+
     // initial filter string, if not present, no filtering is applied
     filter: string
 
@@ -124,7 +128,7 @@ export type VisualizeConfig<T extends object> = {
     // It's recommended to provide a custom filter for better performance, if there are many large items
     // Custom filter will be disabled when the filter string is exception
     itemFilter: (item: T, filter: string) => boolean | undefined
-    // If not empty, sort and prop settings will be saved to local storage with the given key
+    // If not empty, view, filter, sort, column and paging settings are saved to local storage.
     stateKey: string
 
     // Optional: load more data when user clicks on the total count
@@ -151,6 +155,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         randomSort: false,
         filter: cfg.filter || '',
         pageSize: cfg.pageSize,
+        currentPage: 0,
+        propertyFilterExpanded: false,
         renderStyle: renderStyles[0],
         tableProps: undefined as string[] | undefined,
         tileProps: undefined as string[] | undefined,
@@ -519,7 +525,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                     state.sortBy = [{ prop, order: 'asc' }]
                 }
                 applySort()
-                gotoPage(0)
+                pager.gotoPage(0)
             }
         }
 
@@ -653,7 +659,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const allData = arr.map((item, index) => ({item, index}))
     let textFilteredData = allData
     let data = allData
-    const pager = new Pager(data.length, state.pageSize || Infinity, (page) => gotoPage(page))
+    const pager = new Pager(data.length, state.pageSize && state.pageSize > 0 ? state.pageSize : Infinity, (page, pageSize) => {
+        state.currentPage = page
+        // Zero survives JSON serialization and distinguishes disabled paging from an unset default.
+        state.pageSize = pageSize === Infinity ? 0 : pageSize
+        gotoPage(page)
+    })
     const pagerElem = pager.getElement()
 
     // overall dom
@@ -687,7 +698,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const pagerPlaceholder = createElement(toolbar, 'div', ['uu-va-pager'])
     const loadMoreBtn = createElement(toolbar, 'button', ['uu-btn', 'uu-va-load-more', 'btn', 'btn-outline-secondary'], fa('fa-plus'))
     const optionBtn = createElement(toolbar, 'button', ['uu-btn', 'uu-va-options', 'btn', 'btn-outline-secondary'], fa('fa-bars'))
-    const propertyFilterArea = createElement(view, 'div', ['uu-va-pf', 'mb-1'], '', { display: 'none' })
+    const propertyFilterArea = createElement(view, 'div', ['uu-va-pf', 'mb-1'], '', { display: state.propertyFilterExpanded ? '' : 'none' })
+    propertyFilterArea.classList.toggle('uu-is-active', state.propertyFilterExpanded)
     const dataContainer = createElement(view, 'div', ['uu-va-data'])
 
     const propertyFilter = new PropertyFilter<T>(propertyFilterArea, allData.map(v => v.item), cfg.stateKey ? `${cfg.stateKey}:property-filter` : '', {
@@ -714,11 +726,11 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         dataContainer.appendChild(getRenderer()(startIndex, endIndex))
     }
 
-    function applyFilterAndSort() {
+    function applyFilterAndSort(page = 0) {
         applyTextFilter(state.filter || '')
         applyPropertyFilter()
         applySort()
-        pager.gotoPage(0)
+        pager.gotoPage(page)
     }
 
     function applyTextFilter(s: string) {
@@ -779,6 +791,11 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         createElement(counts, 'span', ['uu-va-count-value'], `${data.length} / ${arr.length}`)
     }
 
+    function getSortingValue(item: T, prop: string, dataIndex: number) {
+        const value = cfg.getSortingValue?.(item, prop, dataIndex)
+        return value === undefined ? getPropValue(item, prop, dataIndex) : value
+    }
+
     function applySort() {
         // update sort hint
         const sortBy = state.sortBy || []
@@ -790,8 +807,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         } else if (sortBy.length > 0) {
             data.sort((a, b) => {
                 for (const s of sortBy) {
-                    const aValue = getPropValue(a.item, s.prop, a.index)
-                    const bValue = getPropValue(b.item, s.prop, b.index)
+                    const aValue = getSortingValue(a.item, s.prop, a.index)
+                    const bValue = getSortingValue(b.item, s.prop, b.index)
                     if (aValue === bValue) continue
                     let ret = 0
                     if (aValue === undefined) ret = -1
@@ -947,15 +964,16 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         state.sortBy = r.sortBy
         state.randomSort = r.randomSort
         applySort()
-        gotoPage(0)
+        pager.gotoPage(0)
     }
     propSelectorBtn.onclick = () => selectProps()
 
     filterHint.style.cursor = 'pointer'
     filterHint.title = 'Show or hide property filters'
     filterHint.onclick = () => {
-        propertyFilterArea.style.display = propertyFilterArea.style.display === 'none' ? '' : 'none'
-        propertyFilterArea.classList.toggle('uu-is-active', propertyFilterArea.style.display !== 'none')
+        state.propertyFilterExpanded = !state.propertyFilterExpanded
+        propertyFilterArea.style.display = state.propertyFilterExpanded ? '' : 'none'
+        propertyFilterArea.classList.toggle('uu-is-active', state.propertyFilterExpanded)
     }
 
     filter.addEventListener('keydown', (e) => {
@@ -981,12 +999,11 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         },
         'Select Props': () => selectProps(),
         'Change Page Size': async () => {
-            const v = await prompt('Page Size', 'Enter number of items per page (enter 0 or negative number to disable paging)', `${state.pageSize || cfg.pageSize || 20}`)
+            const v = await prompt('Page Size', 'Enter number of items per page (enter 0 or negative number to disable paging)', `${state.pageSize ?? 20}`)
             if (v) {
                 const n = parseInt(v)
                 if (!isNaN(n)) {
-                    state.pageSize = n > 0 ? n : undefined
-                    pager.setPageSize(state.pageSize || Infinity)
+                    pager.setPageSize(n > 0 ? n : Infinity)
                     pager.gotoPage(0)
                 }
             }
@@ -1032,6 +1049,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     // logic start here
     syncRegionExistence()
-    applyFilterAndSort()
+    applyFilterAndSort(state.currentPage)
     return view
 }
