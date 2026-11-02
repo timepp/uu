@@ -54,14 +54,29 @@ export function createSelector(parent: HTMLElement | null, options: string[], on
     }
 }
 
-export function associateDropdownActions(elem: HTMLElement, actions: Record<string, () => void> | {name: string, action: () => void}[]) {
+export type DropdownAction = { name: string, action: () => void } | { separator: true }
+
+export function associateDropdownActions(elem: HTMLElement, actions: Record<string, () => void> | DropdownAction[] | (() => DropdownAction[])) {
     type DropdownElement = HTMLElement & { dropdown?: HTMLElement }
     const element = elem as DropdownElement
+    let closeDropdown: (() => void) | undefined
     element.onclick = () => {
-        if (element.dropdown) return
+        if (closeDropdown) {
+            closeDropdown()
+            return
+        }
         const container = element.closest('dialog') || document.body
         const dropdown = createElement(container, 'div', ['uu-dropdown', 'dropdown-menu', 'show'], '', { position: 'fixed', zIndex: '1050' })
         const runtimeId = registerDomResource(dropdown, 'uu-controls', 'dropdown')
+        const entries = typeof actions === 'function' ? actions() : Array.isArray(actions) ? actions : Object.entries(actions).map(([name, action]) => ({name, action}))
+        for (const entry of entries) {
+            if ('separator' in entry) {
+                createElement(dropdown, 'hr', ['uu-dropdown-divider', 'dropdown-divider'])
+            } else {
+                const item = createElement(dropdown, 'a', ['uu-dropdown-item', 'dropdown-item'], entry.name, { cursor: 'pointer' })
+                item.onclick = entry.action
+            }
+        }
         const rect = element.getBoundingClientRect()
         container.appendChild(dropdown)
         let left = rect.left
@@ -73,18 +88,18 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
         dropdown.style.left = `${left}px`
         dropdown.style.top = `${top}px`
         element.dropdown = dropdown
-        const entries = Array.isArray(actions) ? actions : Object.entries(actions).map(([name, action]) => ({name, action}))
-        for (const {name, action} of entries) {
-            const item = createElement(dropdown, 'a', ['uu-dropdown-item', 'dropdown-item'], name, { cursor: 'pointer' })
-            item.onclick = action
+        function onDocumentClick(event: MouseEvent) {
+            if (event.target instanceof Node && element.contains(event.target)) return
+            closeDropdown?.()
         }
-        function closeDropdown() {
-            element.dropdown?.remove()
+        closeDropdown = () => {
+            dropdown.remove()
             delete element.dropdown
             unregisterDomResource(runtimeId)
-            document.removeEventListener('click', closeDropdown)
+            document.removeEventListener('click', onDocumentClick, true)
+            closeDropdown = undefined
         }
-        setTimeout(() => document.addEventListener('click', closeDropdown), 0)
+        document.addEventListener('click', onDocumentClick, true)
     }
 }
 

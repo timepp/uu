@@ -8,7 +8,7 @@ import {
 } from './uu-dom.ts'
 import { showJsonResult } from './uu-json.ts'
 import { createFoldedString } from './uu-text.ts'
-import { associateDropdownActions } from './uu-controls.ts'
+import { associateDropdownActions, type DropdownAction } from './uu-controls.ts'
 import { showDialog } from './uu-dialog.ts'
 import { renderDataInsights } from './uu-data-insights.ts'
 import { Pager } from './uu-pager.ts'
@@ -17,6 +17,7 @@ import { showSelection } from './uu-selection.ts'
 import { PropertyFilter } from './uu-propfilter.ts'
 import { DraggableSortedContainer } from './uu-dnd.ts'
 import { withUI } from './uu-progress.ts'
+import { registerDomResource } from './uu-runtime-state.ts'
 
 export type PropRenderOption<T extends object> = {
     formatter?: (item: T, prop: string, dataIndex: number) => string | HTMLElement
@@ -73,12 +74,9 @@ export type VisualizeConfig<T extends object> = {
     
     itemActions: ItemActions | ((item: T, dataIndex: number) => ItemActions)
 
-    // Adds named entries to the options menu. Each callback receives all
+    // Adds named entries to the selection actions menu. Each callback receives all
     // selected items in selection order.
     multiItemActions: MultiItemActions<T>
-
-    // Whether item selection is enabled. Default: false.
-    enableSelection: boolean
 
     // If not empty, raw index will be shown in the first prop with the given prop name
     // note: this prop can be hide / sort as well
@@ -136,10 +134,52 @@ export type VisualizeConfig<T extends object> = {
     onPropertyValueClick: (prop: string, value: string) => void
 }
 
+function ensureSelectionStyles() {
+    const styleId = 'uu-va-selection-styles'
+    let style = document.getElementById(styleId)
+    if (!style) {
+        style = createElement(document.head, 'style', [], `
+            .uu-va-selectable { position: relative; }
+            .uu-va-selection-cell { position: relative; padding-left: 2rem !important; }
+            .uu-va-table .uu-va-selectable.uu-is-selected { outline: none; }
+            .uu-va-table .uu-va-selectable.uu-is-selected::after {
+                content: '';
+                position: absolute;
+                inset: 0;
+                border: 2px solid var(--bs-primary, #0d6efd);
+                box-sizing: border-box;
+                pointer-events: none;
+                z-index: 2;
+            }
+            .uu-va-select-checkbox {
+                position: absolute;
+                top: .5rem;
+                left: .4rem;
+                width: 1rem;
+                height: 1rem;
+                margin: 0;
+                z-index: 1;
+                opacity: 0;
+                cursor: pointer;
+            }
+            .uu-va-selection-cell > .uu-va-select-checkbox {
+                top: 50%;
+                transform: translateY(-50%);
+            }
+            .uu-va-selectable:hover > .uu-va-select-checkbox,
+            .uu-va-selectable:hover > .uu-va-selection-cell > .uu-va-select-checkbox,
+            .uu-va-select-checkbox:checked,
+            .uu-va-select-checkbox:focus-visible { opacity: 1; }
+        `, {}, { id: styleId })
+    }
+    registerDomResource(style, 'uu-visualize-array', 'style', `#${styleId}`, 'array-selection-styles')
+}
+
 export function visualizeArray<T extends object>(arr: T[], cfg: Partial<VisualizeConfig<T>> = {}): HTMLDivElement {
     if (arr.length === 0) {
         return createElement(null, 'div', ['uu-va', 'uu-va-empty', 'uu-is-empty', 'alert', 'alert-info', 'mb-0'], 'Data is empty.')
     }
+    ensureSelectionStyles()
 
     // helper functions
     const toArrow = (s: string) => s === 'asc' ? '⬆️' : '⬇️'
@@ -191,26 +231,34 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         return cfg.wallRenderOption
     }
 
-    function createActionArea(item: T, index: number) {
+    function getItemActions(item: T, index: number) {
         const actions = (typeof cfg.itemActions === 'function') ? cfg.itemActions(item, index) : (cfg.itemActions || {})
         const defaultActions = cfg.noDefaultActions ? {} : {
             raw: () => showJsonResult(`Raw data (index: ${index})`, item)
         }
-        const allActions = { ...defaultActions, ...actions }
+        return {...defaultActions, ...actions}
+    }
+
+    async function runItemAction(name: string, action: () => unknown) {
+        try {
+            await action()
+        } catch (error) {
+            console.error(`item action "${name}" failed`, error)
+            const message = error instanceof Error ? error.message : String(error)
+            const content = createElement(null, 'pre', ['text-danger', 'overflow-auto'], message)
+            showDialog(`Error executing action "${name}"`, content)
+        }
+    }
+
+    function createActionArea(item: T, index: number) {
+        const allActions = getItemActions(item, index)
         const container = createElement(null, 'div', ['uu-va-actions', 'd-flex', 'gap-2'])
         for (const [name, action] of Object.entries(allActions)) {
             const btn = createElement(container, 'a', ['uu-va-action', 'me-2'], name)
             btn.style.cursor = 'pointer'
             btn.onclick = async (event) => {
                 event.stopPropagation()
-                try {
-                    await action(item, index)
-                } catch (error) {
-                    console.error(`item action "${name}" failed`, error)
-                    const message = error instanceof Error ? error.message : String(error)
-                    const content = createElement(null, 'pre', ['text-danger', 'overflow-auto'], message)
-                    showDialog(`Error executing action "${name}"`, content)
-                }
+                await runItemAction(name, () => action(item, index))
             }
         }
         return container
@@ -349,12 +397,10 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     function getVisibleProps() {
         const stateProps = state.renderStyle === 'table' ? state.tableProps : state.renderStyle === 'tile' ? state.tileProps : state.wallProps
+        if (stateProps) return stateProps
         const viewOption = getActiveViewRenderOption()
-        const props = stateProps || viewOption?.props || cfg.renderOption?.props || meaningfulPropsWithRaw
-        if (actionProp && !props.includes(actionProp)) {
-            props.push(actionProp)
-        }
-        return props
+        const props = viewOption?.props || cfg.renderOption?.props || meaningfulPropsWithRaw
+        return actionProp && !props.includes(actionProp) ? [...props, actionProp] : props
     }
 
     function renderItem(item: T, index: number) {
@@ -394,10 +440,14 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         element.setAttribute('aria-selected', `${selected}`)
         element.classList.toggle('uu-is-selected', selected)
         element.classList.toggle('table-primary', state.renderStyle === 'table' && selected)
+        const checkbox = element.querySelector<HTMLInputElement>('.uu-va-select-checkbox')
+        if (checkbox) checkbox.checked = selected
         if (state.renderStyle !== 'table') {
             if (selected) {
-                element.dataset.uuUnselectedOutline = element.style.outline
-                element.dataset.uuUnselectedOutlineOffset = element.style.outlineOffset
+                if (element.dataset.uuUnselectedOutline === undefined) {
+                    element.dataset.uuUnselectedOutline = element.style.outline
+                    element.dataset.uuUnselectedOutlineOffset = element.style.outlineOffset
+                }
                 element.style.outline = '3px solid var(--bs-primary, #0d6efd)'
                 element.style.outlineOffset = '-3px'
             } else if (element.dataset.uuUnselectedOutline !== undefined) {
@@ -409,38 +459,49 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         }
     }
 
+    function syncSelection() {
+        for (const [index, element] of selectionElements) {
+            syncItemSelection(element, index)
+        }
+    }
+
     function attachItemClickHandler(item: T, index: number, element: HTMLElement) {
         const viewOption = getActiveViewRenderOption()
         const onItemClickFallbackChain = [
             viewOption?.onItemClick,
             cfg.renderOption?.onItemClick
         ].filter(v => !!v) as ((item: T, dataIndex: number) => Promise<boolean|undefined>)[]
-        if (onItemClickFallbackChain.length === 0) {
-            if (!(cfg.enableSelection ?? false)) return
-            selectionElements.set(index, element)
-            syncItemSelection(element, index)
-            element.style.cursor = 'pointer'
-            element.onclick = evt => {
-                evt.stopPropagation()
-                const target = evt.target as Element | null
-                if (target?.closest('a, button, input, select, textarea, label')) return
-                if (globalThis.getSelection?.()?.toString()) return
-                if (selectedIndexes.has(index)) selectedIndexes.delete(index)
-                else selectedIndexes.add(index)
-                for (const [renderedIndex, renderedElement] of selectionElements) {
-                    syncItemSelection(renderedElement, renderedIndex)
-                }
-            }
-            return
+        element.classList.add('uu-va-selectable')
+        let checkboxHost = element
+        if (element instanceof HTMLTableRowElement) {
+            checkboxHost = element.cells[0] || element.insertCell()
+            checkboxHost.classList.add('uu-va-selection-cell')
         }
-        element.style.cursor = 'pointer'
-        element.onclick = async (evt) => {
+        const checkbox = createElement(null, 'input', ['uu-va-select-checkbox'], '', {}, { type: 'checkbox' })
+        checkbox.setAttribute('aria-label', `Select item ${index + 1}`)
+        checkboxHost.prepend(checkbox)
+        checkbox.onclick = event => event.stopPropagation()
+        checkbox.onchange = () => {
+            if (checkbox.checked) selectedIndexes.add(index)
+            else selectedIndexes.delete(index)
+            syncSelection()
+        }
+        selectionElements.set(index, element)
+        syncItemSelection(element, index)
+        element.addEventListener('click', async evt => {
             evt.stopPropagation()
+            const target = evt.target
+            if (target instanceof Element && target.closest('a, button, input, select, textarea, label')) return
+            if (globalThis.getSelection?.()?.toString()) return
+            const deselect = selectedIndexes.size === 1 && selectedIndexes.has(index)
+            selectedIndexes.clear()
+            if (!deselect) selectedIndexes.add(index)
+            syncSelection()
             for (const onItemClickHandler of onItemClickFallbackChain) {
                 const handled = await onItemClickHandler(item, index)
                 if (handled !== false) break
             }
-        }
+        })
     }
 
     function comparisonValue(item: T, property: string): unknown {
@@ -818,7 +879,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                     else if (typeof aValue === 'number' && typeof bValue === 'number') {
                         ret = aValue - bValue
                     } else {
-                        ret = zhCollator.compare(`${aValue}`, `${bValue}`)
+                        const aText = typeof aValue === 'object' ? tu.stringify(aValue) : String(aValue)
+                        const bText = typeof bValue === 'object' ? tu.stringify(bValue) : String(bValue)
+                        ret = zhCollator.compare(aText, bText)
                     }
                     // console.log(`"${aValue}" vs "${bValue}" => ${ret}`)
                     if (ret !== 0) {
@@ -1012,11 +1075,45 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             showJsonResult('Original Data', arr)
         }
     }
-    for (const [name, action] of Object.entries(cfg.multiItemActions || {})) {
-        dropdownActions[name] = () => action(getSelectedItems())
-    }
-    dropdownActions['Compare Selected Items'] = () => compareSelectedItems()
-    associateDropdownActions(optionBtn, dropdownActions)
+    associateDropdownActions(optionBtn, () => {
+        const entries: DropdownAction[] = Object.entries(dropdownActions).map(([name, action]) => ({ name, action }))
+        entries.push(
+            { separator: true },
+            { name: 'Select All', action: () => {
+                for (const { index } of data) selectedIndexes.add(index)
+                syncSelection()
+            } },
+            { name: 'Invert Selection', action: () => {
+                for (const { index } of data) {
+                    if (selectedIndexes.has(index)) selectedIndexes.delete(index)
+                    else selectedIndexes.add(index)
+                }
+                syncSelection()
+            } },
+            { name: 'Clear Selection', action: () => {
+                selectedIndexes.clear()
+                syncSelection()
+            } }
+        )
+        if (selectedIndexes.size > 0) {
+            const selectionActions: DropdownAction[] = []
+            if (selectedIndexes.size === 1) {
+                const index = [...selectedIndexes][0]
+                const item = arr[index]
+                for (const [name, action] of Object.entries(getItemActions(item, index))) {
+                    selectionActions.push({ name, action: () => runItemAction(name, () => action(item, index)) })
+                }
+            }
+            for (const [name, action] of Object.entries(cfg.multiItemActions || {})) {
+                selectionActions.push({ name, action: () => runItemAction(name, () => action(getSelectedItems())) })
+            }
+            if (selectedIndexes.size >= 2) {
+                selectionActions.push({ name: 'Compare Selected Items', action: () => compareSelectedItems() })
+            }
+            if (selectionActions.length > 0) entries.push({ separator: true }, ...selectionActions)
+        }
+        return entries
+    })
 
     // Load More button
     if (!cfg.loadMore) {

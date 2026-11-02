@@ -92,5 +92,55 @@ export function runSortingTests() {
         throw new Error('Sorting must not reorder the original array')
     }
     checks++
+
+    const objectItems = [
+        { id: 'c', value: { toString: 'serialized function', rank: 3 } },
+        { id: 'a', value: { toString: 'serialized function', rank: 1 } },
+        { id: 'b', value: { toString: 'serialized function', rank: 2 } },
+    ]
+    const stateKey = `uu-object-sort-test:${crypto.randomUUID()}`
+    function createObjectView() {
+        return visualizeArray(objectItems, {
+            stateKey,
+            renderStyles: ['table'],
+            renderOption: { props: ['id', 'value'] },
+        })
+    }
+    function valueHeader(view: HTMLElement) {
+        const header = Array.from(view.querySelectorAll<HTMLElement>('.uu-va-table-head-cell'))
+            .find(cell => cell.querySelector('.uu-va-sort-label')?.textContent === 'value')
+        if (!header) throw new Error('Missing value header')
+        return header
+    }
+    function assertIndicator(view: HTMLElement, expected: string, name: string) {
+        const actual = valueHeader(view).querySelector('.uu-va-sort-order')?.textContent || ''
+        if (actual !== expected) throw new Error(`${name}: unexpected sort indicator ${actual}`)
+        checks++
+    }
+    try {
+        const objectView = createObjectView()
+        valueHeader(objectView).click()
+        assertOrder(objectView, 'a,b,c', 'Objects with non-callable toString sort by serialized contents')
+        assertIndicator(objectView, '\u2b06\ufe0f', 'Object sorting updates the ascending indicator')
+        const restored = createObjectView()
+        assertOrder(restored, 'a,b,c', 'Saved object sorting restores without throwing')
+        assertIndicator(restored, '\u2b06\ufe0f', 'Saved object sorting restores the indicator')
+        valueHeader(objectView).click()
+        assertOrder(objectView, 'c,b,a', 'Object sorting supports descending header clicks')
+        assertIndicator(objectView, '\u2b07\ufe0f', 'Object sorting updates the descending indicator')
+        valueHeader(objectView).click()
+        assertOrder(objectView, 'c,a,b', 'Clearing object sorting restores original order')
+        assertIndicator(objectView, '', 'Clearing object sorting removes the indicator')
+        assertOrder(visualizeArray([
+            { id: 'b', value: Object.setPrototypeOf({ rank: 2 }, null) },
+            { id: 'a', value: Object.setPrototypeOf({ rank: 1 }, null) },
+        ], {
+            renderStyles: ['table'],
+            renderOption: { props: ['id', 'value'] },
+            sortBy: [{ prop: 'value', order: 'asc' }],
+        }), 'a,b', 'Objects without a prototype sort without primitive coercion')
+    } finally {
+        localStorage.removeItem(stateKey)
+    }
     return { passed: checks }
 }

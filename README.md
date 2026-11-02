@@ -102,6 +102,34 @@ property filter state.
 Row selection, scroll position, focus, and unsubmitted filter text are not
 restored. Random sorting restores the mode, not the previous shuffled order.
 
+## Array selection and actions
+
+Items are always selectable in table, tile, and wall views; `enableSelection`
+has been removed. Hover over an item to reveal its checkbox. Clicking the item
+replaces the selection with that item; clicking its checkbox adds or removes it
+without changing other selections. Selected checkboxes remain visible.
+Clicking the only selected item again clears the selection.
+Selection survives sorting, filtering, paging, and view changes within a view.
+Existing item click callbacks still run on item clicks, but not checkbox clicks.
+Interactive controls and property click handlers keep their existing behavior.
+Selection does not set an item-level pointer cursor; checkboxes, item actions,
+and properties with click handlers use pointer cursors.
+
+The options menu separates global features, selection controls, and actions for
+the current selection. Clicking outside the menu, choosing an action, or clicking
+its trigger again closes it. `Select All` and `Invert Selection` operate on all filtered
+results across pages, leaving selections outside the filter unchanged.
+`Clear Selection` clears everything, including hidden selections.
+With one item selected, its `itemActions` (including the default raw-data action
+unless `noDefaultActions` is set) appear in the final section. `multiItemActions`
+appear whenever the selection is nonempty and receive all selected items,
+including hidden ones, in selection order. With two or more selected items,
+`Compare Selected Items` compares the first two.
+
+The `(Actions)` property is included by default but can be hidden in the visible
+properties dialog, independently for each view mode. Hiding this property does
+not remove selection actions from the options menu.
+
 ## Custom array sorting
 
 Use `getSortingValue(item, prop, dataIndex)` to customize sort keys without
@@ -129,6 +157,8 @@ the default property value; `0` and `''` are valid custom keys. `dataIndex` is
 the zero-based index in the original array, unaffected by sorting, filtering,
 or paging. Return consistent key types for each column: numbers are compared
 numerically, and strings use the existing Chinese locale collator.
+Default object values are compared using their `tu.stringify()` text, avoiding
+implicit object-to-string conversion failures for serialized browser objects.
 
 Custom keys apply to initial sorting, header clicks, and multi-column sorting
 in all views. They are not used for random sorting. Callbacks should be pure
