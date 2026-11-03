@@ -13,6 +13,10 @@ export async function runSelectionTests() {
     let checks = 0
     let callbackCount = 0
     let actionResult = ''
+    const comparisonState = new Map<string, string | null>(
+        ['uu-comparison-result-table', 'uu-comparison-result-table:property-filter']
+            .map(key => [key, localStorage.getItem(key)])
+    )
     const tick = () => new Promise<void>(resolve => setTimeout(resolve, 0))
 
     function assert(condition: boolean, name: string) {
@@ -219,8 +223,81 @@ export async function runSelectionTests() {
         const border = getComputedStyle(rows(view)[0], '::after')
         assert(border.position === 'absolute' && parseFloat(border.borderTopWidth) > 0 && border.borderLeftWidth === border.borderTopWidth && border.borderRightWidth === border.borderTopWidth && border.borderBottomWidth === border.borderTopWidth, 'Selected table rows have a complete overlay border')
         assert(border.pointerEvents === 'none' && Number(border.zIndex) > 1, 'Selection border stays above positioned cells without blocking clicks')
+
+        for (const key of comparisonState.keys()) localStorage.removeItem(key)
+        const comparisonItems = [
+            { uniform: true, nested: { value: 1 }, items: [1, 2], optional: undefined },
+            { nested: { value: 2 }, items: [2, 1], uniform: true },
+            { nested: { value: 1 }, items: [1, 2], uniform: true, optional: null },
+        ]
+        view = visualizeArray(comparisonItems, { renderStyles: ['table'] })
+        host.replaceChildren(view)
+        checkbox(rows(view)[2]).click()
+        checkbox(rows(view)[0]).click()
+        checkbox(rows(view)[1]).click()
+        await action(view, 'Compare Selected Items')
+        let dialog = element<HTMLDialogElement>(document, 'dialog:has(.uu-va-compare)')
+        let comparison = element(dialog, '.uu-va-compare > .uu-va')
+        assert(element(comparison, '.uu-va-pf').style.display !== 'none' && element(comparison, '.uu-pf-name').textContent === 'allSame', 'Comparison initially displays the recommended allSame property filter')
+        assert(Array.from(comparison.querySelectorAll('.uu-va-table-head-cell')).map(cell => cell.textContent).join(',') === 'prop,allSame,Item 3,Item 1,Item 2', 'Comparison includes allSame and all selected items in selection order with original item numbers')
+        assert(!comparison.querySelector('.uu-va-actions'), 'Comparison has no extra action column')
+        function comparisonRow(property: string) {
+            const row = Array.from(comparison.querySelectorAll<HTMLTableRowElement>('.uu-va-compare-row'))
+                .find(row => row.cells[0].textContent === property)
+            if (!row) throw new Error(`Missing comparison row: ${property}`)
+            return row
+        }
+        let nested = comparisonRow('nested.value')
+        assert(nested.cells[1].textContent === 'false', 'Different properties display allSame false')
+        assert(Array.from(nested.cells).slice(2).map(cell => cell.textContent).join(',') === '1,1,2', 'Comparison recursively renders nested property values')
+        assert(nested.cells[2].style.backgroundColor === nested.cells[3].style.backgroundColor, 'Equal comparison values share a cell background')
+        assert(nested.cells[2].style.backgroundColor !== nested.cells[4].style.backgroundColor, 'Different comparison groups have different cell backgrounds')
+        assert(getComputedStyle(nested.cells[2]).backgroundColor !== 'rgba(0, 0, 0, 0)', 'Comparison background covers the actual table cell')
+        assert(Array.from(comparisonRow('items').cells).slice(2).map(cell => cell.textContent).join(';') === '[1,2];[1,2];[2,1]', 'Comparison renders arrays as whole values')
+        assert(comparisonRow('uniform').cells[1].textContent === 'true', 'Comparison retains matching properties with allSame true')
+        assert(Array.from(comparisonRow('uniform').cells).every(cell => !cell.style.backgroundColor && !cell.style.getPropertyValue('--bs-table-bg')), 'allSame rows have no comparison background colors')
+        assert(Array.from(comparisonRow('optional').cells).slice(2).map(cell => cell.textContent).join(',') === 'null,undefined,<missing>', 'Comparison distinguishes missing, null and undefined')
+        element(comparison, '.uu-va-table-head-cell').click()
+        nested = comparisonRow('nested.value')
+        assert(nested.cells[2].style.backgroundColor === nested.cells[3].style.backgroundColor && nested.cells[2].style.backgroundColor !== nested.cells[4].style.backgroundColor, 'Comparison preserves value colors after sorting')
+        let comparisonFilter = element<HTMLInputElement>(comparison, '.uu-va-filter')
+        comparisonFilter.value = 'allSame === false'
+        comparisonFilter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        assert(!Array.from(comparison.querySelectorAll('.uu-va-compare-name')).some(cell => cell.textContent === 'uniform'), 'allSame supports boolean expression filtering')
+        assert(JSON.parse(localStorage.getItem('uu-comparison-result-table') || '{}').filter === 'allSame === false', 'Comparison persists settings under the requested state key')
+        element(dialog, '.uu-dialog-close').click()
+        assert(!document.querySelector('dialog:has(.uu-va-compare)'), 'Comparison dialog closes normally')
+
+        await action(view, 'Compare Selected Items')
+        dialog = element<HTMLDialogElement>(document, 'dialog:has(.uu-va-compare)')
+        comparison = element(dialog, '.uu-va-compare > .uu-va')
+        comparisonFilter = element<HTMLInputElement>(comparison, '.uu-va-filter')
+        assert(comparisonFilter.value === 'allSame === false' && !Array.from(comparison.querySelectorAll('.uu-va-compare-name')).some(cell => cell.textContent === 'uniform'), 'Reopening comparison restores filter settings')
+        comparisonFilter.value = ''
+        comparisonFilter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+        assert(comparisonRow('uniform').cells[1].textContent === 'true', 'Clearing the restored filter shows matching properties again')
+        element(dialog, '.uu-dialog-close').click()
+
+        for (const identicalItems of [[{}, {}], [{ same: 1 }, { same: 1 }]]) {
+            view = visualizeArray(identicalItems, { renderStyles: ['table'] })
+            host.replaceChildren(view)
+            checkbox(rows(view)[0]).click()
+            checkbox(rows(view)[1]).click()
+            await action(view, 'Compare Selected Items')
+            dialog = element<HTMLDialogElement>(document, 'dialog:has(.uu-va-compare)')
+            if (Object.keys(identicalItems[0]).length === 0) {
+                assert(!!dialog.querySelector('.uu-va-empty'), 'Empty objects render the standard visualizeArray empty state')
+            } else {
+                assert(dialog.querySelector('.uu-va-compare-all-same')?.textContent === 'true', 'Identical nonempty objects retain their matching properties')
+            }
+            element(dialog, '.uu-dialog-close').click()
+        }
         return { passed: checks }
     } finally {
+        for (const [key, value] of comparisonState) {
+            if (value === null) localStorage.removeItem(key)
+            else localStorage.setItem(key, value)
+        }
         document.querySelectorAll<HTMLElement>('.uu-dropdown').forEach(dropdown => dropdown.remove())
         host.remove()
     }

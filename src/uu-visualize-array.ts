@@ -121,6 +121,10 @@ export type VisualizeConfig<T extends object> = {
     // initial filter string, if not present, no filtering is applied
     filter: string
 
+    // Recommended property filter rows for a new view; saved settings take precedence.
+    // Providing nonempty defaults also initially expands the property filter panel.
+    initialFilterProps: string[]
+
     // item filter, used to filter items given the filter string
     // the default filter will do a deep search on all properties of the item
     // It's recommended to provide a custom filter for better performance, if there are many large items
@@ -196,7 +200,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         filter: cfg.filter || '',
         pageSize: cfg.pageSize,
         currentPage: 0,
-        propertyFilterExpanded: false,
+        propertyFilterExpanded: (cfg.initialFilterProps?.length ?? 0) > 0,
         renderStyle: renderStyles[0],
         tableProps: undefined as string[] | undefined,
         tileProps: undefined as string[] | undefined,
@@ -504,19 +508,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         })
     }
 
-    function comparisonValue(item: T, property: string): unknown {
-        return item[property as keyof T]
-    }
-
-    function renderComparisonValue(value: unknown): HTMLElement {
-        let text: string
-        if (value === undefined) text = '(undefined)'
-        else if (value === null) text = '(null)'
-        else if (typeof value === 'object') text = tu.stringify(value)
-        else text = String(value)
-        return createFoldedString(text, cfg.stringFoldThreshold ?? 120)
-    }
-
     function compareSelectedItems() {
         const selected = [...selectedIndexes]
             .map(index => ({ item: arr[index], index }))
@@ -524,28 +515,41 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         if (selected.length < 2) {
             return showDialog('Compare Selected Items', 'Select at least two items first.', { actions: ['Close'] })
         }
-        const [left, right] = selected
-        const properties = tu.dataProperties([left.item, right.item]).filter(property => {
-            return tu.stringify(comparisonValue(left.item, property)) !== tu.stringify(comparisonValue(right.item, property))
-        })
+        const objects = selected.map(({ item, index }) => ({ name: `Item ${index + 1}`, obj: item }))
+        const comparisons = tu.compareObjects(objects)
+        const rows = comparisons.map(comparison => Object.fromEntries<string | boolean>([
+            ['prop', comparison.prop],
+            ['allSame', comparison.allSame],
+            ...comparison.values.map(({ name, value }): [string, string] => [name, value]),
+        ]))
         const content = createElement(null, 'div', ['uu-va-compare'])
-        if (properties.length === 0) {
-            createElement(content, 'div', ['uu-va-compare-empty', 'uu-is-empty', 'alert', 'alert-info', 'mb-0'], 'The first two selected items have no different properties.')
-        } else {
-            const table = createElement(content, 'table', ['uu-va-compare-table', 'table', 'table-bordered', 'table-hover', 'mb-0'])
-            const thead = createElement(table, 'thead', ['uu-va-table-head', 'table-light'])
-            const header = createElement(thead, 'tr', ['uu-va-table-head-row'])
-            createElement(header, 'th', ['uu-va-table-head-cell'], 'Property')
-            createElement(header, 'th', ['uu-va-table-head-cell'], `Item ${left.index + 1}`)
-            createElement(header, 'th', ['uu-va-table-head-cell'], `Item ${right.index + 1}`)
-            const tbody = createElement(table, 'tbody', ['uu-va-table-body'])
-            for (const property of properties) {
-                const row = createElement(tbody, 'tr', ['uu-va-compare-row'])
-                createElement(row, 'th', ['uu-va-compare-name'], property)
-                createElement(row, 'td', ['uu-va-compare-value'], renderComparisonValue(comparisonValue(left.item, property)))
-                createElement(row, 'td', ['uu-va-compare-value'], renderComparisonValue(comparisonValue(right.item, property)))
-            }
-        }
+        content.appendChild(visualizeArray(rows, {
+            stateKey: 'uu-comparison-result-table',
+            initialFilterProps: ['allSame'],
+            renderStyles: ['table'],
+            rawIndexProp: '',
+            actionProp: '',
+            hideUniformProps: false,
+            renderOption: { props: ['prop', 'allSame', ...objects.map(({ name }) => name)] },
+            tableRenderOption: {
+                itemFormatter: (item, dataIndex, props) => {
+                    const row = createElement(null, 'tr', ['uu-va-table-row', 'uu-va-compare-row'])
+                    for (const prop of props) {
+                        const value = comparisons[dataIndex].values.find(value => value.name === prop)
+                        const cell = createElement(row, 'td', ['uu-va-table-cell', value ? 'uu-va-compare-value' : prop === 'prop' ? 'uu-va-compare-name' : 'uu-va-compare-all-same'])
+                        if (value && !comparisons[dataIndex].allSame) {
+                            const color = `hsl(${value.valueIndex * 137.508 % 360}, 70%, 93%)`
+                            cell.style.backgroundColor = color
+                            cell.style.setProperty('--bs-table-bg', color)
+                        }
+                        const text = createFoldedString(String(item[prop]), cfg.stringFoldThreshold ?? 120)
+                        text.classList.add('uu-va-value', 'uu-va-table-value')
+                        cell.appendChild(text)
+                    }
+                    return row
+                },
+            },
+        }))
         return showDialog('Compare Selected Items', content, {
             actions: ['Close'],
             style: { minWidth: '70vw', maxWidth: '90vw', maxHeight: '80vh' }
@@ -764,6 +768,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const dataContainer = createElement(view, 'div', ['uu-va-data'])
 
     const propertyFilter = new PropertyFilter<T>(propertyFilterArea, allData.map(v => v.item), cfg.stateKey ? `${cfg.stateKey}:property-filter` : '', {
+        initialProperties: cfg.initialFilterProps,
         onChange: () => {
             applyPropertyFilter()
             applySort()

@@ -204,6 +204,20 @@ export async function runStateTests() {
         assert(!view.querySelector('.uu-va-actions'), 'Switching back to table keeps its actions hidden')
         viewButtons[2].click()
         assert(!!view.querySelector('.uu-va-actions'), 'Hiding table actions does not hide wall actions')
+
+        localStorage.removeItem(stateKey)
+        localStorage.removeItem(`${stateKey}:property-filter`)
+        view = create(items, { initialFilterProps: ['group'] })
+        assert(element(view, '.uu-va-pf').style.display !== 'none', 'Recommended filter properties initially expand the panel')
+        assert(element(view, '.uu-pf-name').textContent === 'group', 'visualizeArray forwards recommended filter properties')
+        assert(view.querySelectorAll('.uu-va-table-row').length === 3, 'Recommended properties do not exclude items')
+        element(view, '.uu-va-filter-toggle').click()
+        localStorage.setItem(`${stateKey}:property-filter`, JSON.stringify({ properties: [], filters: {} }))
+        view = create(items, { initialFilterProps: ['group'] })
+        assert(element(view, '.uu-va-pf').style.display === 'none', 'Saved collapsed panel overrides initial expansion')
+        assert(!!view.querySelector('.uu-pf-select') && !view.querySelector('.uu-pf-name'), 'Saved empty filter properties override recommendations in visualizeArray')
+        view = create(items, { stateKey: '', initialFilterProps: ['group'] })
+        assert(element(view, '.uu-va-pf').style.display !== 'none' && element(view, '.uu-pf-name').textContent === 'group', 'Unkeyed views also display initial filter properties')
         return { passed: checks }
     } finally {
         host.remove()

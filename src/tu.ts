@@ -824,3 +824,89 @@ export function groupBy<T>(arr: T[], keyFunc: (item: T) => string): [string, T[]
     // sort occurrences by counts descending
     return Object.entries(groupMap).sort((a, b) => b[1].length - a[1].length)
 }
+
+export type ObjectComparison = {
+    prop: string
+    allSame: boolean
+    values: { name: string, value: string, valueIndex: number }[]
+}
+
+/**
+ * Compare own enumerable properties, recursively flattening plain objects.
+ * Arrays and empty objects are compared as whole values. Paths use dot notation,
+ * with JSON-quoted brackets for keys containing dots, brackets, or empty keys.
+ * Missing properties display as <missing>, distinct from undefined and null.
+ * Each row assigns zero-based value indexes in input order, reusing equal values.
+ * Strings are JSON-quoted; arrays use structural equality (object key order is ignored).
+ */
+export function compareObjects(objects: { name: string, obj: object }[]): ObjectComparison[] {
+    const missing = Symbol('missing')
+    const props = new Set<string>()
+    const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+        if (value === null || typeof value !== 'object') return false
+        const prototype = Object.getPrototypeOf(value)
+        return prototype === Object.prototype || prototype === null
+    }
+
+    const flattened = objects.map(({ obj }) => {
+        const values = new Map<string, unknown>()
+        const parents = new Set<object>()
+        function visit(value: unknown, path: string, root = false): void {
+            if (isPlainObject(value)) {
+                if (parents.has(value)) {
+                    throw new TypeError(`Cannot compare circular object at ${path}`)
+                }
+                const entries = Object.entries(value)
+                if (root || entries.length > 0) {
+                    parents.add(value)
+                    for (const [key, child] of entries) {
+                        const segment = key === '' || /[.[\]]/.test(key) ? `[${JSON.stringify(key)}]` : key
+                        const childPath = !path || segment.startsWith('[') ? path + segment : `${path}.${segment}`
+                        visit(child, childPath)
+                    }
+                    parents.delete(value)
+                    return
+                }
+            }
+            props.add(path)
+            values.set(path, value)
+        }
+        visit(obj, '', true)
+        return values
+    })
+
+    function equal(a: unknown, b: unknown, pairs = new Map<object, object>()): boolean {
+        if (Object.is(a, b)) return true
+        if (a === null || b === null || typeof a !== 'object' || typeof b !== 'object') return false
+        if (Array.isArray(a) !== Array.isArray(b)) return false
+        if (!Array.isArray(a) && !(isPlainObject(a) && isPlainObject(b))) return false
+        if (pairs.has(a)) return pairs.get(a) === b
+        if (Array.isArray(a) && Array.isArray(b) && a.length !== b.length) return false
+        const aEntries = Object.entries(a)
+        const bValues = new Map<string, unknown>(Object.entries(b))
+        if (aEntries.length !== bValues.size) return false
+        pairs.set(a, b)
+        const result = aEntries.every(([key, value]) => bValues.has(key) && equal(value, bValues.get(key), pairs))
+        pairs.delete(a)
+        return result
+    }
+
+    return [...props].map(prop => {
+        const distinct: unknown[] = []
+        const values = objects.map(({ name }, index) => {
+            const item = flattened[index]
+            const value = item.has(prop) ? item.get(prop) : missing
+            let valueIndex = distinct.findIndex(previous => equal(previous, value))
+            if (valueIndex === -1) {
+                valueIndex = distinct.length
+                distinct.push(value)
+            }
+            return {
+                name,
+                value: value === missing ? '<missing>' : stringify(value) ?? String(value),
+                valueIndex,
+            }
+        })
+        return { prop, allSame: distinct.length === 1, values }
+    })
+}

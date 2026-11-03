@@ -10,6 +10,7 @@ export type PropertyFilterState = {
 }
 
 export type PropertyFilterOptions<T extends object> = {
+    initialProperties?: string[]
     valueGetters?: Partial<Record<keyof T | string, (item: T) => unknown | unknown[]>>
     maxInlineValues?: number
     onChange?: (filter: PropertyFilter<T>) => void | Promise<void>
@@ -109,15 +110,18 @@ function injectPropertyFilterStyles() {
     registerDomResource(style, 'uu-propfilter', 'style', `#${styleId}`, 'property-filter-styles')
 }
 
-function loadState(stateKey: string): PropertyFilterState {
-    if (!stateKey) return { properties: [], filters: {} }
+function loadState(stateKey: string, initialProperties: string[] = []): PropertyFilterState {
+    const initialState: PropertyFilterState = { properties: [...initialProperties], filters: {} }
+    if (!stateKey) return initialState
     try {
-        const parsed = JSON.parse(readLocalStorage(stateKey, 'uu-propfilter') || '{}')
+        const stored = readLocalStorage(stateKey, 'uu-propfilter')
+        if (!stored) return initialState
+        const parsed = JSON.parse(stored)
         const filters = parsed.filters || {}
         const properties = parsed.properties || Object.keys(filters).filter(property => filters[property]?.length > 0)
         return { properties, filters }
     } catch {
-        return { properties: [], filters: {} }
+        return initialState
     }
 }
 
@@ -134,7 +138,7 @@ export class PropertyFilter<T extends object> {
         injectPropertyFilterStyles()
         this.items = items
         this.availablePropertyNames = tu.dataProperties(items)
-        this.state = loadState(stateKey)
+        this.state = loadState(stateKey, options.initialProperties)
         this.maxInlineValues = options.maxInlineValues ?? 20
         this.onChange = options.onChange
         this.valueGetters = options.valueGetters || {}

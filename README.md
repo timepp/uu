@@ -99,6 +99,11 @@ selection. `All` clears the row. The expanded values dialog keeps direct-click
 multiple selection without requiring Ctrl. Selected values are saved with the
 property filter state.
 
+Use `initialFilterProps: ['status', 'category']` to recommend property filter
+rows for a new view. Nonempty defaults initially expand the filter panel without
+selecting any values or excluding items. Saved property filter settings (including
+an empty property list) and panel visibility take precedence over these defaults.
+
 Row selection, scroll position, focus, and unsubmitted filter text are not
 restored. Random sorting restores the mode, not the previous shuffled order.
 
@@ -124,7 +129,17 @@ With one item selected, its `itemActions` (including the default raw-data action
 unless `noDefaultActions` is set) appear in the final section. `multiItemActions`
 appear whenever the selection is nonempty and receive all selected items,
 including hidden ones, in selection order. With two or more selected items,
-`Compare Selected Items` compares the first two.
+`Compare Selected Items` compares all selected items in selection order using
+`compareObjects` and renders the result with `visualizeArray`. The first column
+is the recursive property path, followed by the boolean `allSame` column and
+the original one-based item numbers (`Item 1`, etc.). Arrays are compared as
+whole values, and missing properties display as `<missing>`. All properties,
+including matching ones, are shown. Within differing property rows, equal values
+share a pale cell background; different `valueIndex` groups receive different
+colors. Rows with `allSame: true` have no comparison background colors.
+Comparison table settings are saved using the state key
+`uu-comparison-result-table`. On first use, `initialFilterProps: ['allSame']`
+shows the `allSame` property filter without preselecting a value.
 
 The `(Actions)` property is included by default but can be hidden in the visible
 properties dialog, independently for each view mode. Hiding this property does
