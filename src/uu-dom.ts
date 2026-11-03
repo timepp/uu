@@ -46,6 +46,17 @@ export function createElement<K extends keyof HTMLElementTagNameMap>(
     return element
 }
 
+export function createHeader(color: string): HTMLDivElement {
+    return createElement(null, 'div', ['uu-header'], '', {
+        width: '100%',
+        minHeight: '6rem',
+        flexShrink: '0',
+        boxSizing: 'border-box',
+        padding: '0.75rem',
+        backgroundColor: color,
+    })
+}
+
 export function createButton(parent: Element | null, classes: string[] = [], child: string|HTMLElement, onclick = () => {}): HTMLButtonElement {
     const button = createElement(parent, 'button', ['uu-btn', ...classes], child)
     button.onclick = onclick

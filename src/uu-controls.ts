@@ -56,17 +56,20 @@ export function createSelector(parent: HTMLElement | null, options: string[], on
 
 export type DropdownAction = { name: string, action: () => void } | { separator: true }
 
-export function associateDropdownActions(elem: HTMLElement, actions: Record<string, () => void> | DropdownAction[] | (() => DropdownAction[])) {
+export function associateDropdownActions(elem: HTMLElement, actions: Record<string, () => void> | DropdownAction[] | (() => DropdownAction[])): (position?: { x: number, y: number }) => HTMLDivElement | undefined {
     type DropdownElement = HTMLElement & { dropdown?: HTMLElement }
     const element = elem as DropdownElement
     let closeDropdown: (() => void) | undefined
-    element.onclick = () => {
+    function toggleDropdown(position?: { x: number, y: number }): HTMLDivElement | undefined {
         if (closeDropdown) {
             closeDropdown()
             return
         }
         const container = element.closest('dialog') || document.body
-        const dropdown = createElement(container, 'div', ['uu-dropdown', 'dropdown-menu', 'show'], '', { position: 'fixed', zIndex: '1050' })
+        const dropdown = createElement(container, 'div', ['uu-dropdown', 'dropdown-menu', 'show'], '', {
+            position: 'fixed', zIndex: '1050', left: '0', top: '0',
+            maxWidth: '100vw', maxHeight: '100vh', overflowY: 'auto', boxSizing: 'border-box',
+        })
         const runtimeId = registerDomResource(dropdown, 'uu-controls', 'dropdown')
         const entries = typeof actions === 'function' ? actions() : Array.isArray(actions) ? actions : Object.entries(actions).map(([name, action]) => ({name, action}))
         for (const entry of entries) {
@@ -79,14 +82,15 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
         }
         const rect = element.getBoundingClientRect()
         container.appendChild(dropdown)
-        let left = rect.left
-        let top = rect.bottom
-        const width = dropdown.offsetWidth || 200
-        const height = dropdown.offsetHeight || 100
-        if (left + width > window.innerWidth) left = rect.right - width
-        if (top + height > window.innerHeight) top = rect.top - height
-        dropdown.style.left = `${left}px`
-        dropdown.style.top = `${top}px`
+        let left = position?.x ?? rect.left
+        let top = position?.y ?? rect.bottom
+        const width = dropdown.getBoundingClientRect().width || 200
+        dropdown.style.width = `${width}px`
+        const height = dropdown.getBoundingClientRect().height || 100
+        if (left + width > window.innerWidth) left = position ? window.innerWidth - width : rect.right - width
+        if (top + height > window.innerHeight) top = position ? window.innerHeight - height : rect.top - height
+        dropdown.style.left = `${Math.max(0, left)}px`
+        dropdown.style.top = `${Math.max(0, top)}px`
         element.dropdown = dropdown
         function onDocumentClick(event: MouseEvent) {
             if (event.target instanceof Node && element.contains(event.target)) return
@@ -100,7 +104,10 @@ export function associateDropdownActions(elem: HTMLElement, actions: Record<stri
             closeDropdown = undefined
         }
         document.addEventListener('click', onDocumentClick, true)
+        return dropdown
     }
+    element.onclick = () => toggleDropdown()
+    return toggleDropdown
 }
 
 export type ContentProvider = HTMLElement | ((refresh: boolean) => HTMLElement) | ((refresh: boolean) => Promise<HTMLElement>)

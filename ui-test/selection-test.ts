@@ -1,4 +1,6 @@
 import { visualizeArray, type VisualizeConfig } from '../src/uu-visualize-array.ts'
+import { createHeader } from '../src/uu-dom.ts'
+import { stringToColor } from '../src/tu.ts'
 
 export async function runSelectionTests() {
     const items = [
@@ -74,6 +76,20 @@ export async function runSelectionTests() {
         await tick()
     }
 
+    function hover(view: HTMLElement) {
+        view.scrollIntoView({ block: 'start' })
+        const bounds = view.getBoundingClientRect()
+        const position = { x: bounds.left + Math.min(20, bounds.width / 2), y: bounds.top + Math.min(20, bounds.height / 2) }
+        document.dispatchEvent(new MouseEvent('mousemove', { clientX: position.x, clientY: position.y }))
+        return position
+    }
+
+    function pressF(target: EventTarget = document.body, options: KeyboardEventInit = {}) {
+        const event = new KeyboardEvent('keydown', { key: 'f', bubbles: true, cancelable: true, ...options })
+        target.dispatchEvent(event)
+        return event
+    }
+
     try {
         for (const style of ['table', 'tile', 'wall'] as const) {
             const view = create({
@@ -83,6 +99,13 @@ export async function runSelectionTests() {
             const rendered = rows(view)
             const first = rendered[0]
             assert(rendered.length === 4, `${style}: all items have selection controls`)
+            if (style === 'tile') {
+                const defaultHeaders = view.querySelectorAll<HTMLElement>('.uu-va-tile-header')
+                assert(defaultHeaders.length === rendered.length && Array.from(defaultHeaders).every(header => header.classList.contains('uu-header') && header.style.backgroundColor === 'gray'), 'Tiles without a header callback use gray headers')
+                assert(defaultHeaders[0].getBoundingClientRect().height > 0, 'Default empty headers have a visible height')
+            } else {
+                assert(!view.querySelector('.uu-va-tile-header'), `${style}: default tile headers do not affect other layouts`)
+            }
             assert(getComputedStyle(first).cursor !== 'pointer', `${style}: selectable items do not use pointer cursors`)
             assert(getComputedStyle(element(first, '.uu-va-value')).cursor !== 'pointer', `${style}: ordinary values do not inherit pointer cursors`)
             assert(getComputedStyle(checkbox(first)).cursor === 'pointer', `${style}: checkboxes use pointer cursors`)
@@ -99,6 +122,13 @@ export async function runSelectionTests() {
             await menu(view)
             element(view, '.uu-va-options').click()
             assert(!document.querySelector('.uu-dropdown'), `${style}: clicking the menu trigger again closes it`)
+            first.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }))
+            rendered[1].dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }))
+            assert(selected(view) === '0,1', `${style}: Ctrl-click extends selection`)
+            first.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }))
+            assert(selected(view) === '1', `${style}: Ctrl-click removes only the clicked item`)
+            rendered[1].dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }))
+            assert(selected(view) === '', `${style}: Ctrl-click can clear the final selected item`)
             first.click()
             assert(selected(view) === '0' && checkbox(first).checked, `${style}: plain click selects`)
             assert(getComputedStyle(checkbox(first)).opacity === '1', `${style}: selected checkbox stays visible`)
@@ -125,6 +155,27 @@ export async function runSelectionTests() {
             assert(!dropdown.textContent?.includes('Inspect'), `${style}: multiple selection hides single-item actions`)
             assert(!!dropdown.textContent?.includes('Compare Selected Items'), `${style}: comparison is a selection action`)
             document.body.click()
+            const position = hover(view)
+            assert(pressF().defaultPrevented, `${style}: F handles the hovered view shortcut`)
+            const contextMenu = element(document, '.uu-dropdown')
+            const menuBounds = contextMenu.getBoundingClientRect()
+            assert(Math.abs(menuBounds.left - position.x) < 1 && Math.abs(menuBounds.top - position.y) < 1, `${style}: F anchors the menu at the mouse position`)
+            assert(!!contextMenu.textContent?.includes('Compare Selected Items'), `${style}: keyboard menu includes current selection actions`)
+            pressF(document.body, { repeat: true })
+            assert(contextMenu.isConnected, `${style}: key repeat does not toggle the menu`)
+            pressF(document.body, { key: 'F', shiftKey: true })
+            assert(!document.querySelector('.uu-dropdown'), `${style}: F toggles the context menu closed`)
+            for (const modifiers of [{ ctrlKey: true }, { altKey: true }, { metaKey: true }, { isComposing: true }]) {
+                assert(!pressF(document.body, modifiers).defaultPrevented && !document.querySelector('.uu-dropdown'), `${style}: modified or composing F leaves native input behavior intact`)
+            }
+            pressF(element(view, '.uu-va-filter'))
+            assert(!document.querySelector('.uu-dropdown'), `${style}: F in a text input does not open the menu`)
+            const editor = document.createElement('div')
+            editor.contentEditable = 'true'
+            view.appendChild(editor)
+            pressF(editor)
+            assert(!document.querySelector('.uu-dropdown'), `${style}: F in contenteditable does not open the menu`)
+            editor.remove()
             await action(view, 'Batch')
             assert(actionResult === 'a,d', `${style}: batch actions receive selection order`)
             assert(!document.querySelector('.uu-dropdown'), `${style}: menu actions execute and dismiss the menu`)
@@ -139,6 +190,70 @@ export async function runSelectionTests() {
             assert(!emptyMenu.textContent?.includes('Batch'), `${style}: no selection actions without selection`)
             document.body.click()
         }
+
+        const standaloneHeader = createHeader('red')
+        assert(standaloneHeader instanceof HTMLDivElement && standaloneHeader.parentElement === null, 'Headers can be created independently without mounting')
+        assert(standaloneHeader.textContent === '' && standaloneHeader.style.backgroundColor === 'red', 'createHeader uses the supplied CSS color without adding text')
+        const coloredHeaderView = create({
+            renderStyles: ['tile'],
+            tileRenderOption: {
+                header: item => createHeader(stringToColor(item.group, 70, 93)),
+            },
+        })
+        const headers = coloredHeaderView.querySelectorAll<HTMLElement>('.uu-va-tile-header')
+        assert(headers.length === 4 && headers[0].tagName === 'DIV' && headers[0].textContent === '', 'createHeader composes into empty colored tile headers')
+        assert(headers[0].style.backgroundColor === headers[2].style.backgroundColor && headers[0].style.backgroundColor !== headers[1].style.backgroundColor, 'Clients can use stringToColor to supply stable header colors')
+        const headerColor = getComputedStyle(headers[0]).backgroundColor.match(/\d+/g)?.map(Number) || []
+        assert(headerColor.length >= 3 && headerColor.slice(0, 3).every(channel => channel > 220), 'createHeader preserves a supplied pale color')
+        const headerCard = rows(coloredHeaderView)[0]
+        const headerFillsCard = () => {
+            const style = getComputedStyle(headerCard)
+            const contentWidth = headerCard.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+            return Math.abs(headers[0].getBoundingClientRect().width - contentWidth) < 1
+        }
+        assert(headerFillsCard(), 'Headers fill the entire card content width')
+        assert(headers[0].getBoundingClientRect().height >= 6 * parseFloat(getComputedStyle(document.documentElement).fontSize), 'Headers are at least 6rem tall')
+        element(coloredHeaderView, '.uu-va-tiles').style.gridTemplateColumns = '100px'
+        assert(headerFillsCard(), 'Headers remain aligned to narrow card content widths')
+        headers[0].click()
+        assert(selected(coloredHeaderView) === '0', 'Colored headers retain tile selection behavior')
+        const customHeader = document.createElement('span')
+        customHeader.textContent = 'Custom header'
+        customHeader.style.backgroundColor = 'red'
+        const elementHeaderView = create({
+            renderStyles: ['tile'],
+            tileRenderOption: { header: item => item.id === 'a' ? customHeader : createHeader(stringToColor(item.group)) },
+        })
+        assert(elementHeaderView.querySelector('.uu-va-tile-header') === customHeader && customHeader.style.backgroundColor === 'red', 'Custom element headers retain their original node and styling instead of using the default gray header')
+
+        const outer = create()
+        const inner = visualizeArray(items, {
+            renderStyles: ['table'],
+            itemActions: { Nested: () => { actionResult = 'nested' } },
+        })
+        outer.appendChild(inner)
+        rows(inner)[0].click()
+        hover(inner)
+        pressF()
+        const nestedMenu = element(document, '.uu-dropdown')
+        assert(!!nestedMenu.textContent?.includes('Nested') && !nestedMenu.textContent?.includes('Inspect'), 'F targets the innermost hovered view only')
+        const nestedAction = Array.from(nestedMenu.querySelectorAll<HTMLElement>('.uu-dropdown-item')).find(item => item.textContent === 'Nested')
+        if (!nestedAction) throw new Error('Missing nested context action')
+        nestedAction.click()
+        await tick()
+        assert(actionResult === 'nested' && !document.querySelector('.uu-dropdown'), 'Context menu actions execute and dismiss normally')
+        const edgeView = create()
+        Object.assign(edgeView.style, { position: 'fixed', right: '0', bottom: '0', width: '300px', maxHeight: '250px', overflow: 'auto', zIndex: '1' })
+        document.dispatchEvent(new MouseEvent('mousemove', { clientX: innerWidth - 2, clientY: innerHeight - 2 }))
+        pressF()
+        const edgeBounds = element(document, '.uu-dropdown').getBoundingClientRect()
+        assert(edgeBounds.left >= 0 && edgeBounds.top >= 0 && edgeBounds.right <= innerWidth && edgeBounds.bottom <= innerHeight, `Mouse-anchored context menus remain inside the viewport: ${JSON.stringify(edgeBounds.toJSON())}`)
+        document.body.click()
+        document.dispatchEvent(new MouseEvent('mousemove', { clientX: -1, clientY: -1 }))
+        assert(!pressF().defaultPrevented && !document.querySelector('.uu-dropdown'), 'F outside a view does not open a menu')
+        hover(edgeView)
+        edgeView.remove()
+        assert(!pressF().defaultPrevented && !document.querySelector('.uu-dropdown'), 'Removed views do not retain active shortcuts')
 
         let view = create({
             noDefaultActions: true,
@@ -241,6 +356,10 @@ export async function runSelectionTests() {
         assert(element(comparison, '.uu-va-pf').style.display !== 'none' && element(comparison, '.uu-pf-name').textContent === 'allSame', 'Comparison initially displays the recommended allSame property filter')
         assert(Array.from(comparison.querySelectorAll('.uu-va-table-head-cell')).map(cell => cell.textContent).join(',') === 'prop,allSame,Item 3,Item 1,Item 2', 'Comparison includes allSame and all selected items in selection order with original item numbers')
         assert(!comparison.querySelector('.uu-va-actions'), 'Comparison has no extra action column')
+        hover(comparison)
+        pressF(element(dialog, '.uu-dialog-content'))
+        assert(!!dialog.querySelector('.uu-dropdown'), 'F opens the comparison menu inside its modal dialog')
+        pressF(element(dialog, '.uu-dialog-content'))
         function comparisonRow(property: string) {
             const row = Array.from(comparison.querySelectorAll<HTMLTableRowElement>('.uu-va-compare-row'))
                 .find(row => row.cells[0].textContent === property)

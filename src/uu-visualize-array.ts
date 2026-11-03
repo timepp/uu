@@ -2,6 +2,7 @@
 import * as tu from './tu.ts'
 import { 
     createElement, 
+    createHeader,
     fa, 
     createToggleBar, 
     syncExistence
@@ -38,7 +39,7 @@ export type WallRenderOption<T extends object> = RenderOption<T> & {
 }
 
 export type TileRenderOption<T extends object> = RenderOption<T> & {
-    // Optional: returns content to render before the tile properties.
+    // Optional: returns content before the tile properties. Defaults to createHeader('gray').
     header?: (item: T) => HTMLElement
     // Whether to hide property names in the default tile renderer. Default: false.
     hidePropName?: boolean
@@ -138,12 +139,38 @@ export type VisualizeConfig<T extends object> = {
     onPropertyValueClick: (prop: string, value: string) => void
 }
 
+const arrayContextMenus = new WeakMap<HTMLElement, (position: { x: number, y: number }) => HTMLElement | undefined>()
+let arrayShortcutsInitialized = false
+
+function ensureArrayShortcuts() {
+    if (arrayShortcutsInitialized) return
+    arrayShortcutsInitialized = true
+    let pointer: { x: number, y: number } | undefined
+    document.addEventListener('mousemove', event => {
+        pointer = { x: event.clientX, y: event.clientY }
+    })
+    document.addEventListener('keydown', event => {
+        if (event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.key.toLowerCase() !== 'f' || !pointer) return
+        const target = event.target
+        if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, [role="textbox"]'))) return
+        const view = document.elementFromPoint(pointer.x, pointer.y)?.closest<HTMLElement>('.uu-va, .uu-dropdown')
+        const toggleMenu = view && arrayContextMenus.get(view)
+        if (!toggleMenu) return
+        event.preventDefault()
+        const menu = toggleMenu(pointer)
+        if (menu) arrayContextMenus.set(menu, toggleMenu)
+    })
+}
+
 function ensureSelectionStyles() {
     const styleId = 'uu-va-selection-styles'
     let style = document.getElementById(styleId)
     if (!style) {
         style = createElement(document.head, 'style', [], `
             .uu-va-selectable { position: relative; }
+            .uu-va-tiles > .uu-va-selectable:hover {
+                box-shadow: inset 0 0 0 9999px var(--bs-table-hover-bg, rgba(var(--bs-emphasis-color-rgb, 0, 0, 0), 0.075));
+            }
             .uu-va-selection-cell { position: relative; padding-left: 2rem !important; }
             .uu-va-table .uu-va-selectable.uu-is-selected { outline: none; }
             .uu-va-table .uu-va-selectable.uu-is-selected::after {
@@ -497,9 +524,14 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             const target = evt.target
             if (target instanceof Element && target.closest('a, button, input, select, textarea, label')) return
             if (globalThis.getSelection?.()?.toString()) return
-            const deselect = selectedIndexes.size === 1 && selectedIndexes.has(index)
-            selectedIndexes.clear()
-            if (!deselect) selectedIndexes.add(index)
+            if (evt.ctrlKey) {
+                if (selectedIndexes.has(index)) selectedIndexes.delete(index)
+                else selectedIndexes.add(index)
+            } else {
+                const deselect = selectedIndexes.size === 1 && selectedIndexes.has(index)
+                selectedIndexes.clear()
+                if (!deselect) selectedIndexes.add(index)
+            }
             syncSelection()
             for (const onItemClickHandler of onItemClickFallbackChain) {
                 const handled = await onItemClickHandler(item, index)
@@ -627,7 +659,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             if (!card) {
                 card = createElement(null, 'div', ['uu-va-tile', 'card', 'p-1'], '')
 
-                const header = cfg.tileRenderOption?.header?.(item)
+                const header = cfg.tileRenderOption?.header ? cfg.tileRenderOption.header(item) : createHeader('gray')
                 if (header) {
                     header.classList.add('uu-va-tile-header')
                     card.appendChild(header)
@@ -1080,7 +1112,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             showJsonResult('Original Data', arr)
         }
     }
-    associateDropdownActions(optionBtn, () => {
+    const toggleContextMenu = associateDropdownActions(optionBtn, () => {
         const entries: DropdownAction[] = Object.entries(dropdownActions).map(([name, action]) => ({ name, action }))
         entries.push(
             { separator: true },
@@ -1119,6 +1151,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         }
         return entries
     })
+    arrayContextMenus.set(view, toggleContextMenu)
+    ensureArrayShortcuts()
 
     // Load More button
     if (!cfg.loadMore) {

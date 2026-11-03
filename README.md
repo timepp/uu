@@ -110,9 +110,12 @@ restored. Random sorting restores the mode, not the previous shuffled order.
 ## Array selection and actions
 
 Items are always selectable in table, tile, and wall views; `enableSelection`
-has been removed. Hover over an item to reveal its checkbox. Clicking the item
+has been removed. Hover over an item to reveal its checkbox.
+Tile cards also show a subtle table-like hover highlight without changing their
+background or selected outline. Clicking the item
 replaces the selection with that item; clicking its checkbox adds or removes it
-without changing other selections. Selected checkboxes remain visible.
+without changing other selections. Ctrl-click also toggles an item without
+changing other selections. Selected checkboxes remain visible.
 Clicking the only selected item again clears the selection.
 Selection survives sorting, filtering, paging, and view changes within a view.
 Existing item click callbacks still run on item clicks, but not checkbox clicks.
@@ -124,6 +127,9 @@ The options menu separates global features, selection controls, and actions for
 the current selection. Clicking outside the menu, choosing an action, or clicking
 its trigger again closes it. `Select All` and `Invert Selection` operate on all filtered
 results across pages, leaving selections outside the filter unchanged.
+Hover over a view and press `F` to toggle the same menu at the mouse position
+(clamped to the viewport). The shortcut targets the innermost view and is ignored
+while editing text, composing input, or holding Ctrl, Alt, or Meta.
 `Clear Selection` clears everything, including hidden selections.
 With one item selected, its `itemActions` (including the default raw-data action
 unless `noDefaultActions` is set) appear in the final section. `multiItemActions`
@@ -144,6 +150,14 @@ shows the `allSame` property filter without preselecting a value.
 The `(Actions)` property is included by default but can be hidden in the visible
 properties dialog, independently for each view mode. Hiding this property does
 not remove selection actions from the options menu.
+
+`tileRenderOption.header` accepts a callback returning an `HTMLElement`.
+Use `header: item => uu.createHeader(uu.stringToColor(item.name))` for a colored
+header. `createHeader(color)` returns a standalone empty padded `div` with a
+width of `100%` and a minimum height of `6rem`, using the supplied CSS color
+as its background. It can also be composed into other UI elements independently
+of `visualizeArray`. When no header callback is provided, tiles use
+`createHeader('gray')`. Custom item renderers still control their entire card.
 
 ## Custom array sorting
 
