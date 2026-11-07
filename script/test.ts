@@ -1,6 +1,53 @@
 import * as tu from '../src/tu.ts'
 import * as ut from 'jsr:@std/assert@1.0.2'
 
+Deno.test('flattened properties preserve paths, whole values and original objects', () => {
+    const date = new Date('2026-01-01')
+    const shared = { value: 1 }
+    const items = [
+        { a: { b: 2 }, 'a.b': 3, tags: ['x', 'y'], empty: {}, date, left: shared, right: shared,
+            special: { 'x[y]': { '': 4 }, 'quote".\\key': 5 } },
+        { a: null, extra: true },
+    ]
+    ut.assertEquals(tu.dataProperties(items), [
+        'a', 'a.b', 'tags', 'empty', 'date', 'left', 'right', 'special', 'extra',
+    ])
+    ut.assertEquals(tu.dataProperties(items, true), [
+        'a.b', '["a.b"]', 'tags', 'empty', 'date', 'left.value', 'right.value',
+        'special["x[y]"][""]', 'special["quote\\".\\\\key"]', 'a', 'extra',
+    ])
+    ut.assertEquals(tu.getDataProperty(items[0], 'a.b'), 3)
+    ut.assertEquals(tu.getDataProperty(items[0], 'a.b', true), 2)
+    ut.assertEquals(tu.getDataProperty(items[0], '["a.b"]', true), 3)
+    ut.assertEquals(tu.getDataProperty(items[0], 'special["x[y]"][""]', true), 4)
+    ut.assertEquals(tu.getDataProperty(items[0], 'special["quote\\".\\\\key"]', true), 5)
+    ut.assertStrictEquals(tu.getDataProperty(items[0], 'tags', true), items[0].tags)
+    ut.assertStrictEquals(tu.getDataProperty(items[0], 'date', true), date)
+    ut.assertStrictEquals(items[0].left, shared)
+    ut.assertEquals(tu.getDataProperty(items[1], 'a.b', true), undefined)
+    ut.assertEquals(tu.getDataProperty(items[1], 'missing.child', true), undefined)
+    ut.assertEquals(tu.dataProperties([], true), [])
+    for (const path of ['', '.a', 'a.', 'a..b', 'a.[\"b\"]', 'a[b]', '["a"]b']) {
+        ut.assertThrows(() => tu.getDataProperty(items[0], path, true), TypeError, 'Invalid property path')
+    }
+    const circular: { self?: object } = {}
+    circular.self = circular
+    ut.assertThrows(() => tu.dataProperties([circular], true), TypeError, 'circular object')
+})
+
+Deno.test('flattened chart statistics share paths and retain array counting', () => {
+    const items = [
+        { user: { city: 'a' }, tags: ['x', 'y'], 'user.city': 'literal' },
+        { user: { city: 'b' }, tags: ['x'], 'user.city': 'literal' },
+    ]
+    ut.assertEquals(tu.getPropStat(items, true), [
+        { propName: '["user.city"]', uniqueValues: [{ value: 'literal', count: 2 }] },
+        { propName: 'user.city', uniqueValues: [{ value: 'a', count: 1 }, { value: 'b', count: 1 }] },
+        { propName: 'tags', uniqueValues: [{ value: 'x', count: 2 }, { value: 'y', count: 1 }] },
+    ])
+    ut.assertEquals(tu.getPropStat(items).map(stat => stat.propName), ['user.city', 'user', 'tags'])
+})
+
 Deno.test('compareObjects recursive rows and stable value indexes', () => {
     const result = tu.compareObjects([
         { name: 'A', obj: { config: { size: 1, enabled: true } } },

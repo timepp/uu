@@ -462,14 +462,67 @@ export function extractJsonObject(text: string): { obj: any, startPos: number, e
     return null;
 }
 
-export function dataProperties(arr: object[]): string[] {
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    if (value === null || typeof value !== 'object') return false
+    const prototype = Object.getPrototypeOf(value)
+    return prototype === Object.prototype || prototype === null
+}
+
+function appendPropertyPath(path: string, key: string): string {
+    const segment = key === '' || /[.[\]]/.test(key) ? `[${JSON.stringify(key)}]` : key
+    return !path || segment.startsWith('[') ? path + segment : `${path}.${segment}`
+}
+
+/** Discover properties, optionally expanding plain objects while keeping arrays as values. */
+export function dataProperties(arr: object[], flattenNestedObjects = false): string[] {
     const propSet = new Set<string>()
-    for (const item of arr) {
-        for (const key in item) {
-            propSet.add(key)
+    const parents = new Set<object>()
+    function visit(value: unknown, path: string): void {
+        if (isPlainObject(value) && Object.keys(value).length > 0) {
+            if (parents.has(value)) throw new TypeError(`Cannot flatten circular object at ${path}`)
+            parents.add(value)
+            for (const key in value) visit(value[key], appendPropertyPath(path, key))
+            parents.delete(value)
+        } else {
+            propSet.add(path)
         }
     }
+    for (const item of arr) {
+        if (flattenNestedObjects) parents.add(item)
+        for (const key in item) {
+            if (flattenNestedObjects) visit(Reflect.get(item, key), appendPropertyPath('', key))
+            else propSet.add(key)
+        }
+        parents.delete(item)
+    }
     return [...propSet]
+}
+
+/** Read a property or a flattened path with JSON-quoted brackets for special keys. */
+export function getDataProperty(item: object, property: string, flattenNestedObjects = false): unknown {
+    if (!flattenNestedObjects) return Reflect.get(item, property)
+    const segment = /\["(?:\\.|[^"\\])*"\]|[^.[\]]+/y
+    const keys: string[] = []
+    let offset = 0
+    while (offset < property.length) {
+        if (offset > 0 && property[offset] !== '[') {
+            if (property[offset] !== '.') throw new TypeError(`Invalid property path: ${property}`)
+            offset++
+            if (property[offset] === '[') throw new TypeError(`Invalid property path: ${property}`)
+        }
+        segment.lastIndex = offset
+        const match = segment.exec(property)
+        if (!match) throw new TypeError(`Invalid property path: ${property}`)
+        keys.push(match[0].startsWith('[') ? JSON.parse(match[0].slice(1, -1)) : match[0])
+        offset = segment.lastIndex
+    }
+    if (keys.length === 0) throw new TypeError(`Invalid property path: ${property}`)
+    let value: unknown = item
+    for (const key of keys) {
+        if (value === null || value === undefined) return undefined
+        value = Reflect.get(Object(value), key)
+    }
+    return value
 }
 
 // catch all excpetion and return a default value if error occurs
@@ -754,7 +807,7 @@ export type DataPropStat = {
         count: number
     }[]
 }
-export function getPropStat(arr: object[]): DataPropStat[] {
+export function getPropStat(arr: object[], flattenNestedObjects = false): DataPropStat[] {
     const pvm: Record<string, Record<any, number>> = {}
     function getOrCreate(obj: any, prop: string) {
         if (!obj[prop]) obj[prop] = {}
@@ -765,8 +818,8 @@ export function getPropStat(arr: object[]): DataPropStat[] {
         obj[props] = (obj[props] || 0) + 1
     }
     for (const item of arr) {
-        for (const prop in item) {
-            const value = item[prop as keyof typeof item]
+        for (const prop of dataProperties([item], flattenNestedObjects)) {
+            const value = getDataProperty(item, prop, flattenNestedObjects)
             let pp = getOrCreate(pvm, prop)
             if (Array.isArray(value)) {
                 const arr = value as any[]
@@ -844,12 +897,6 @@ export type ObjectComparison = {
 export function compareObjects(objects: { name: string, obj: object }[]): ObjectComparison[] {
     const missing = Symbol('missing')
     const props = new Set<string>()
-    const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-        if (value === null || typeof value !== 'object') return false
-        const prototype = Object.getPrototypeOf(value)
-        return prototype === Object.prototype || prototype === null
-    }
-
     const flattened = objects.map(({ obj }) => {
         const values = new Map<string, unknown>()
         const parents = new Set<object>()
@@ -862,9 +909,7 @@ export function compareObjects(objects: { name: string, obj: object }[]): Object
                 if (root || entries.length > 0) {
                     parents.add(value)
                     for (const [key, child] of entries) {
-                        const segment = key === '' || /[.[\]]/.test(key) ? `[${JSON.stringify(key)}]` : key
-                        const childPath = !path || segment.startsWith('[') ? path + segment : `${path}.${segment}`
-                        visit(child, childPath)
+                        visit(child, appendPropertyPath(path, key))
                     }
                     parents.delete(value)
                     return

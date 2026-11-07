@@ -67,6 +67,13 @@ Importing `uu.ts` itself has no browser side effects. `enableBootstrap()` and
 
 ## Recreating array views
 
+The UI test page includes a **UU Feature Showcase** with 36 synthetic products
+from [demo-data.ts](./ui-test/demo-data.ts). Run `npm run ui-test` to try nested filters, custom
+sorting and formatting, charts, pagination, table/tile/wall views, selection,
+comparison, JSON export, and incremental loading. The demo initially loads
+24 products, provides an interaction guide, and has its own resettable saved
+settings.
+
 `visualizeArray()` renders a data snapshot. When the data changes, create a new
 view and replace the old element. Reuse the same `stateKey` to restore the
 user's settings from local storage:
@@ -103,6 +110,39 @@ Use `initialFilterProps: ['status', 'category']` to recommend property filter
 rows for a new view. Nonempty defaults initially expand the filter panel without
 selecting any values or excluding items. Saved property filter settings (including
 an empty property list) and panel visibility take precedence over these defaults.
+
+Set `flattenNestedObjects: true` to use nested property paths consistently in
+display, sorting, property filters, and charts:
+
+```typescript
+const view = uu.visualizeArray(items, {
+    flattenNestedObjects: true,
+    initialFilterProps: ['user.city', 'user.department'],
+})
+```
+
+Filter properties are independent of visible columns and `hideUniformProps`.
+Flattening expands plain objects; arrays, empty objects, and non-plain objects
+(such as dates) remain values. Arrays retain multi-value filtering and chart
+statistics rather than exposing array indexes. Keys containing dots or brackets,
+and empty keys, use JSON-quoted brackets: `["a.b"]` is a literal key, whereas
+`a.b` is a nested path. Circular references through expanded objects throw a
+`TypeError`. Ordinary dotted paths and the default non-flattened behavior remain
+unchanged. Views and filters always retain the original item objects.
+
+Standalone `PropertyFilter` accepts the same `flattenNestedObjects` option
+(default `false`). Its `valueGetters` override default property/path lookup and
+also register virtual filter properties:
+
+```typescript
+const filter = new uu.PropertyFilter(parent, items, 'orders-filter', {
+    flattenNestedObjects: true,
+    initialProperties: ['orderStatuses'],
+    valueGetters: {
+        orderStatuses: item => item.orders.map(order => order.status),
+    },
+})
+```
 
 Row selection, scroll position, focus, and unsubmitted filter text are not
 restored. Random sorting restores the mode, not the previous shuffled order.

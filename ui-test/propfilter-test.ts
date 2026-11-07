@@ -1,4 +1,5 @@
 import { PropertyFilter } from '../src/uu-propfilter.ts'
+import { visualizeArray } from '../src/uu-visualize-array.ts'
 
 export async function runPropertyFilterTests() {
     const stateKey = `uu-propfilter-test:${crypto.randomUUID()}`
@@ -140,10 +141,92 @@ export async function runPropertyFilterTests() {
         localStorage.setItem(stateKey, JSON.stringify({ properties: ['kind'], filters: { kind: ['y'] } }))
         filter = create(stateKey, 20, ['group'])
         assert(filter.getState().properties.join(',') === 'kind' && filter.getFilteredItems().length === 1, 'Saved properties and values override initial recommendations')
+
+        const nestedItems: { id: string, user: { city: string, tags: string[], extra?: string } | null, 'user.city': string }[] = [
+            { id: 'a', user: { city: 'x', tags: ['red', 'blue'] }, 'user.city': 'literal-a' },
+            { id: 'b', user: { city: 'y', tags: ['blue'] }, 'user.city': 'literal-b' },
+            { id: 'c', user: null, 'user.city': 'literal-c' },
+        ]
+        host.replaceChildren()
+        let nestedFilter = new PropertyFilter(host, nestedItems, '', {
+            flattenNestedObjects: true,
+            initialProperties: ['user.city', 'user.tags', '["user.city"]'],
+        })
+        assert(row('user.city').textContent?.includes('x (1)') === true, 'Nested paths expose leaf values')
+        choose(row('user.city'), 'x')
+        assert(nestedFilter.getFilteredItems()[0] === nestedItems[0], 'Nested filtering returns original objects')
+        assert(nestedFilter.getFilteredItems().length === 1, 'Missing nested values do not match')
+        choose(row('user.city'), 'All')
+        choose(row('user.tags'), 'blue')
+        assert(nestedFilter.getFilteredItems().length === 2, 'Nested arrays remain multi-value properties')
+        nestedFilter.reset()
+        choose(row('["user.city"]'), 'literal-b')
+        assert(nestedFilter.getFilteredItems()[0] === nestedItems[1], 'Literal dotted keys differ from nested paths')
+        nestedFilter.setItems([])
+        assert(nestedFilter.getState().filters['["user.city"]'].join(',') === 'literal-b', 'Empty subsets retain selected paths')
+        nestedFilter.setItems(nestedItems)
+        assert(nestedFilter.getFilteredItems()[0] === nestedItems[1], 'Selections survive text-filter subset changes')
+        nestedFilter.setItems([{ id: 'd', user: { city: 'z', tags: [] }, 'user.city': 'literal-d' }])
+        nestedFilter.reset()
+        assert(row('user.city').textContent?.includes('z (1)') === true, 'Updated items discover nested values')
+        nestedFilter.setItems([{ id: 'e', user: { city: 'z', tags: [], extra: 'new' }, 'user.city': 'literal-e' }])
+        nestedFilter.getState().properties.push('user.extra')
+        nestedFilter.render()
+        assert(row('user.extra').textContent?.includes('new (1)') === true, 'Updated items discover new nested paths')
+
+        host.replaceChildren()
+        nestedFilter = new PropertyFilter(host, nestedItems, '', {
+            flattenNestedObjects: true,
+            initialProperties: ['user.city', 'virtual'],
+            valueGetters: {
+                'user.city': item => item.id,
+                virtual: item => item.user?.tags,
+            },
+        })
+        choose(row('user.city'), 'b')
+        assert(nestedFilter.getFilteredItems()[0] === nestedItems[1], 'Custom getters override nested lookup')
+        choose(row('user.city'), 'All')
+        choose(row('virtual'), 'red')
+        assert(nestedFilter.getFilteredItems()[0] === nestedItems[0], 'Getter keys register virtual multi-value properties')
+
+        host.replaceChildren()
+        const topLevelFilter = new PropertyFilter(host, nestedItems, '', { initialProperties: ['user.city'] })
+        choose(row('user.city'), 'literal-a')
+        assert(topLevelFilter.getFilteredItems()[0] === nestedItems[0], 'Default filters still treat dotted keys literally')
+        host.replaceChildren()
+        const virtualFilter = new PropertyFilter(host, nestedItems, '', {
+            initialProperties: ['virtual'],
+            valueGetters: { virtual: item => item.id },
+        })
+        choose(row('virtual'), 'c')
+        assert(virtualFilter.getFilteredItems()[0] === nestedItems[2], 'Virtual properties also work without flattening')
+
+        function nestedView() {
+            host.replaceChildren()
+            const view = visualizeArray(nestedItems, {
+                stateKey,
+                flattenNestedObjects: true,
+                initialFilterProps: ['user.city'],
+                renderStyles: ['table'],
+                renderOption: { props: ['id'] },
+            })
+            host.appendChild(view)
+            return view
+        }
+        localStorage.removeItem(stateKey)
+        localStorage.removeItem(`${stateKey}:property-filter`)
+        let view = nestedView()
+        choose(row('user.city'), 'y')
+        assert(view.querySelectorAll('.uu-va-table-row').length === 1, 'Array views wire nested property filters')
+        assert(view.querySelector('.uu-va-table-cell')?.textContent === 'b', 'Hidden nested columns can still filter')
+        view = nestedView()
+        assert(view.querySelectorAll('.uu-va-table-row').length === 1, 'Nested filters restore in recreated array views')
+        assert(view.querySelector('.uu-va-table-cell')?.textContent === 'b', 'Restored nested selections retain their values')
         return { passed: checks }
     } finally {
         host.remove()
         localStorage.removeItem(stateKey)
+        localStorage.removeItem(`${stateKey}:property-filter`)
         const dialog = document.querySelector('.uu-pf-dialog')
         const closeButton = dialog?.closest('.uu-dialog')?.querySelector<HTMLElement>('.uu-dialog-action')
         closeButton?.click()

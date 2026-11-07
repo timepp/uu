@@ -242,18 +242,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         if (prop === actionProp) {
             return `action #${index + 1}`
         }
-        if (!cfg.flattenNestedObjects) {
-            return item[prop as keyof T]
-        }
-        const parts = prop.split('.')
-        let v = item as any
-        for (const part of parts) {
-            if (v === null || v === undefined) {
-                return undefined
-            }
-            v = v[part]
-        }
-        return v
+        return tu.getDataProperty(item, prop, cfg.flattenNestedObjects)
     }
 
     function getActiveViewRenderOption() {
@@ -379,20 +368,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     }
 
     function calculateProps() {
-        let allProps = tu.dataProperties(arr)
-        if (cfg.flattenNestedObjects) {
-            const props = new Set<string>()
-            tu.traverseObject(arr, -1, (p, v, t) => {
-                const path = p.slice(1).join('.')
-                if (path && v instanceof Array) {
-                    props.add(path)
-                    return 0
-                }
-                if (t === 'leaf') props.add(path)
-            })
-            allProps = [...props]
-
-        }
+        const allProps = tu.dataProperties(arr, cfg.flattenNestedObjects)
         const presentationProps = cfg.renderOption?.props ?? []
         const allPropsWithRaw = [
             rawIndexProp,
@@ -801,6 +777,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     const propertyFilter = new PropertyFilter<T>(propertyFilterArea, allData.map(v => v.item), cfg.stateKey ? `${cfg.stateKey}:property-filter` : '', {
         initialProperties: cfg.initialFilterProps,
+        flattenNestedObjects: cfg.flattenNestedObjects,
         onChange: () => {
             applyPropertyFilter()
             applySort()
@@ -1086,7 +1063,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
 
     const dropdownActions: Record<string, () => tu.MaybePromise<unknown>> = {
         'Charts': async () => {
-            const info = tu.getPropStat(arr)
+            const info = tu.getPropStat(arr, cfg.flattenNestedObjects)
             console.log('prop stat', info)
             // const goodInfo = info.filter(v => v.uniqueValues.length <= 200)
             const content = await renderDataInsights(info, cfg.onPropertyValueClick)

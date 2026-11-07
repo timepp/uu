@@ -11,6 +11,7 @@ export type PropertyFilterState = {
 
 export type PropertyFilterOptions<T extends object> = {
     initialProperties?: string[]
+    flattenNestedObjects?: boolean
     valueGetters?: Partial<Record<keyof T | string, (item: T) => unknown | unknown[]>>
     maxInlineValues?: number
     onChange?: (filter: PropertyFilter<T>) => tu.MaybePromise<void>
@@ -133,15 +134,20 @@ export class PropertyFilter<T extends object> {
     private maxInlineValues: number
     private onChange?: (filter: PropertyFilter<T>) => tu.MaybePromise<void>
     private valueGetters: Partial<Record<keyof T | string, (item: T) => unknown | unknown[]>>
+    private flattenNestedObjects: boolean
 
     constructor(parent: Element | null, items: T[], private stateKey: string, options: PropertyFilterOptions<T> = {}) {
         injectPropertyFilterStyles()
         this.items = items
-        this.availablePropertyNames = tu.dataProperties(items)
+        this.flattenNestedObjects = options.flattenNestedObjects ?? false
+        this.valueGetters = options.valueGetters || {}
+        this.availablePropertyNames = [...new Set([
+            ...tu.dataProperties(items, this.flattenNestedObjects),
+            ...Object.keys(this.valueGetters).filter(property => typeof this.valueGetters[property] === 'function'),
+        ])]
         this.state = loadState(stateKey, options.initialProperties)
         this.maxInlineValues = options.maxInlineValues ?? 20
         this.onChange = options.onChange
-        this.valueGetters = options.valueGetters || {}
         this.root = createElement(parent, 'div', ['uu-pf'])
         this.cleanupState()
         this.render()
@@ -155,7 +161,7 @@ export class PropertyFilter<T extends object> {
 
     setItems(items: T[]) {
         this.items = items
-        const propertyNames = tu.dataProperties(items)
+        const propertyNames = tu.dataProperties(items, this.flattenNestedObjects)
         this.availablePropertyNames = [...new Set([...this.availablePropertyNames, ...propertyNames])]
         this.render()
     }
@@ -179,7 +185,7 @@ export class PropertyFilter<T extends object> {
         const getValues = this.valueGetters[property]
         return {
             name: property,
-            getValues: item => normalizeValues(getValues ? getValues(item) : item[property as keyof T] as unknown)
+            getValues: item => normalizeValues(getValues ? getValues(item) : tu.getDataProperty(item, property, this.flattenNestedObjects))
         }
     }
 

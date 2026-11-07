@@ -73,6 +73,26 @@ export function runSortingTests() {
         sortBy: [{ prop: 'nested.value', order: 'asc' }],
         getSortingValue: () => undefined,
     }), 'c,b,a', 'nested property fallback')
+    const specialItems = [
+        { id: 'a', nested: { value: 2 }, 'nested.value': 1 },
+        { id: 'b', nested: { value: 1 }, 'nested.value': 2 },
+    ]
+    function specialView(prop: string) {
+        return visualizeArray(specialItems, {
+            flattenNestedObjects: true,
+            renderStyles: ['table'],
+            renderOption: { props: ['id', 'nested.value', '["nested.value"]'] },
+            sortBy: [{ prop, order: 'asc' }],
+        })
+    }
+    const nestedView = specialView('nested.value')
+    assertOrder(nestedView, 'b,a', 'nested and literal dotted keys sort independently')
+    const cells = Array.from(nestedView.querySelector('.uu-va-table-row')?.querySelectorAll('.uu-va-table-cell') || [])
+    if (cells.slice(0, 3).map(cell => cell.textContent).join(',') !== 'b,1,2') {
+        throw new Error('Nested and literal dotted keys must display distinct values')
+    }
+    checks++
+    assertOrder(specialView('["nested.value"]'), 'a,b', 'quoted literal paths sort by their own values')
     assertOrder(create({
         sortBy: [{ prop: '#', order: 'desc' }],
         getSortingValue: () => undefined,
