@@ -17,10 +17,11 @@ export async function runPropertyFilterTests() {
         checks++
     }
 
-    function create(key = stateKey, maxInlineValues = 20) {
+    function create(key = stateKey, maxInlineValues = 20, initialProperties: string[] = []) {
         host.replaceChildren()
         return new PropertyFilter(host, items, key, {
             maxInlineValues,
+            initialProperties,
             onChange: () => { changes++ },
         })
     }
@@ -124,6 +125,21 @@ export async function runPropertyFilterTests() {
         assert(selected(filter) === 'b,a', 'Unkeyed filters support Ctrl multi-selection')
         filter = create('')
         assert(selected(filter) === '', 'Unkeyed filters do not restore selections')
+
+        const initialProperties = ['group', 'unknown']
+        filter = create('', 20, initialProperties)
+        assert(filter.getState().properties.join(',') === 'group', 'Unkeyed filters use known initial properties')
+        assert(initialProperties.join(',') === 'group,unknown', 'Cleaning initial properties does not mutate caller defaults')
+        assert(filter.getFilteredItems().length === items.length, 'Initial properties do not preselect values')
+        localStorage.removeItem(stateKey)
+        filter = create(stateKey, 20, ['group'])
+        assert(row('group').textContent?.includes('All (3)') === true, 'First keyed use displays recommended filter properties')
+        localStorage.setItem(stateKey, JSON.stringify({ properties: [], filters: {} }))
+        filter = create(stateKey, 20, ['group'])
+        assert(filter.getState().properties.length === 0, 'Saved empty properties override initial recommendations')
+        localStorage.setItem(stateKey, JSON.stringify({ properties: ['kind'], filters: { kind: ['y'] } }))
+        filter = create(stateKey, 20, ['group'])
+        assert(filter.getState().properties.join(',') === 'kind' && filter.getFilteredItems().length === 1, 'Saved properties and values override initial recommendations')
         return { passed: checks }
     } finally {
         host.remove()

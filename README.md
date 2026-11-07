@@ -99,8 +99,65 @@ selection. `All` clears the row. The expanded values dialog keeps direct-click
 multiple selection without requiring Ctrl. Selected values are saved with the
 property filter state.
 
+Use `initialFilterProps: ['status', 'category']` to recommend property filter
+rows for a new view. Nonempty defaults initially expand the filter panel without
+selecting any values or excluding items. Saved property filter settings (including
+an empty property list) and panel visibility take precedence over these defaults.
+
 Row selection, scroll position, focus, and unsubmitted filter text are not
 restored. Random sorting restores the mode, not the previous shuffled order.
+
+## Array selection and actions
+
+Items are always selectable in table, tile, and wall views; `enableSelection`
+has been removed. Hover over an item to reveal its checkbox.
+Tile cards also show a subtle table-like hover highlight without changing their
+background or selected outline. Clicking the item
+replaces the selection with that item; clicking its checkbox adds or removes it
+without changing other selections. Ctrl-click also toggles an item without
+changing other selections. Selected checkboxes remain visible.
+Clicking the only selected item again clears the selection.
+Selection survives sorting, filtering, paging, and view changes within a view.
+Existing item click callbacks still run on item clicks, but not checkbox clicks.
+Interactive controls and property click handlers keep their existing behavior.
+Selection does not set an item-level pointer cursor; checkboxes, item actions,
+and properties with click handlers use pointer cursors.
+
+The options menu separates global features, selection controls, and actions for
+the current selection. Clicking outside the menu, choosing an action, or clicking
+its trigger again closes it. `Select All` and `Invert Selection` operate on all filtered
+results across pages, leaving selections outside the filter unchanged.
+Hover over a view and press `F` to toggle the same menu at the mouse position
+(clamped to the viewport). The shortcut targets the innermost view and is ignored
+while editing text, composing input, or holding Ctrl, Alt, or Meta.
+`Clear Selection` clears everything, including hidden selections.
+With one item selected, its `itemActions` (including the default raw-data action
+unless `noDefaultActions` is set) appear in the final section. `multiItemActions`
+appear whenever the selection is nonempty and receive all selected items,
+including hidden ones, in selection order. With two or more selected items,
+`Compare Selected Items` compares all selected items in selection order using
+`compareObjects` and renders the result with `visualizeArray`. The first column
+is the recursive property path, followed by the boolean `allSame` column and
+the original one-based item numbers (`Item 1`, etc.). Arrays are compared as
+whole values, and missing properties display as `<missing>`. All properties,
+including matching ones, are shown. Within differing property rows, equal values
+share a pale cell background; different `valueIndex` groups receive different
+colors. Rows with `allSame: true` have no comparison background colors.
+Comparison table settings are saved using the state key
+`uu-comparison-result-table`. On first use, `initialFilterProps: ['allSame']`
+shows the `allSame` property filter without preselecting a value.
+
+The `(Actions)` property is included by default but can be hidden in the visible
+properties dialog, independently for each view mode. Hiding this property does
+not remove selection actions from the options menu.
+
+`tileRenderOption.header` accepts a callback returning an `HTMLElement`.
+Use `header: item => uu.createHeader(uu.stringToColor(item.name))` for a colored
+header. `createHeader(color)` returns a standalone empty padded `div` with a
+width of `100%` and a minimum height of `6rem`, using the supplied CSS color
+as its background. It can also be composed into other UI elements independently
+of `visualizeArray`. When no header callback is provided, tiles use
+`createHeader('gray')`. Custom item renderers still control their entire card.
 
 ## Custom array sorting
 
@@ -129,6 +186,8 @@ the default property value; `0` and `''` are valid custom keys. `dataIndex` is
 the zero-based index in the original array, unaffected by sorting, filtering,
 or paging. Return consistent key types for each column: numbers are compared
 numerically, and strings use the existing Chinese locale collator.
+Default object values are compared using their `tu.stringify()` text, avoiding
+implicit object-to-string conversion failures for serialized browser objects.
 
 Custom keys apply to initial sorting, header clicks, and multi-column sorting
 in all views. They are not used for random sorting. Callbacks should be pure

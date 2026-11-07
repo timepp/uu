@@ -1,6 +1,86 @@
 import * as tu from '../src/tu.ts'
 import * as ut from 'jsr:@std/assert@1.0.2'
 
+Deno.test('compareObjects recursive rows and stable value indexes', () => {
+    const result = tu.compareObjects([
+        { name: 'A', obj: { config: { size: 1, enabled: true } } },
+        { name: 'B', obj: { config: { size: 2, enabled: true } } },
+        { name: 'C', obj: { config: { size: 1, enabled: true } } },
+        { name: 'D', obj: { config: { size: 3, enabled: true } } },
+    ])
+    ut.assertEquals(result, [
+        {
+            prop: 'config.size', allSame: false, values: [
+                { name: 'A', value: '1', valueIndex: 0 },
+                { name: 'B', value: '2', valueIndex: 1 },
+                { name: 'C', value: '1', valueIndex: 0 },
+                { name: 'D', value: '3', valueIndex: 2 },
+            ],
+        },
+        {
+            prop: 'config.enabled', allSame: true, values: [
+                { name: 'A', value: 'true', valueIndex: 0 },
+                { name: 'B', value: 'true', valueIndex: 0 },
+                { name: 'C', value: 'true', valueIndex: 0 },
+                { name: 'D', value: 'true', valueIndex: 0 },
+            ],
+        },
+    ])
+})
+
+Deno.test('compareObjects distinguishes missing, undefined, null and primitive types', () => {
+    const result = tu.compareObjects([
+        { name: 'same', obj: {} },
+        { name: 'same', obj: { value: undefined } },
+        { name: 'null', obj: { value: null } },
+        { name: 'number', obj: { value: 1 } },
+        { name: 'string', obj: { value: '1' } },
+        { name: 'missing text', obj: { value: '<missing>' } },
+        { name: 'missing again', obj: {} },
+    ])
+    ut.assertEquals(result.map(row => row.prop), ['value'])
+    ut.assertEquals(result[0].allSame, false)
+    ut.assertEquals(result[0].values.map(value => [value.value, value.valueIndex]), [
+        ['<missing>', 0], ['undefined', 1], ['null', 2], ['1', 3],
+        ['"1"', 4], ['"<missing>"', 5], ['<missing>', 0],
+    ])
+})
+
+Deno.test('compareObjects treats arrays as structural whole values', () => {
+    const result = tu.compareObjects([
+        { name: 'A', obj: { items: [{ x: 1, y: 2 }], empty: {} } },
+        { name: 'B', obj: { items: [{ y: 2, x: 1 }], empty: {} } },
+        { name: 'C', obj: { items: [{ x: 2, y: 2 }], empty: [] } },
+    ])
+    ut.assertEquals(result.map(row => row.prop), ['items', 'empty'])
+    ut.assertEquals(result.map(row => row.allSame), [false, false])
+    ut.assertEquals(result.map(row => row.values.map(value => value.valueIndex)), [[0, 0, 1], [0, 0, 1]])
+    const types = tu.compareObjects([
+        { name: 'undefined', obj: { items: [undefined] } },
+        { name: 'null', obj: { items: [null] } },
+        { name: 'empty', obj: { items: [] } },
+    ])
+    ut.assertEquals(types[0].values.map(value => value.valueIndex), [0, 1, 2])
+})
+
+Deno.test('compareObjects handles empty inputs, mixed shapes and ambiguous keys', () => {
+    ut.assertEquals(tu.compareObjects([]), [])
+    ut.assertEquals(tu.compareObjects([{ name: 'empty', obj: {} }]), [])
+    const result = tu.compareObjects([
+        { name: 'A', obj: { a: 1, 'a.b': 2, '': 3 } },
+        { name: 'B', obj: { a: { b: 2 } } },
+    ])
+    ut.assertEquals(result.map(row => row.prop), ['a', '["a.b"]', '[""]', 'a.b'])
+    ut.assertEquals(result.map(row => row.values.map(value => value.value)), [
+        ['1', '<missing>'], ['2', '<missing>'], ['3', '<missing>'], ['<missing>', '2'],
+    ])
+    const shared = { value: 1 }
+    ut.assertEquals(tu.compareObjects([{ name: 'A', obj: { a: shared, b: shared } }]).map(row => row.prop), ['a.value', 'b.value'])
+    const circular: { self?: object } = {}
+    circular.self = circular
+    ut.assertThrows(() => tu.compareObjects([{ name: 'A', obj: circular }]), TypeError, 'circular object')
+})
+
 Deno.test('object traverse', () => {
     const data = {
         name: 'test',

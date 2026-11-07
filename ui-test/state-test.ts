@@ -137,6 +137,87 @@ export async function runStateTests() {
         view = create(items, { stateKey: '' })
         assert(firstId(view) === '1', 'Unkeyed views do not restore the page')
         assert(element(view, '.uu-va-pf').style.display === 'none', 'Unkeyed views do not restore panel state')
+
+        async function actionColumnOption(view: HTMLElement) {
+            element(view, '.uu-va-props-btn').click()
+            await tick()
+            const option = Array.from(document.querySelectorAll<HTMLElement>('.uu-selection-item'))
+                .find(item => item.querySelector('.uu-selection-value')?.textContent === '(Actions)')
+            if (!option) throw new Error('Missing actions column option')
+            return option
+        }
+
+        async function finishPropSelection(name: string) {
+            const button = Array.from(document.querySelectorAll<HTMLElement>('.uu-dialog-action'))
+                .find(item => item.textContent === name)
+            if (!button) throw new Error(`Missing property selection action: ${name}`)
+            button.click()
+            await tick()
+        }
+
+        for (const style of ['table', 'tile', 'wall'] as const) {
+            localStorage.removeItem(stateKey)
+            localStorage.removeItem(`${stateKey}:property-filter`)
+            const props = ['id', 'group']
+            Object.freeze(props)
+            const config: Partial<VisualizeConfig<Item>> = {
+                renderStyles: [style],
+                renderOption: { props },
+                wallRenderOption: { imageUrl: () => 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>' },
+            }
+            view = create(items, config)
+            assert(!!view.querySelector('.uu-va-actions'), `${style}: actions are shown by default`)
+            assert(props.join(',') === 'id,group', `${style}: rendering does not mutate configured properties`)
+            const option = await actionColumnOption(view)
+            assert(option.classList.contains('uu-is-selected'), `${style}: dialog reflects the default actions column`)
+            option.click()
+            await finishPropSelection('OK')
+            assert(!view.querySelector('.uu-va-actions'), `${style}: unchecking actions hides the column`)
+            const savedProps = JSON.parse(localStorage.getItem(stateKey) || '{}')[`${style}Props`]
+            assert(Array.isArray(savedProps) && !savedProps.includes('(Actions)'), `${style}: hidden action column is persisted`)
+            const hiddenOption = await actionColumnOption(view)
+            assert(!hiddenOption.classList.contains('uu-is-selected'), `${style}: reopening the dialog keeps actions unchecked`)
+            hiddenOption.click()
+            await finishPropSelection('Cancel')
+            assert(!view.querySelector('.uu-va-actions'), `${style}: cancelling column changes keeps actions hidden`)
+            element(view, '.uu-pager-next').click()
+            assert(!view.querySelector('.uu-va-actions'), `${style}: paging does not restore hidden actions`)
+            view = create(items, config)
+            assert(!view.querySelector('.uu-va-actions'), `${style}: recreating the view restores hidden actions`)
+            const restoredOption = await actionColumnOption(view)
+            restoredOption.click()
+            await finishPropSelection('OK')
+            assert(!!view.querySelector('.uu-va-actions'), `${style}: actions can be shown again`)
+            await actionColumnOption(view)
+            element(document, '.uu-selection-none').click()
+            await finishPropSelection('OK')
+            assert(!view.querySelector('.uu-va-actions'), `${style}: an empty column selection does not force actions back`)
+        }
+        view = create(items, { stateKey: '', renderStyles: ['table', 'tile', 'wall'] })
+        const actionOption = await actionColumnOption(view)
+        actionOption.click()
+        await finishPropSelection('OK')
+        const viewButtons = view.querySelectorAll<HTMLElement>('.uu-va-view .uu-toggle-item')
+        viewButtons[1].click()
+        assert(!!view.querySelector('.uu-va-actions'), 'Hiding table actions does not hide tile actions')
+        viewButtons[0].click()
+        assert(!view.querySelector('.uu-va-actions'), 'Switching back to table keeps its actions hidden')
+        viewButtons[2].click()
+        assert(!!view.querySelector('.uu-va-actions'), 'Hiding table actions does not hide wall actions')
+
+        localStorage.removeItem(stateKey)
+        localStorage.removeItem(`${stateKey}:property-filter`)
+        view = create(items, { initialFilterProps: ['group'] })
+        assert(element(view, '.uu-va-pf').style.display !== 'none', 'Recommended filter properties initially expand the panel')
+        assert(element(view, '.uu-pf-name').textContent === 'group', 'visualizeArray forwards recommended filter properties')
+        assert(view.querySelectorAll('.uu-va-table-row').length === 3, 'Recommended properties do not exclude items')
+        element(view, '.uu-va-filter-toggle').click()
+        localStorage.setItem(`${stateKey}:property-filter`, JSON.stringify({ properties: [], filters: {} }))
+        view = create(items, { initialFilterProps: ['group'] })
+        assert(element(view, '.uu-va-pf').style.display === 'none', 'Saved collapsed panel overrides initial expansion')
+        assert(!!view.querySelector('.uu-pf-select') && !view.querySelector('.uu-pf-name'), 'Saved empty filter properties override recommendations in visualizeArray')
+        view = create(items, { stateKey: '', initialFilterProps: ['group'] })
+        assert(element(view, '.uu-va-pf').style.display !== 'none' && element(view, '.uu-pf-name').textContent === 'group', 'Unkeyed views also display initial filter properties')
         return { passed: checks }
     } finally {
         host.remove()
