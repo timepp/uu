@@ -12,8 +12,11 @@
 			"label": "deno: test"
 		},
 		{
-			"type": "npm",
-			"script": "ui-test",
+			"type": "deno",
+			"command": "task",
+			"args": ["ui-test"],
+			"problemMatcher": [],
+			"label": "deno: ui-test"
 		}
 	]
 }

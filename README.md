@@ -68,7 +68,7 @@ Importing `uu.ts` itself has no browser side effects. `enableBootstrap()` and
 ## Recreating array views
 
 The UI test page includes a **UU Feature Showcase** with 36 synthetic products
-from [demo-data.ts](./ui-test/demo-data.ts). Run `npm run ui-test` to try nested filters, custom
+from [demo-data.ts](./ui-test/demo-data.ts). Run `deno task ui-test` to try nested filters, custom
 sorting and formatting, charts, pagination, table/tile/wall views, selection,
 comparison, JSON export, and incremental loading. The demo initially loads
 24 products, provides an interaction guide, and has its own resettable saved
@@ -232,8 +232,21 @@ implicit object-to-string conversion failures for serialized browser objects.
 Custom keys apply to initial sorting, header clicks, and multi-column sorting
 in all views. They are not used for random sorting. Callbacks should be pure
 and inexpensive because they may run multiple times during comparisons.
+The toolbar's slider-icon button (tooltip: `Sort settings`) opens sorting settings; it does not
+immediately sort the data. Confirm with `OK` to apply the settings.
 
 ## Styling and CSS hooks
+
+`showDialog()` sizes itself to its content by default, including changes after
+opening. Explicit `options.style.width` and `height` are preserved, including
+viewport units. Manual resizing uses the browser's native dialog resize behavior.
+Content exceeding the available viewport scrolls inside `.uu-dialog-content`.
+For a view with its own scroll container, constrain the dialog height and use
+a flex layout with `min-height: 0` on the content area and nested flex containers.
+`showJsonResult()` already does this so scrolling stays inside CodeMirror while
+the dialog header and actions remain visible.
+Very short dialogs with long, wrapping titles or search panels can leave no
+space for the viewer; increase the available height or shorten the title.
 
 UU adds stable `uu-*` classes to the roots and important structural elements of
 the UI it creates. Use these classes instead of depending on element nesting or
@@ -301,6 +314,12 @@ uu exposes all its internal states, owned local storages, and injected styles in
 
 ## Development
 
+Development commands are defined in `deno.json`. Run `deno task` to list them,
+`deno task test` for tests, and `deno task build:all` for standard and bundled
+outputs. Deno tasks resolve the installed development tools from `node_modules`.
+The npm `prepublishOnly` hook delegates to the Deno task of the same name, so
+`npm publish` still builds the package automatically.
+
 ### File structure
 
 - `package.json`: used for publishing the package to npm registry
@@ -318,22 +337,24 @@ uu exposes all its internal states, owned local storages, and injected styles in
 - `script/test.ts`: script for cli test
 - `ui-test`: directory for UI tests
 
-To run the array sorting regression checks, start `npm run ui-test`, then run
+To run the array sorting regression checks, start `deno task ui-test`, then run
 `(await import('./sorting-test.ts')).runSortingTests()` in the browser console.
 For view-state persistence checks, run
 `await (await import('./state-test.ts')).runStateTests()`.
+For dialog sizing and CodeMirror scrolling checks, run
+`await (await import('./dialog-test.ts')).runDialogTests()`.
 
 ### Publishing
 
-First you need to invoke npm command to update the version:
+First update the version:
 
 ```shell
-npm run incver
+deno task incver
 ```
 
 #### Publish to npm
 
-1. Run `npm run build:all` to build the standard and bundled outputs
+1. Run `deno task build:all` to build the standard and bundled outputs
 1. commit local changes (and push to remote repository)
 1. Run `npm publish` to publish the package to the npm registry
 

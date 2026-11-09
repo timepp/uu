@@ -93,10 +93,6 @@ export function showDialog<T>(title: string, content: string | HTMLElement | und
     onCreate?.({ dialog, header, closeButton, contentArea, footer, buttons }, finish)
     dialog.showModal()
     try { contentArea.focus({ preventScroll: true }) } catch { contentArea.focus() }
-    if (content || options.actions) {
-        dialog.style.height = `${dialog.offsetHeight + 1}px`
-        dialog.style.width = `${dialog.offsetWidth + 1}px`
-    }
     return promise
 }
 

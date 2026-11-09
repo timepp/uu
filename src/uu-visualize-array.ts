@@ -762,7 +762,9 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const igPropSelector = createElement(toolbar, 'div', ['uu-va-props', 'input-group', 'w-auto', 'flex-shrink-0'])
     const propSelectorBtn = createElement(igPropSelector, 'button', ['uu-btn', 'uu-va-props-btn', 'btn', 'btn-outline-secondary'], fa('fa-eye'))
     const igSort = createElement(toolbar, 'div', ['uu-va-sort', 'input-group', 'w-auto', 'flex-shrink-0'])
-    const sortBtn = createElement(igSort, 'button', ['uu-btn', 'uu-va-sort-btn', 'btn', 'btn-outline-secondary'], fa('fa-sort'))
+    const sortBtn = createElement(igSort, 'button', ['uu-btn', 'uu-va-sort-btn', 'btn', 'btn-outline-secondary'], fa('fa-list-ol'), {}, {
+        title: 'Sort settings', ariaLabel: 'Sort settings', ariaHasPopup: 'dialog'
+    })
     const sortHint = createElement(igSort, 'span', ['uu-va-sort-hint', 'input-group-text'])
     const igFiler = createElement(toolbar, 'div', ['uu-va-filter-group', 'input-group', 'flex-grow-1'])
     const filter = createElement(igFiler, 'input', ['uu-va-filter', 'form-control'], '')

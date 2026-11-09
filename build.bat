@@ -1,1 +1,1 @@
-deno run -A script\build.ts
+deno task build:all

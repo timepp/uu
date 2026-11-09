@@ -1,6 +1,6 @@
 {
   "name": "tpuu",
-  "version": "1.0.35",
+  "version": "1.0.36",
   "description": "UU aims to provide the following reusable constructs for modern development:\r - script development using typescript and Deno\r - web development using typescript and Vite, without any transpilation step",
   "main": "dist/uu.js",
   "type": "module",
@@ -9,14 +9,7 @@
     "test": "test"
   },
   "scripts": {
-    "test": "deno test",
-    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build": "npm run clean && npx tsc --noCheck",
-    "build:bundle": "esbuild src/uu.ts --bundle --format=esm --platform=browser --target=es2022 --outfile=dist/uu.bundle.js",
-    "build:all": "npm run build && npm run build:bundle",
-    "prepublishOnly": "npm run build:all",
-    "ui-test": "cd ui-test && vite --open",
-    "incver": "deno run -A script/increase-ver.ts"
+    "prepublishOnly": "deno task prepublishOnly"
   },
   "files": [
     "dist/**/*"

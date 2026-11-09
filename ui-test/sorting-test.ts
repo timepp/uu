@@ -36,6 +36,15 @@ export function runSortingTests() {
         },
     })
     assertOrder(view, 'c,b,a', 'custom numeric keys including zero')
+    const sortButton = view.querySelector<HTMLButtonElement>('.uu-va-sort-btn')
+    if (!sortButton?.querySelector('.fa-sliders') || sortButton.textContent?.trim() !== '') {
+        throw new Error('Sort settings must use an icon without visible text')
+    }
+    checks++
+    if (sortButton.getAttribute('aria-haspopup') !== 'dialog' || sortButton.getAttribute('aria-label') !== 'Sort settings') {
+        throw new Error('Sort settings must identify its dialog for assistive technology')
+    }
+    checks++
     const statusHeader = () => {
         const header = Array.from(view.querySelectorAll<HTMLElement>('.uu-va-table-head-cell'))
             .find(cell => cell.querySelector('.uu-va-sort-label')?.textContent === 'status')
