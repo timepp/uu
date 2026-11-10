@@ -1069,12 +1069,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             console.log('prop stat', info)
             // const goodInfo = info.filter(v => v.uniqueValues.length <= 200)
             const content = await renderDataInsights(info, cfg.onPropertyValueClick)
-            showDialog<string>('Charts', content, {
-                style: {
-                    minWidth: '90vw',
-                    minHeight: '90vh',
-                }
-            })
+            showDialog<string>('Charts', content)
         },
         'Select Props': () => selectProps(),
         'Change Page Size': async () => {
