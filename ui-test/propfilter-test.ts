@@ -142,6 +142,120 @@ export async function runPropertyFilterTests() {
         filter = create(stateKey, 20, ['group'])
         assert(filter.getState().properties.join(',') === 'kind' && filter.getFilteredItems().length === 1, 'Saved properties and values override initial recommendations')
 
+        host.replaceChildren()
+        const sortableFilter = new PropertyFilter(host, [
+            { zebra: 'z', beta: 'b', alpha: 'a', alpine: 'a' },
+            { zebra: 'y', beta: 'b', alpha: 'b', alpine: 'a' },
+            { zebra: 'x', beta: 'b', alpha: 'a', alpine: 'a' },
+        ], '', { initialProperties: ['beta', 'zebra'] })
+        click(row('beta'), '.uu-pf-name')
+        const propertyDialog = document.querySelector<HTMLElement>('.uu-selection')?.closest('dialog')
+        if (!propertyDialog) throw new Error('Missing property selection dialog')
+        const sortButtons = Array.from(propertyDialog.querySelectorAll<HTMLButtonElement>('.uu-selection-sort-option'))
+        const propertyOrder = () => Array.from(propertyDialog.querySelectorAll('.uu-selection-item .uu-selection-value'))
+            .map(element => element.textContent).join(',')
+        const selectionOrder = () => Array.from(propertyDialog.querySelectorAll('.uu-selection-item.uu-is-selected .uu-selection-value'))
+            .map(element => element.textContent).sort().join(',')
+        assert(sortButtons.length === 3, 'Property picker offers count and both name sorts')
+        assert(sortButtons.every(button => button.querySelector('.uu-icon.fa')
+            && button.textContent === '' && button.title === button.getAttribute('aria-label')), 'Sort buttons use labeled Font Awesome icons')
+        const selectionToolbar = propertyDialog.querySelector('.uu-selection-toolbar')
+        if (!selectionToolbar) throw new Error('Missing selection toolbar')
+        assert(Array.from(selectionToolbar.children).map(element => element.classList[0]).join(',')
+            === 'uu-selection-filter-group,uu-selection-sort,uu-selection-actions', 'Toolbar separates filter, sorting and selection actions in order')
+        const searchInput = propertyDialog.querySelector('.uu-selection-filter')
+        if (!searchInput) throw new Error('Missing property filter input')
+        const searchBounds = searchInput.getBoundingClientRect()
+        assert(sortButtons.every(button => {
+            const bounds = button.getBoundingClientRect()
+            return bounds.top < searchBounds.bottom && bounds.bottom > searchBounds.top
+        }), 'Sort buttons share the filter row')
+        const statusBar = propertyDialog.querySelector<HTMLElement>('.uu-selection-status')
+        const selectedArea = propertyDialog.querySelector<HTMLElement>('.uu-selection-selected')
+        const selectedLabel = propertyDialog.querySelector('.uu-selection-status-label')
+        const optionsArea = propertyDialog.querySelector('.uu-selection-items')
+        if (!statusBar || !selectedArea || !selectedLabel || !optionsArea) throw new Error('Missing property selection layout')
+        assert(getComputedStyle(statusBar).backgroundColor === 'rgb(255, 255, 224)', 'Selected-properties area has a pale yellow background')
+        assert(Array.from(propertyDialog.querySelectorAll('.uu-selection-item')).every(element =>
+            element.tagName === 'BUTTON'
+            && element.classList.contains('btn-primary') === element.classList.contains('uu-is-selected')
+            && element.classList.contains('btn-outline-secondary') !== element.classList.contains('uu-is-selected')
+            && element.getAttribute('aria-pressed') === `${element.classList.contains('uu-is-selected')}`), 'Options use the Sort dialog button styles for selected and unselected states')
+        assert(statusBar.getBoundingClientRect().top >= optionsArea.getBoundingClientRect().bottom, 'Selected properties appear below all options')
+        const labelBounds = selectedLabel.getBoundingClientRect()
+        const selectedBounds = selectedArea.getBoundingClientRect()
+        assert(labelBounds.top < selectedBounds.bottom && labelBounds.bottom > selectedBounds.top
+            && labelBounds.right <= selectedBounds.left, 'Selected label and chips share a row')
+        const dragSelected = (index: number, toEnd: boolean, below: boolean) => {
+            const chips = selectedArea.querySelectorAll<HTMLElement>('.uu-dnd-item')
+            const chip = chips[index]
+            assert(getComputedStyle(chip).cursor === 'pointer', 'Draggable selected properties use pointer cursors')
+            const bounds = (toEnd ? chips[chips.length - 1] : chips[0]).getBoundingClientRect()
+            const areaBounds = selectedArea.getBoundingClientRect()
+            const position = {
+                clientX: toEnd ? bounds.right + 20 : bounds.left - 20,
+                clientY: below ? areaBounds.bottom + 300 : areaBounds.top - 300,
+                bubbles: true,
+                cancelable: true,
+                dataTransfer: new DataTransfer(),
+            }
+            chip.dispatchEvent(new DragEvent('dragstart', position))
+            const dragOver = new DragEvent('dragover', position)
+            document.dispatchEvent(dragOver)
+            assert(dragOver.defaultPrevented && !!selectedArea.querySelector('.uu-is-drop-target'), 'Dragging outside the selected row still accepts a drop')
+            document.dispatchEvent(new DragEvent('drop', position))
+            chip.dispatchEvent(new DragEvent('dragend', position))
+        }
+        dragSelected(0, true, true)
+        assert(selectedArea.textContent?.includes('1: zebra') === true, 'Dragging far below the row reorders selected properties')
+        dragSelected(1, false, false)
+        assert(selectedArea.textContent?.includes('1: beta') === true, 'Dragging far above the row reorders selected properties')
+        assert(!selectedArea.querySelector('.uu-is-drop-target'), 'Ending a drag clears drop hints')
+        assert(propertyOrder() === 'zebra,alpha,alpine,beta', 'Properties default to distinct-value count descending with name tie-breaking')
+        assert(sortButtons[0].classList.contains('uu-is-active'), 'Count sort is initially active')
+        sortButtons[1].click()
+        assert(propertyOrder() === 'alpha,alpine,beta,zebra', 'Property names sort ascending')
+        sortButtons[2].click()
+        assert(propertyOrder() === 'zebra,beta,alpine,alpha', 'Property names sort descending')
+        assert(sortButtons[2].classList.contains('active') && !sortButtons[1].classList.contains('active'), 'Only the current sort is active')
+        assert(selectionOrder() === 'beta,zebra', 'Sorting preserves selected properties')
+        const propertySearch = propertyDialog.querySelector<HTMLInputElement>('.uu-selection-filter')
+        if (!propertySearch) throw new Error('Missing property search')
+        propertySearch.value = 'al'
+        propertySearch.dispatchEvent(new Event('input'))
+        sortButtons[0].click()
+        assert(Array.from(propertyDialog.querySelectorAll<HTMLElement>('.uu-selection-item'))
+            .filter(element => getComputedStyle(element).display !== 'none')
+            .map(element => element.querySelector('.uu-selection-value')?.textContent).join(',') === 'alpha,alpine', 'Sorting preserves the active search')
+        const alphaOption = Array.from(propertyDialog.querySelectorAll<HTMLElement>('.uu-selection-item'))
+            .find(element => element.querySelector('.uu-selection-value')?.textContent === 'alpha')
+        if (!alphaOption) throw new Error('Missing alpha property')
+        alphaOption.click()
+        assert(alphaOption.classList.contains('btn-primary') && !alphaOption.classList.contains('btn-outline-secondary'), 'Selecting an option applies the Sort dialog selected style')
+        alphaOption.click()
+        assert(!alphaOption.classList.contains('btn-primary') && alphaOption.classList.contains('btn-outline-secondary'), 'Deselecting an option restores the Sort dialog outline style')
+        alphaOption.click()
+        const propertyAction = (name: string) => {
+            const button = Array.from(propertyDialog.querySelectorAll<HTMLElement>('.uu-dialog-action'))
+                .find(element => element.textContent === name)
+            if (!button) throw new Error(`Missing property dialog action: ${name}`)
+            button.click()
+        }
+        propertyAction('OK')
+        await new Promise<void>(resolve => setTimeout(resolve, 0))
+        assert(sortableFilter.getState().properties.join(',') === 'beta,zebra,alpha', 'Confirm preserves selection order independently of display sorting')
+        click(row('beta'), '.uu-pf-name')
+        const cancelDialog = document.querySelector('.uu-selection')?.closest('dialog')
+        if (!cancelDialog) throw new Error('Missing reopened property dialog')
+        click(cancelDialog, '.uu-selection-sort-option:last-child')
+        click(cancelDialog, '.uu-selection-none')
+        const cancelButton = Array.from(cancelDialog.querySelectorAll<HTMLElement>('.uu-dialog-action'))
+            .find(element => element.textContent === 'Cancel')
+        if (!cancelButton) throw new Error('Missing Cancel button')
+        cancelButton.click()
+        await new Promise<void>(resolve => setTimeout(resolve, 0))
+        assert(sortableFilter.getState().properties.join(',') === 'beta,zebra,alpha', 'Cancel discards edits after sorting')
+
         const nestedItems: { id: string, user: { city: string, tags: string[], extra?: string } | null, 'user.city': string }[] = [
             { id: 'a', user: { city: 'x', tags: ['red', 'blue'] }, 'user.city': 'literal-a' },
             { id: 'b', user: { city: 'y', tags: ['blue'] }, 'user.city': 'literal-b' },

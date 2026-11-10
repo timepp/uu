@@ -144,6 +144,17 @@ const filter = new uu.PropertyFilter(parent, items, 'orders-filter', {
 })
 ```
 
+The filter-property picker supports sorting by count (distinct values, highest
+first) or property name (ascending/descending), without changing the selected
+properties' order. The values dialog likewise supports count and value sorting.
+In the property picker, search, icon-only sorting, and select-all/clear actions
+are separate groups on the same toolbar, in that order. Options use the same
+outline, hover, and primary selected-button styles as the Sort dialog; the
+selected-properties area keeps its pale yellow highlight. The selected properties
+appear below all options with their label on the same row. Drag
+selected properties horizontally to reorder, regardless of the pointer's
+vertical position.
+
 Row selection, scroll position, focus, and unsubmitted filter text are not
 restored. Random sorting restores the mode, not the previous shuffled order.
 

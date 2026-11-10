@@ -243,13 +243,19 @@ export class PropertyFilter<T extends object> {
     }
 
     private async selectProperties() {
-        const propertyOptions = this.availablePropertyNames.map(propertyName => ({
-            value: propertyName,
-            comment: `${this.allPropertyValues(this.normalizeProperty(propertyName)).length}`
-        }))
+        const counts: Record<string, number> = {}
+        const propertyOptions = this.availablePropertyNames.map(propertyName => {
+            counts[propertyName] = this.allPropertyValues(this.normalizeProperty(propertyName)).length
+            return { value: propertyName, comment: `${counts[propertyName]}` }
+        })
         const properties = await showSelection('Select Filter Properties', propertyOptions, {
             initialSelection: this.state.properties,
-            showOrder: true
+            showOrder: true,
+            sortOptions: [
+                { label: 'Sort by Count', icon: 'fa-sort-amount-down', compare: (a, b) => counts[b] - counts[a] || a.localeCompare(b) },
+                { label: 'Sort by Prop Name (Asc)', icon: 'fa-sort-alpha-down', compare: (a, b) => a.localeCompare(b) },
+                { label: 'Sort by Prop Name (Desc)', icon: 'fa-sort-alpha-up', compare: (a, b) => b.localeCompare(a) },
+            ],
         })
         if (properties === undefined) return
 

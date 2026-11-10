@@ -53,9 +53,6 @@ export class DraggableSortedContainer {
         const first = this.itemElements[0]
         const last = this.itemElements[this.itemElements.length - 1]
         if (!first || !last) return
-        const rootRect = this.root.getBoundingClientRect()
-        const verticalTolerance = Math.max(rootRect.height, 24)
-        if (event.clientY < rootRect.top - verticalTolerance || event.clientY > rootRect.bottom + verticalTolerance) return
         const firstRect = first.getBoundingClientRect()
         const lastRect = last.getBoundingClientRect()
         if (event.clientX < firstRect.left) return 0
@@ -149,6 +146,7 @@ export class DraggableSortedContainer {
             createElement(chip, 'span', ['uu-dnd-label', 'me-1'], this.cfg.showOrder ? `${index + 1}: ${item}` : item)
             if (this.cfg.interactive ?? true) {
                 chip.draggable = true
+                chip.style.cursor = 'pointer'
                 chip.title = 'Drag to reorder'
                 chip.ondragstart = event => {
                     this.dragFromIndex = index
