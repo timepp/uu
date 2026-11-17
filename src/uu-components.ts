@@ -109,14 +109,21 @@ export function createDataArea<T extends object>(parent: HTMLElement | null, tit
 
     renderBtn.onclick = async () => {
         state.showData = true
+        div.classList.remove('uu-has-error')
         div.classList.add('uu-is-loading')
         contentDiv.textContent = 'Loading...'
         try {
             const content = await renderer(ia.getValues())
             contentDiv.replaceChildren(content)
-            showHideBtn.style.display = 'inline-block'
+        } catch (error) {
+            console.error('Error rendering data area:', error)
+            div.classList.add('uu-has-error')
+            contentDiv.replaceChildren()
+            const message = error instanceof Error ? error.message : String(error)
+            createElement(contentDiv, 'pre', ['uu-data-area-error', 'text-danger'], `Error rendering content: ${message}`)
         } finally {
             div.classList.remove('uu-is-loading')
+            showHideBtn.style.display = 'inline-block'
         }
     }
 

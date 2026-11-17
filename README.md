@@ -31,6 +31,11 @@ const defaults = { query: '', limit: 20 }
 const runtimeParams = { query: 'status:active' }
 const input = uu.createInputArea(parent, defaults, {}, 'table', 'search', runtimeParams)
 ```
+
+`createDataArea()` catches synchronous and asynchronous renderer failures, logs
+the error, and displays its message as plain text in the content area. Failed
+content can still be folded, and clicking the render button again retries with
+the current inputs and clears the previous error state.
  
 ### With package installation
 
