@@ -153,7 +153,7 @@ function ensureArrayShortcuts() {
         if (event.defaultPrevented || event.repeat || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.key.toLowerCase() !== 'f' || !pointer) return
         const target = event.target
         if (target instanceof HTMLElement && (target.isContentEditable || target.closest('input, textarea, select, [role="textbox"]'))) return
-        const view = document.elementFromPoint(pointer.x, pointer.y)?.closest<HTMLElement>('.uu-va, .uu-dropdown')
+        const view = document.elementFromPoint(pointer.x, pointer.y)?.closest<HTMLElement>('.uu-va-selectable, .uu-va, .uu-dropdown')
         const toggleMenu = view && arrayContextMenus.get(view)
         if (!toggleMenu) return
         event.preventDefault()
@@ -171,7 +171,7 @@ function ensureSelectionStyles() {
             .uu-va-tiles > .uu-va-selectable:hover {
                 box-shadow: inset 0 0 0 9999px var(--bs-table-hover-bg, rgba(var(--bs-emphasis-color-rgb, 0, 0, 0), 0.075));
             }
-            .uu-va-selection-cell { position: relative; padding-left: 2rem !important; }
+            .uu-va-selection-cell { position: relative; padding-left: 3.5rem !important; }
             .uu-va-table .uu-va-selectable.uu-is-selected { outline: none; }
             .uu-va-table .uu-va-selectable.uu-is-selected::after {
                 content: '';
@@ -193,12 +193,38 @@ function ensureSelectionStyles() {
                 opacity: 0;
                 cursor: pointer;
             }
-            .uu-va-selection-cell > .uu-va-select-checkbox {
+            .uu-va-item-menu {
+                position: absolute;
+                top: .25rem;
+                left: 1.6rem;
+                width: 1.5rem;
+                height: 1.5rem;
+                padding: 0;
+                border: 0;
+                border-radius: .2rem;
+                background: transparent;
+                color: inherit;
+                line-height: 1;
+                z-index: 1;
+                opacity: 0;
+                cursor: pointer;
+            }
+            .uu-va-item-menu:hover,
+            .uu-va-item-menu:focus-visible {
+                background: var(--bs-primary, #0d6efd);
+                color: #fff;
+                box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb, 13, 110, 253), .3);
+            }
+            .uu-va-selection-cell > .uu-va-select-checkbox,
+            .uu-va-selection-cell > .uu-va-item-menu {
                 top: 50%;
                 transform: translateY(-50%);
             }
             .uu-va-selectable:hover > .uu-va-select-checkbox,
             .uu-va-selectable:hover > .uu-va-selection-cell > .uu-va-select-checkbox,
+            .uu-va-selectable:hover > .uu-va-item-menu,
+            .uu-va-selectable:hover > .uu-va-selection-cell > .uu-va-item-menu,
+            .uu-va-item-menu:focus-visible,
             .uu-va-select-checkbox:checked,
             .uu-va-select-checkbox:focus-visible { opacity: 1; }
         `, {}, { id: styleId })
@@ -219,6 +245,28 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const actionProp = cfg.actionProp ?? '(Actions)'
     const selectedIndexes = new Set<number>()
     const selectionElements = new Map<number, HTMLElement>()
+    let activeContextMenu: { menu: HTMLElement, toggle: () => HTMLElement | undefined } | undefined
+
+    function associateContextMenu(button: HTMLElement, actions: () => DropdownAction[]) {
+        const toggleDropdown = associateDropdownActions(button, actions)
+        const toggleMenu = (position?: { x: number, y: number }) => {
+            if (activeContextMenu?.menu.isConnected && activeContextMenu.toggle !== toggleDropdown) {
+                activeContextMenu.toggle()
+            }
+            const menu = toggleDropdown(position)
+            activeContextMenu = menu ? { menu, toggle: toggleDropdown } : undefined
+            if (menu) {
+                button.focus({ preventScroll: true })
+                arrayContextMenus.set(menu, toggleMenu)
+            }
+            return menu
+        }
+        button.onclick = event => {
+            event.stopPropagation()
+            toggleMenu()
+        }
+        return toggleMenu
+    }
 
     // persist state
     const state = tu.createObservableState(cfg.stateKey || null, {
@@ -493,6 +541,22 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             else selectedIndexes.delete(index)
             syncSelection()
         }
+        const menuButton = createElement(null, 'button', ['uu-va-item-menu'], fa('fa-ellipsis-v'), {}, {
+            type: 'button',
+            title: 'Item actions',
+        })
+        menuButton.setAttribute('aria-label', `Actions for item ${index + 1}`)
+        menuButton.setAttribute('aria-haspopup', 'menu')
+        checkbox.after(menuButton)
+        const toggleItemMenu = associateContextMenu(menuButton, () => {
+            if (!selectedIndexes.has(index)) {
+                selectedIndexes.clear()
+                selectedIndexes.add(index)
+                syncSelection()
+            }
+            return getContextMenuActions(true)
+        })
+        arrayContextMenus.set(element, toggleItemMenu)
         selectionElements.set(index, element)
         syncItemSelection(element, index)
         element.addEventListener('click', async evt => {
@@ -1083,10 +1147,8 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             showJsonResult('Original Data', arr)
         }
     }
-    const toggleContextMenu = associateDropdownActions(optionBtn, () => {
-        const entries: DropdownAction[] = Object.entries(dropdownActions).map(([name, action]) => ({ name, action }))
-        entries.push(
-            { separator: true },
+    function getContextMenuActions(itemMenu = false): DropdownAction[] {
+        const selectionControls: DropdownAction[] = [
             { name: 'Select All', action: () => {
                 for (const { index } of data) selectedIndexes.add(index)
                 syncSelection()
@@ -1102,14 +1164,15 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
                 selectedIndexes.clear()
                 syncSelection()
             } }
-        )
+        ]
+        const itemActions: DropdownAction[] = []
+        const selectionActions: DropdownAction[] = []
         if (selectedIndexes.size > 0) {
-            const selectionActions: DropdownAction[] = []
             if (selectedIndexes.size === 1) {
                 const index = [...selectedIndexes][0]
                 const item = arr[index]
                 for (const [name, action] of Object.entries(getItemActions(item, index))) {
-                    selectionActions.push({ name, action: () => runItemAction(name, () => action(item, index)) })
+                    itemActions.push({ name, action: () => runItemAction(name, () => action(item, index)) })
                 }
             }
             for (const [name, action] of Object.entries(cfg.multiItemActions || {})) {
@@ -1118,10 +1181,20 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             if (selectedIndexes.size >= 2) {
                 selectionActions.push({ name: 'Compare Selected Items', action: () => compareSelectedItems() })
             }
-            if (selectionActions.length > 0) entries.push({ separator: true }, ...selectionActions)
+        }
+        const globalActions: DropdownAction[] = Object.entries(dropdownActions).map(([name, action]) => ({ name, action }))
+        const sections = itemMenu
+            ? [itemActions, [...selectionControls, ...selectionActions]]
+            : [globalActions, selectionControls, [...itemActions, ...selectionActions]]
+        const entries: DropdownAction[] = []
+        for (const section of sections) {
+            if (section.length === 0) continue
+            if (entries.length > 0) entries.push({ separator: true })
+            entries.push(...section)
         }
         return entries
-    })
+    }
+    const toggleContextMenu = associateContextMenu(optionBtn, getContextMenuActions)
     arrayContextMenus.set(view, toggleContextMenu)
     ensureArrayShortcuts()
 

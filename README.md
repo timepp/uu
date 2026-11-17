@@ -166,7 +166,15 @@ restored. Random sorting restores the mode, not the previous shuffled order.
 ## Array selection and actions
 
 Items are always selectable in table, tile, and wall views; `enableSelection`
-has been removed. Hover over an item to reveal its checkbox.
+has been removed. Hover over an item to reveal its checkbox and a vertical
+three-dot button on its right. Clicking the three-dot button opens its context
+menu without invoking item click callbacks. If the item is already selected,
+the entire selection is preserved, including selection order, so the menu can
+offer multi-item actions. Otherwise, the selection is replaced with that item.
+The button uses a primary-color highlight on hover or keyboard focus.
+Item menus put item actions first, followed by selection controls and selection
+actions; they omit global features such as Charts and View Original Data.
+Clicking the button again closes the menu.
 Tile cards also show a subtle table-like hover highlight without changing their
 background or selected outline. Clicking the item
 replaces the selection with that item; clicking its checkbox adds or removes it
@@ -183,12 +191,18 @@ The options menu separates global features, selection controls, and actions for
 the current selection. Clicking outside the menu, choosing an action, or clicking
 its trigger again closes it. `Select All` and `Invert Selection` operate on all filtered
 results across pages, leaving selections outside the filter unchanged.
-Hover over a view and press `F` to toggle the same menu at the mouse position
-(clamped to the viewport). The shortcut targets the innermost view and is ignored
+Hover over a view and press `F` to toggle a menu at the mouse position
+(clamped to the viewport). When hovering over an item, `F` follows the same
+selection rules as its three-dot button without invoking item click callbacks.
+Opening a menu focuses its trigger, so switching items with `F` does not leave
+the previous item's button highlighted. Outside an item, the current selection
+is preserved and the full options menu, including global features, is shown.
+The shortcut targets the innermost view and is ignored
 while editing text, composing input, or holding Ctrl, Alt, or Meta.
 `Clear Selection` clears everything, including hidden selections.
 With one item selected, its `itemActions` (including the default raw-data action
-unless `noDefaultActions` is set) appear in the final section. `multiItemActions`
+unless `noDefaultActions` is set) appear first in item menus and in the final
+section of the options menu. `multiItemActions`
 appear whenever the selection is nonempty and receive all selected items,
 including hidden ones, in selection order. With two or more selected items,
 `Compare Selected Items` compares all selected items in selection order using
