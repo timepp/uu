@@ -794,7 +794,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     function gotoPage(page: number) {
         // only visible rows falling into the current page are shown, all others are hidden
         const {startIndex, endIndex} = pager.getPageRange(page)
-        console.log(`goto page ${page}, show items from ${startIndex} to ${endIndex}`)
         selectionElements.clear()
         view.classList.toggle('uu-va-view-table', state.renderStyle === 'table')
         view.classList.toggle('uu-va-view-tiles', state.renderStyle === 'tile')
@@ -820,7 +819,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
             if (isExpr) {
                 // advanced filter, we compile this as a function
                 const funcCode = `with (item) { return (${s}) }`
-                console.log('compile filter function with code:', funcCode)
                 try {
                     const filterFunc = new Function('item', funcCode) as (item: T) => boolean
                     textFilteredData = allData.filter(v => {
@@ -1066,7 +1064,6 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
     const dropdownActions: Record<string, () => tu.MaybePromise<unknown>> = {
         'Charts': async () => {
             const info = tu.getPropStat(arr, cfg.flattenNestedObjects)
-            console.log('prop stat', info)
             // const goodInfo = info.filter(v => v.uniqueValues.length <= 200)
             const content = await renderDataInsights(info, cfg.onPropertyValueClick)
             showDialog<string>('Charts', content)
