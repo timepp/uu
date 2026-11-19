@@ -160,6 +160,13 @@ appear below all options with their label on the same row. Drag
 selected properties horizontally to reorder, regardless of the pointer's
 vertical position.
 
+The visible-property picker provides text buttons for `Select all`, `Select none`,
+and `Select differing props`. The latter replaces the selection with properties
+whose values differ across all loaded items, using the same serialized-value
+comparison as `hideUniformProps`, and includes the index and actions columns when
+enabled. Filtering and paging preserve this comparison scope. Click OK to apply
+the selection to the current view style.
+
 Row selection, scroll position, focus, and unsubmitted filter text are not
 restored. Random sorting restores the mode, not the previous shuffled order.
 

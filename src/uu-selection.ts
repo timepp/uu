@@ -12,6 +12,7 @@ export type SelectOption = {
     showStatus: boolean
     statusInteractive: boolean
     sortOptions: { label: string, icon?: string, compare: (a: string, b: string) => number }[]
+    selectionPresets: { label: string, select: () => string[] }[]
     checker: (oldSelection: string[], newSelection: string[]) => string[] | string
     styleModifier: (item: string, elem: HTMLElement) => void
     dlgStyle: Partial<CSSStyleDeclaration>
@@ -35,8 +36,12 @@ export function showSelection(title: string, options: SelectionItem[], cfg: Part
             ? createElement(toolbar, 'div', ['uu-selection-sort', 'input-group', 'w-auto', 'flex-shrink-0'])
             : undefined
         const selectionToolbar = createElement(toolbar, 'div', ['uu-selection-actions', 'input-group', 'w-auto', 'flex-shrink-0'])
-        const selectAllButton = createElement(selectionToolbar, 'button', ['uu-btn', 'uu-selection-all', 'btn', 'btn-outline-secondary'], '☑')
-        const unselectAllButton = createElement(selectionToolbar, 'button', ['uu-btn', 'uu-selection-none', 'btn', 'btn-outline-secondary'], '☐')
+        const selectAllButton = createElement(selectionToolbar, 'button', ['uu-btn', 'uu-selection-all', 'btn', 'btn-outline-secondary'], 'Select all')
+        const unselectAllButton = createElement(selectionToolbar, 'button', ['uu-btn', 'uu-selection-none', 'btn', 'btn-outline-secondary'], 'Select none')
+        for (const preset of cfg.selectionPresets || []) {
+            const button = createElement(selectionToolbar, 'button', ['uu-btn', 'uu-selection-preset', 'btn', 'btn-outline-secondary'], preset.label)
+            button.onclick = () => onSelectionChange(selection, preset.select())
+        }
         const main = createElement(container, 'div', ['uu-selection-items', 'd-flex', 'overflow-auto', 'flex-wrap', 'gap-2', 'mb-4'])
         const statusBar = createElement(container, 'div', ['uu-selection-status', 'form-control', 'd-flex', 'align-items-center'], '', { backgroundColor: 'lightyellow' })
         const selectedPrefix = createElement(statusBar, 'span', ['uu-selection-status-label', 'me-2'], 'Selected: ', { color: 'blue', flexShrink: '0' })

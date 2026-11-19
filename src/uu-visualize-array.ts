@@ -415,6 +415,12 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         return element
     }
 
+    function hasDifferentValues(prop: string) {
+        if (arr.length < 2) return false
+        const firstValue = tu.stringify(getPropValue(arr[0], prop, 0))
+        return arr.some((item, index) => tu.stringify(getPropValue(item, prop, index)) !== firstValue)
+    }
+
     function calculateProps() {
         const allProps = tu.dataProperties(arr, cfg.flattenNestedObjects)
         const presentationProps = cfg.renderOption?.props ?? []
@@ -427,13 +433,7 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         let meaningfulProps = allProps
         const hideUniformProps = cfg.hideUniformProps ?? true
         if (hideUniformProps && arr.length > 1) {
-            meaningfulProps = allProps.filter(p => {
-                const firstValue = getPropValue(arr[0], p, 0)
-                return arr.some((item, index) => {
-                    const v = getPropValue(item, p, index)
-                    return tu.stringify(v) !== tu.stringify(firstValue)
-                })
-            })
+            meaningfulProps = allProps.filter(hasDifferentValues)
         }
         const meaningfulPropsWithRaw = [
             rawIndexProp,
@@ -1001,6 +1001,10 @@ export function visualizeArray<T extends object>(arr: T[], cfg: Partial<Visualiz
         const r = await showSelection('visible props for ' + state.renderStyle, allPropsWithRaw, {
             initialSelection: getVisibleProps(), 
             showOrder: true,
+            selectionPresets: [{
+                label: 'Select differing props',
+                select: () => allPropsWithRaw.filter(prop => prop === rawIndexProp || prop === actionProp || hasDifferentValues(prop))
+            }],
             styleModifier: (item, elem) => {
                 if (item === rawIndexProp) {
                     elem.style.fontWeight = 'bold'

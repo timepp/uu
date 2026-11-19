@@ -435,6 +435,49 @@ export async function runSelectionTests() {
         assert(border.position === 'absolute' && parseFloat(border.borderTopWidth) > 0 && border.borderLeftWidth === border.borderTopWidth && border.borderRightWidth === border.borderTopWidth && border.borderBottomWidth === border.borderTopWidth, 'Selected table rows have a complete overlay border')
         assert(border.pointerEvents === 'none' && Number(border.zIndex) > 1, 'Selection border stays above positioned cells without blocking clicks')
 
+        const propItems = [
+            { id: 1, same: true, nested: { value: 'a' }, values: [1, 2], optional: null },
+            { id: 2, same: true, nested: { value: 'b' }, values: [1, 2] },
+        ]
+        view = visualizeArray(propItems, {
+            renderStyles: ['table'],
+            flattenNestedObjects: true,
+            hideUniformProps: false,
+            renderOption: { props: ['same', 'id'] },
+            pageSize: 1,
+            filter: 'id === 1',
+        })
+        host.replaceChildren(view)
+        await action(view, 'Select Props')
+        let propDialog = element<HTMLDialogElement>(document, 'dialog:has(.uu-selection)')
+        const selectedProps = () => Array.from(propDialog.querySelectorAll('.uu-selection-item[aria-pressed="true"] .uu-selection-value'))
+            .map(item => item.textContent).join(',')
+        assert(element(propDialog, '.uu-selection-all').textContent === 'Select all' && element(propDialog, '.uu-selection-none').textContent === 'Select none', 'Property picker uses text selection buttons')
+        element(propDialog, '.uu-selection-preset').click()
+        assert(selectedProps() === '#,id,nested.value,optional,(Actions)', 'Differing props uses all loaded items, supports nested and missing values, excludes uniform arrays and explicit uniform columns, and retains utility columns')
+        element(propDialog, '.uu-selection-none').click()
+        assert(selectedProps() === '', 'Select none clears the property selection')
+        element(propDialog, '.uu-selection-all').click()
+        assert(selectedProps() === '#,same,id,nested.value,values,optional,(Actions)', 'Select all includes uniform properties')
+        element(propDialog, '.uu-selection-preset').click()
+        element(propDialog, '.uu-dialog-action').click()
+        await tick()
+        assert(Array.from(view.querySelectorAll('.uu-va-table-head-cell')).map(cell => cell.textContent).join(',') === '#,id,nested.value,optional,(Actions)', 'Confirming differing props applies the chosen columns in option order')
+        await action(view, 'Select Props')
+        propDialog = element<HTMLDialogElement>(document, 'dialog:has(.uu-selection)')
+        element(propDialog, '.uu-selection-none').click()
+        element(propDialog, '.uu-dialog-close').click()
+        await tick()
+        assert(view.querySelectorAll('.uu-va-table-head-cell').length === 5, 'Cancel preserves the applied property selection')
+
+        view = visualizeArray([propItems[0]], { renderStyles: ['table'] })
+        host.replaceChildren(view)
+        await action(view, 'Select Props')
+        propDialog = element<HTMLDialogElement>(document, 'dialog:has(.uu-selection)')
+        element(propDialog, '.uu-selection-preset').click()
+        assert(selectedProps() === '#,(Actions)', 'A single item has no differing data properties')
+        element(propDialog, '.uu-dialog-close').click()
+
         for (const key of comparisonState.keys()) localStorage.removeItem(key)
         const comparisonItems = [
             { uniform: true, nested: { value: 1 }, items: [1, 2], optional: undefined },
